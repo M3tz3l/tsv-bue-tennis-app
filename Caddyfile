@@ -1,0 +1,78 @@
+teable.tsv-bue-tennis.de {
+    reverse_proxy teable_app:3000
+    # Security headers
+    header {
+        -Server
+        X-Content-Type-Options nosniff
+        X-Frame-Options SAMEORIGIN
+        X-XSS-Protection "1; mode=block"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    }
+    encode gzip
+    log {
+        output file /var/log/caddy/teable-access.log
+        format json
+    }
+}
+
+dockge.tsv-bue-tennis.de {
+    reverse_proxy dockge:5001
+    # Security headers
+    header {
+        -Server
+        X-Content-Type-Options nosniff
+        X-Frame-Options SAMEORIGIN
+        X-XSS-Protection "1; mode=block"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    }
+    encode gzip
+    log {
+        output file /var/log/caddy/dockge-access.log
+        format json
+    }
+}
+
+tsv-bue-tennis.de {
+    # Rate limiting for auth endpoints
+    @auth_endpoints path /api/login /api/register /api/forgot-password /api/reset-password
+    rate_limit @auth_endpoints {
+        zone static_5rps_per_ip
+        key {remote_addr}
+        events 5
+        window 1s
+    }
+    
+    # Rate limiting for API endpoints
+    @api_endpoints path /api/*
+    rate_limit @api_endpoints {
+        zone static_20rps_per_ip
+        key {remote_addr}
+        events 20
+        window 1s
+    }
+    
+    # API routes
+    reverse_proxy /api/* tsv-tennis-app:5000
+    
+    # Serve frontend static files
+    reverse_proxy tsv-tennis-app:5000
+    
+    # Security headers
+    header {
+        -Server
+        X-Content-Type-Options nosniff
+        X-Frame-Options SAMEORIGIN
+        X-XSS-Protection "1; mode=block"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+    
+    # Enable compression
+    encode gzip
+    
+    # Logging
+    log {
+        output file /var/log/caddy/tsv-tennis-access.log
+        format json
+    }
+}

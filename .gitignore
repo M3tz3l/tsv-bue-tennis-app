@@ -1,0 +1,50 @@
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Rust/Cargo
+backend/target/
+backend/Cargo.lock
+backend/tennis_app.db
+backend/nohup.out
+
+# Node.js/Frontend
+tsv-tennis-app/node_modules/
+tsv-tennis-app/dist/
+tsv-tennis-app/.vite/
+tsv-tennis-app/coverage/
+
+# Logs
+*.log
+logs/
+backend/logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+build/
+dist/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/
