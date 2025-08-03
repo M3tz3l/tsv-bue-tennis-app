@@ -5,7 +5,6 @@
 
 # Rust/Cargo
 backend/target/
-backend/Cargo.lock
 backend/tennis_app.db
 backend/nohup.out
 
