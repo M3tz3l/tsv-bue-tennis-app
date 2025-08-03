@@ -1,0 +1,64 @@
+name: Test Deploy Workflow
+
+on:
+  push:
+    branches: [ test-deploy ]
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  test-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Test Docker build
+      run: |
+        echo "Testing Docker build..."
+        docker build -t tsv-tennis-app:test .
+        docker images | grep tsv-tennis-app
+        echo "✅ Docker build successful!"
+
+    - name: Test environment variables
+      run: |
+        echo "Testing GitHub secrets (without exposing them)..."
+        if [ -z "${{ secrets.VPS_HOST }}" ]; then
+          echo "❌ VPS_HOST secret not set"
+          exit 1
+        else
+          echo "✅ VPS_HOST secret is set"
+        fi
+        
+        if [ -z "${{ secrets.VPS_USER }}" ]; then
+          echo "❌ VPS_USER secret not set"
+          exit 1
+        else
+          echo "✅ VPS_USER secret is set"
+        fi
+        
+        if [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
+          echo "❌ VPS_SSH_KEY secret not set"
+          exit 1
+        else
+          echo "✅ VPS_SSH_KEY secret is set"
+        fi
+
+    - name: Test SSH connection (dry run)
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
+        script: |
+          echo "✅ SSH connection successful!"
+          echo "Current directory: $(pwd)"
+          echo "Docker version: $(docker --version)"
+          echo "Docker Compose version: $(docker-compose --version)"
+          echo "Available disk space:"
+          df -h /
+          echo "Test completed - no actual deployment performed"
