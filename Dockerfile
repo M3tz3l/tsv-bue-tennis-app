@@ -2,7 +2,7 @@
 FROM rust as backend-builder
 
 WORKDIR /app
-COPY backend_rust/Cargo.toml backend_rust/Cargo.lock ./
+COPY backend/Cargo.toml backend/Cargo.lock ./
 
 # Create dummy main to cache dependencies
 RUN mkdir src && echo "fn main() {}" > src/main.rs
@@ -10,7 +10,7 @@ RUN cargo build --release
 RUN rm -rf src
 
 # Copy actual source and build
-COPY backend_rust/src ./src
+COPY backend/src ./src
 RUN touch src/main.rs
 RUN cargo build --release
 

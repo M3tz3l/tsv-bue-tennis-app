@@ -16,7 +16,7 @@ impl Config {
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         Ok(Config {
             database_url: env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "sqlite:/home/fred/react/backend_rust/tennis_app.db".to_string()),
+                .map_err(|_| "DATABASE_URL must be set")?,
             jwt_secret: env::var("JWT_SECRET")
                 .unwrap_or_else(|_| "your-secret-key".to_string()),
             frontend_url: env::var("FRONTEND_URL")

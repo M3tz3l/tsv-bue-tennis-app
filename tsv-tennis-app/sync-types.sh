@@ -4,7 +4,7 @@
 echo "🔄 Regenerating TypeScript types from Rust models..."
 
 # Navigate to Rust backend
-cd /home/fred/react/backend_rust || exit 1
+cd /home/fred/react/backend || exit 1
 
 # Generate TypeScript bindings
 echo "📦 Running cargo test to generate types..."
