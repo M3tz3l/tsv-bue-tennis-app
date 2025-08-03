@@ -1,0 +1,84 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    types: [ closed ]
+
+jobs:
+  deploy:
+    # Only run on merged PRs or direct pushes to main
+    if: github.event_name == 'push' || (github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      run: |
+        docker build -t tsv-tennis-app:${{ github.sha }} .
+        docker tag tsv-tennis-app:${{ github.sha }} tsv-tennis-app:latest
+
+    - name: Save Docker image
+      run: docker save tsv-tennis-app:latest | gzip > tsv-tennis-app.tar.gz
+
+    - name: Deploy to VPS
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
+        script: |
+          # Create deployment directory
+          mkdir -p /opt/stacks/tsv-tennis-app
+          cd /opt/stacks/tsv-tennis-app
+          
+          # Stop existing containers
+          docker-compose down || true
+          
+          # Backup current version
+          if [ -f "docker-compose.yml" ]; then
+            cp docker-compose.yml docker-compose.yml.backup
+          fi
+
+    - name: Copy files to VPS
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
+        source: "compose.yaml,tsv-tennis-app.tar.gz"
+        target: "/opt/stacks/tsv-tennis-app/"
+
+    - name: Start new deployment
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
+        script: |
+          cd /opt/stacks/tsv-tennis-app
+          
+          # Load new Docker image
+          docker load < tsv-tennis-app.tar.gz
+          
+          # Start services
+          docker-compose -f compose.yaml up -d
+          
+          # Clean up
+          rm -f tsv-tennis-app.tar.gz
+          
+          # Verify deployment
+          sleep 10
+          docker-compose ps
+          
+          echo "Deployment completed successfully!"

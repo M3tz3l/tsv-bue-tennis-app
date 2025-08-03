@@ -1,7 +1,6 @@
 services:
   tsv-tennis-app:
-    build: .
-    container_name: tsv-tennis-app
+    image: tsv-tennis-app:latest
     ports:
       - 5000:5000
     env_file:
@@ -18,10 +17,11 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - dockge_web
+      - proxy-network
 volumes:
   tsv_tennis_data:
     driver: local
 networks:
-  dockge_web:
+  proxy-network:
     external: true
+    
