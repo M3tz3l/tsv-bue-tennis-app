@@ -4,9 +4,7 @@ class BackendService {
     constructor() {
         // In production, use relative URLs to avoid CORS issues
         // In development, use the explicit backend URL
-        this.baseURL = import.meta.env.PROD 
-            ? '/api'  // Use relative URL in production (served by same domain)
-            : (import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api');
+        this.baseURL = '/api';
 
         this.api = axios.create({
             baseURL: this.baseURL,
