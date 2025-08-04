@@ -698,16 +698,22 @@ const ArbeitsstundenFormModal = ({ isOpen, onClose, onSave, initialData, userPro
                                             placeholder={`${field} (aus Ihrem Profil)`}
                                         />
                                     ) : field === 'Tätigkeit' ? (
-                                        <textarea
-                                            value={formData[field] || ''}
-                                            onChange={(e) => setFormData(prev => ({
-                                                ...prev,
-                                                [field]: e.target.value
-                                            }))}
-                                            rows={3}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                            placeholder="Beschreibung der Tätigkeit"
-                                        />
+                                        <div>
+                                            <input
+                                                type="text"
+                                                value={formData[field] || ''}
+                                                onChange={(e) => setFormData(prev => ({
+                                                    ...prev,
+                                                    [field]: e.target.value
+                                                }))}
+                                                maxLength={40}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                placeholder="z.B. Platzpflege, Vereinsfeier..."
+                                            />
+                                            <div className="text-xs text-gray-500 mt-1">
+                                                {(formData[field] || '').length}/40 Zeichen
+                                            </div>
+                                        </div>
                                     ) : (
                                         <input
                                             type="text"
