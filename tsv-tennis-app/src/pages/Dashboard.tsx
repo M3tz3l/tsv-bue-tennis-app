@@ -257,7 +257,7 @@ const Dashboard = () => {
                 <div className="text-center py-12">
                     <ClockIcon className="mx-auto h-12 w-12 text-gray-400" />
                     <h3 className="mt-2 text-sm font-medium text-gray-900">Keine Arbeitsstunden für {selectedYear} gefunden</h3>
-                    <p className="mt-1 text-sm text-gray-500">Fügen Sie Ihren ersten Eintrag für dieses Jahr hinzu.</p>
+                    <p className="mt-1 text-sm text-gray-500">Fügen Sie Ihren ersten Eintrag hinzu.</p>
                     <div className="mt-6">
                         <button
                             onClick={() => setShowAddForm(true)}
@@ -446,7 +446,7 @@ const Dashboard = () => {
                         onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                         className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                     >
-                        {[2024, 2025, 2026].map(year => (
+                        {[new Date().getFullYear() - 1, new Date().getFullYear()].map(year => (
                             <option key={year} value={year}>{year}</option>
                         ))}
                     </select>
@@ -628,6 +628,24 @@ const ArbeitsstundenFormModal = ({ isOpen, onClose, onSave, initialData, userPro
             toast.error('Das Datum darf nicht in der Zukunft liegen');
             return;
         }
+        
+        // Validate year with one-month grace period
+        const selectedYear = selectedDate.getFullYear();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth(); // 0-based (0 = January, 1 = February, etc.)
+        
+        // Calculate minimum allowed year based on grace period
+        const minAllowedYear = currentMonth === 0 ? currentYear - 1 : currentYear; // January = month 0
+        
+        if (selectedYear < minAllowedYear) {
+            if (currentMonth === 0) {
+                toast.error(`Arbeitsstunden können nur für ${currentYear} oder ${currentYear - 1} (Nachfrist bis Ende Januar) eingetragen werden.`);
+            } else {
+                toast.error(`Arbeitsstunden können nur für das aktuelle Jahr ${currentYear} eingetragen werden.`);
+            }
+            return;
+        }
+        
         // Validate hours is positive and reasonable
         const hours = parseFloat(formData.Stunden);
         if (isNaN(hours) || hours <= 0) {
@@ -647,6 +665,14 @@ const ArbeitsstundenFormModal = ({ isOpen, onClose, onSave, initialData, userPro
     };
 
     const today = new Date().toISOString().split('T')[0];
+    
+    // Calculate minimum allowed date with one-month grace period
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth(); // 0-based (0 = January)
+    const minAllowedYear = currentMonth === 0 ? currentYear - 1 : currentYear; // January = month 0
+    const minDate = `${minAllowedYear}-01-01`;
+    
     const fieldNames = ['Nachname', 'Vorname', 'Datum', 'Stunden', 'Tätigkeit'];
 
     return (
@@ -656,7 +682,7 @@ const ArbeitsstundenFormModal = ({ isOpen, onClose, onSave, initialData, userPro
                 <DialogPanel className="max-w-2xl w-full max-h-[80vh] overflow-y-auto bg-white rounded-lg shadow-xl">
                     <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                         <DialogTitle className="text-lg font-medium text-gray-900">
-                            {initialData ? 'Arbeitsstunden bearbeiten' : `Neue Arbeitsstunden hinzufügen - ${selectedYear}`}
+                            {initialData ? 'Arbeitsstunden bearbeiten' : 'Neue Arbeitsstunden hinzufügen'}
                         </DialogTitle>
                         <button
                             onClick={onClose}
@@ -668,7 +694,7 @@ const ArbeitsstundenFormModal = ({ isOpen, onClose, onSave, initialData, userPro
                     {selectedYear && !initialData && (
                         <div className="px-6 pt-2">
                             <p className="text-sm text-gray-600">
-                                Diese Stunden werden für das Jahr {selectedYear} erfasst.
+                                Bitte beachten Sie die Zeiträume für die Eingabe von Arbeitsstunden.
                             </p>
                         </div>
                     )}
@@ -689,6 +715,7 @@ const ArbeitsstundenFormModal = ({ isOpen, onClose, onSave, initialData, userPro
                                             <input
                                                 type="date"
                                                 value={formData[field] || ''}
+                                                min={minDate}
                                                 max={today}
                                                 onChange={(e) => {
                                                     console.log('📅 Date input changed:', e.target.value);
@@ -702,7 +729,9 @@ const ArbeitsstundenFormModal = ({ isOpen, onClose, onSave, initialData, userPro
                                                 style={{ colorScheme: 'light' }}
                                             />
                                             <p className="text-xs text-gray-500 mt-1">
-                                                Datum darf nicht in der Zukunft liegen
+                                                Datum darf nicht in der Zukunft liegen. {currentMonth === 0 
+                                                    ? `Nur ${currentYear} oder ${currentYear - 1} (Nachfrist bis Ende Januar) erlaubt.`
+                                                    : `Nur ${currentYear} erlaubt.`}
                                             </p>
                                             <p className="text-xs text-blue-600 mt-1">
                                                 📅 Ausgewähltes Datum: {formData[field] ? new Date(formData[field]).toLocaleDateString('de-DE', { 

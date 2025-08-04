@@ -11,6 +11,7 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
+use chrono::{Datelike, Utc, NaiveDate};
 use reqwest::Client;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -861,6 +862,39 @@ async fn create_work_hour(
         return Err(StatusCode::BAD_REQUEST);
     }
 
+    // Validate year with one-month grace period
+    let date_result = chrono::NaiveDate::parse_from_str(&payload.date, "%Y-%m-%d");
+    if let Ok(work_date) = date_result {
+        let today = chrono::Utc::now().date_naive();
+        let current_year = today.year();
+        let current_month = today.month(); // 1-based (1 = January, 2 = February, etc.)
+        let work_year = work_date.year();
+        
+        // Calculate minimum allowed year based on grace period
+        let min_allowed_year = if current_month == 1 { current_year - 1 } else { current_year };
+        
+        if work_year < min_allowed_year {
+            println!("🚨 Create Work Hour: Year validation failed - work year: {}, min allowed: {}", work_year, min_allowed_year);
+            if current_month == 1 {
+                return Ok(ResponseJson(serde_json::json!({
+                    "success": false,
+                    "message": format!("Arbeitsstunden können nur für {} oder {} (Nachfrist bis Ende Januar) eingetragen werden.", current_year, current_year - 1)
+                })));
+            } else {
+                return Ok(ResponseJson(serde_json::json!({
+                    "success": false,
+                    "message": format!("Arbeitsstunden können nur für das aktuelle Jahr {} eingetragen werden.", current_year)
+                })));
+            }
+        }
+    } else {
+        println!("🚨 Create Work Hour: Invalid date format: {}", payload.date);
+        return Ok(ResponseJson(serde_json::json!({
+            "success": false,
+            "message": "Ungültiges Datumsformat. Bitte verwenden Sie YYYY-MM-DD."
+        })));
+    }
+
     // Use get_member_by_id for efficiency
     let current_user = teable::get_member_by_id_with_projection(
         &state.http_client,
@@ -996,6 +1030,39 @@ async fn update_work_hour(
         return Ok(ResponseJson(serde_json::json!({
             "success": false,
             "error": "Hours must be greater than 0"
+        })));
+    }
+
+    // Validate year with one-month grace period
+    let date_result = chrono::NaiveDate::parse_from_str(&payload.date, "%Y-%m-%d");
+    if let Ok(work_date) = date_result {
+        let today = chrono::Utc::now().date_naive();
+        let current_year = today.year();
+        let current_month = today.month(); // 1-based (1 = January, 2 = February, etc.)
+        let work_year = work_date.year();
+        
+        // Calculate minimum allowed year based on grace period
+        let min_allowed_year = if current_month == 1 { current_year - 1 } else { current_year };
+        
+        if work_year < min_allowed_year {
+            println!("🚨 Update Work Hour: Year validation failed - work year: {}, min allowed: {}", work_year, min_allowed_year);
+            if current_month == 1 {
+                return Ok(ResponseJson(serde_json::json!({
+                    "success": false,
+                    "message": format!("Arbeitsstunden können nur für {} oder {} (Nachfrist bis Ende Januar) eingetragen werden.", current_year, current_year - 1)
+                })));
+            } else {
+                return Ok(ResponseJson(serde_json::json!({
+                    "success": false,
+                    "message": format!("Arbeitsstunden können nur für das aktuelle Jahr {} eingetragen werden.", current_year)
+                })));
+            }
+        }
+    } else {
+        println!("🚨 Update Work Hour: Invalid date format: {}", payload.date);
+        return Ok(ResponseJson(serde_json::json!({
+            "success": false,
+            "message": "Ungültiges Datumsformat. Bitte verwenden Sie YYYY-MM-DD."
         })));
     }
 
