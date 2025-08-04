@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import BackendService from '../services/backendService';
+import BackendService from '../services/backendService.ts';
 import { 
     PencilIcon, 
     PlusIcon,

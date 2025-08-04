@@ -23,11 +23,9 @@ class BackendService {
   private baseURL: string;
 
   constructor() {
-    // In production, use relative URLs to avoid CORS issues
-    // In development, use the explicit backend URL
-    this.baseURL = import.meta.env.PROD 
-         ? '/api'  // Use relative URL in production (served by same domain)
-         : 'http://localhost:5000/api'; 
+    // Always use relative URLs since Vite proxy handles the routing in development
+    // and in production it's served by the same domain
+    this.baseURL = '/api';
 
     this.api = axios.create({
       baseURL: this.baseURL,

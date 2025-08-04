@@ -1,7 +1,7 @@
 //ForgotPassword.js
 
 import { React } from "react";
-import backendService from "../services/backendService";
+import backendService from "../services/backendService.ts";
 import { KeyIcon } from "@heroicons/react/24/solid";
 import { toast } from "react-toastify";
 import TSVLogo from "../assets/TSV_Tennis.svg";

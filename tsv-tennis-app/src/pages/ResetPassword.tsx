@@ -8,7 +8,7 @@ import {
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import { toast } from "react-toastify";
 import TSVLogo from "../assets/TSV_Tennis.svg";
-import BackendService from "../services/backendService";
+import BackendService from "../services/backendService.ts";
 
 const ResetPassword = () => {
     const [searchParams] = useSearchParams();

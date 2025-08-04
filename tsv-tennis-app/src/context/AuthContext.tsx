@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import backendService from '../services/backendService';
+import backendService from '../services/backendService.ts';
 import type { UserResponse } from '@/types';
 
 interface AuthResult {
