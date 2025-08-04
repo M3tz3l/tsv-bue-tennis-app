@@ -1,5 +1,5 @@
 teable.tsv-bue-tennis.de {
-    reverse_proxy teable_app:3000
+    reverse_proxy teable:3000
     # Security headers
     header {
         -Server
