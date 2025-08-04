@@ -61,7 +61,7 @@ class BackendService {
       console.error('Login error:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Login failed'
+        message: error.response?.data?.message || 'Anmeldung fehlgeschlagen'
       };
     }
   }
@@ -74,7 +74,7 @@ class BackendService {
       console.error('Token verification error:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Token verification failed'
+        message: error.response?.data?.message || 'Token-Überprüfung fehlgeschlagen'
       };
     }
   }
@@ -89,7 +89,7 @@ class BackendService {
       console.error('Forgot password error:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to send reset email'
+        message: error.response?.data?.message || 'E-Mail konnte nicht gesendet werden'
       };
     }
   }
@@ -106,7 +106,7 @@ class BackendService {
       console.error('Reset password error:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to reset password'
+        message: error.response?.data?.message || 'Passwort-Zurücksetzung fehlgeschlagen'
       };
     }
   }
@@ -120,7 +120,7 @@ class BackendService {
       console.error('Dashboard error:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to fetch dashboard data'
+        message: error.response?.data?.message || 'Dashboard-Daten konnten nicht geladen werden'
       };
     }
   }
@@ -134,7 +134,7 @@ class BackendService {
       console.error('Error fetching work hours:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to fetch work hours'
+        message: error.response?.data?.message || 'Arbeitsstunden konnten nicht geladen werden'
       };
     }
   }
@@ -147,7 +147,7 @@ class BackendService {
       console.error('Error creating work hours:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to create work hours'
+        message: error.response?.data?.message || 'Arbeitsstunden konnten nicht erstellt werden'
       };
     }
   }
@@ -160,7 +160,7 @@ class BackendService {
       console.error('Error updating work hours:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to update work hours'
+        message: error.response?.data?.message || 'Arbeitsstunden konnten nicht aktualisiert werden'
       };
     }
   }
@@ -173,7 +173,7 @@ class BackendService {
       console.error('Error deleting work hours:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to delete work hours'
+        message: error.response?.data?.message || 'Arbeitsstunden konnten nicht gelöscht werden'
       };
     }
   }
@@ -186,7 +186,7 @@ class BackendService {
       console.error('Error fetching work hour:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to fetch work hour'
+        message: error.response?.data?.message || 'Arbeitsstunde konnte nicht geladen werden'
       };
     }
   }

@@ -305,7 +305,7 @@ async fn register(
     // In a real implementation, you would create the user in Teable
     // For now, return a simple success response
     Ok(ResponseJson(serde_json::json!({
-        "message": "Registration successful"
+        "message": "Registrierung erfolgreich"
     })))
 }
 
@@ -327,14 +327,14 @@ async fn forgot_password(
             info!("User not found in Teable: {}", normalized_email);
             return Ok(ResponseJson(serde_json::json!({
                 "success": false,
-                "message": "This email address is not registered in our system. Please check your email address or contact support."
+                "message": "Diese E-Mail-Adresse ist nicht in unserem System registriert. Bitte überprüfen Sie Ihre E-Mail-Adresse oder kontaktieren Sie den Support."
             })));
         },
         Err(e) => {
             error!("Failed to fetch user from Teable: {}", e);
             return Ok(ResponseJson(serde_json::json!({
                 "success": false,
-                "message": "Unable to access user database. Please try again later."
+                "message": "Zugriff auf die Benutzerdatenbank nicht möglich. Bitte versuchen Sie es später erneut."
             })));
         }
     };
@@ -416,14 +416,14 @@ async fn reset_password(
             error!("User with Teable ID {} not found", reset_token_info.user_id);
             return Ok(ResponseJson(serde_json::json!({
                 "success": false,
-                "message": "User not found"
+                "message": "Benutzer nicht gefunden"
             })));
         },
         Err(e) => {
             error!("Failed to fetch member from Teable: {}", e);
             return Ok(ResponseJson(serde_json::json!({
                 "success": false,
-                "message": "Internal server error"
+                "message": "Interner Serverfehler"
             })));
         }
     };
@@ -436,7 +436,7 @@ async fn reset_password(
                 error!("Failed to update password in database: {}", e);
                 return Ok(ResponseJson(serde_json::json!({
                     "success": false,
-                    "message": "Failed to update password"
+                    "message": "Passwort konnte nicht aktualisiert werden"
                 })));
             }
             info!("Password successfully updated for user: {}", db_user.email);
@@ -458,7 +458,7 @@ async fn reset_password(
                     error!("Failed to create user in database: {}", e);
                     return Ok(ResponseJson(serde_json::json!({
                         "success": false,
-                        "message": "Failed to create user account"
+                        "message": "Benutzerkonto konnte nicht erstellt werden"
                     })));
                 }
             }
@@ -467,14 +467,14 @@ async fn reset_password(
             error!("Database error during password reset: {}", e);
             return Ok(ResponseJson(serde_json::json!({
                 "success": false,
-                "message": "Database error"
+                "message": "Datenbankfehler"
             })));
         }
     }
 
     Ok(ResponseJson(serde_json::json!({
         "success": true,
-        "message": "Password reset successful. You can now log in with your new password."
+        "message": "Passwort erfolgreich zurückgesetzt. Sie können sich jetzt mit Ihrem neuen Passwort anmelden."
     })))
 }
 

@@ -33,7 +33,7 @@ const Dashboard = () => {
             console.log('🔍 Dashboard: Selected year:', selectedYear);
             
             if (!token) {
-                throw new Error('No authentication token available');
+                throw new Error('Kein Authentifizierungs-Token verfügbar');
             }
             
             console.log(`🔍 Dashboard: Making API call to dashboard/${selectedYear}`);

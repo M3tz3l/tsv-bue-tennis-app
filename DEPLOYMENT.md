@@ -1,6 +1,6 @@
-# 🚀 TSV Tennis App - VPS Deployment Guide
+# 🚀 TSV TSV BÜ Tennis App - VPS Deployment Guide
 
-This guide explains how to deploy the TSV Tennis App to your VPS using Docker and Caddy.
+This guide explains how to deploy the TSV TSV BÜ Tennis App to your VPS using Docker and Caddy.
 
 ## 📋 Prerequisites
 

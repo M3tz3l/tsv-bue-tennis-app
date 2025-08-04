@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# TSV Tennis App Deployment Script
+# TSV TSV BÜ Tennis App Deployment Script
 set -e
 
-echo "🚀 Starting TSV Tennis App deployment..."
+echo "🚀 Starting TSV TSV BÜ Tennis App deployment..."
 
 # Check if .env file exists
 if [ ! -f .env ]; then
@@ -25,7 +25,7 @@ sleep 10
 
 # Check if container is running
 if docker-compose -f docker-compose.prod.yml ps | grep -q "Up"; then
-    echo "✅ TSV Tennis App deployed successfully!"
+    echo "✅ TSV TSV BÜ Tennis App deployed successfully!"
     echo "📊 Container status:"
     docker-compose -f docker-compose.prod.yml ps
     echo ""

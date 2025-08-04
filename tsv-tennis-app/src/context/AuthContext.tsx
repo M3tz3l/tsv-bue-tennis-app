@@ -51,7 +51,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             if (response.success && (response as any).user) {
                 setUser((response as any).user);
             } else {
-                throw new Error(response.message || 'Token verification failed');
+                throw new Error(response.message || 'Token-Überprüfung fehlgeschlagen');
             }
         } catch (error) {
             console.error('🚨 AuthContext: Token verification failed:', error);
@@ -80,7 +80,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 localStorage.setItem('authToken', newToken);
                 return { success: true };
             } else {
-                return { success: false, message: response.message || 'Login failed' };
+                return { success: false, message: response.message || 'Anmeldung fehlgeschlagen' };
             }
         } catch (error: any) {
             console.error('🚨 AuthContext: Login error:', error);

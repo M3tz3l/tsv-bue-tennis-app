@@ -36,7 +36,7 @@ impl EmailService {
         html_content: &str,
         text_content: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let from_mailbox: Mailbox = format!("Tennis App <{}>", self.from_email).parse()?;
+        let from_mailbox: Mailbox = format!("TSV BÜ Tennis App <{}>", self.from_email).parse()?;
         let to_mailbox: Mailbox = to.parse()?;
 
         let email = Message::builder()
@@ -81,14 +81,14 @@ impl EmailService {
         let html_content = format!(
             r#"
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #333;">Password Reset Request</h2>
-                <p>You requested a password reset for your Tennis App account.</p>
-                <p>Click the button below to reset your password:</p>
-                <a href="{}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 16px 0;">Reset Password</a>
-                <p>Or copy and paste this URL into your browser:</p>
+                <h2 style="color: #333;">Passwort zurücksetzen</h2>
+                <p>Sie haben eine Passwort-Zurücksetzung für Ihr TSV BÜ Tennis App Konto angefordert.</p>
+                <p>Klicken Sie auf die Schaltfläche unten, um Ihr Passwort zurückzusetzen:</p>
+                <a href="{}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 16px 0;">Passwort zurücksetzen</a>
+                <p>Oder kopieren Sie diese URL und fügen Sie sie in Ihren Browser ein:</p>
                 <p style="word-break: break-all; color: #666;">{}</p>
-                <p style="color: #666; font-size: 14px;">This link will expire in 24 hours.</p>
-                <p style="color: #666; font-size: 14px;">If you didn't request this, please ignore this email.</p>
+                <p style="color: #666; font-size: 14px;">Dieser Link läuft in 24 Stunden ab.</p>
+                <p style="color: #666; font-size: 14px;">Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese E-Mail bitte.</p>
             </div>
             "#,
             reset_url, reset_url
@@ -96,22 +96,22 @@ impl EmailService {
 
         let text_content = format!(
             r#"
-Password Reset Request
+Passwort zurücksetzen
 
-You requested a password reset for your Tennis App account.
+Sie haben eine Passwort-Zurücksetzung für Ihr TSV BÜ Tennis App Konto angefordert.
 
-Click this link to reset your password: {}
+Klicken Sie auf diesen Link, um Ihr Passwort zurückzusetzen: {}
 
-This link will expire in 24 hours.
+Dieser Link läuft in 24 Stunden ab.
 
-If you didn't request this, please ignore this email.
+Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese E-Mail bitte.
             "#,
             reset_url
         );
 
         self.send_email(
             email,
-            "Password Reset - Tennis App",
+            "Passwort zurücksetzen - TSV BÜ Tennis App",
             &html_content,
             &text_content,
         )
