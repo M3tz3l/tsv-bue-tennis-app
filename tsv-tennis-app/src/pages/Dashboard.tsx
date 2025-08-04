@@ -308,19 +308,62 @@ const Dashboard = () => {
                         Hinzufügen
                     </button>
                 </div>
-                <div className="overflow-x-auto">
+                
+                {/* Mobile card layout */}
+                <div className="block md:hidden">
+                    <div className="divide-y divide-gray-200">
+                        {data.map((row) => (
+                            <div key={row.id} className="p-4 hover:bg-gray-50">
+                                <div className="space-y-2">
+                                    {fieldNames.map((field) => (
+                                        <div key={field} className="flex justify-between items-start">
+                                            <span className="text-sm font-medium text-gray-500 min-w-0 flex-1">
+                                                {field.replace(/_/g, ' ')}:
+                                            </span>
+                                            <span className="text-sm text-gray-900 ml-2 break-words text-right flex-1">
+                                                {field === 'Stunden' ? 
+                                                    parseFloat(row[field] || 0).toFixed(1) :
+                                                    (row[field] || '-')
+                                                }
+                                            </span>
+                                        </div>
+                                    ))}
+                                    <div className="flex space-x-2 pt-2 border-t border-gray-100">
+                                        <button
+                                            onClick={() => handleEdit(row)}
+                                            className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs text-blue-600 hover:text-blue-900 border border-blue-300 rounded hover:bg-blue-50"
+                                        >
+                                            <PencilIcon className="h-4 w-4 mr-1" />
+                                            Bearbeiten
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(row.id)}
+                                            className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs text-red-600 hover:text-red-900 border border-red-300 rounded hover:bg-red-50"
+                                        >
+                                            <TrashIcon className="h-4 w-4 mr-1" />
+                                            Löschen
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Desktop table layout */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
                                 {fieldNames.map((field) => (
                                     <th
                                         key={field}
-                                        className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"
+                                        className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"
                                     >
                                         {field.replace(/_/g, ' ')}
                                     </th>
                                 ))}
-                                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                                <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                                     Aktionen
                                 </th>
                             </tr>
@@ -329,8 +372,8 @@ const Dashboard = () => {
                             {data.map((row) => (
                                 <tr key={row.id} className="hover:bg-gray-50">
                                     {fieldNames.map((field) => (
-                                        <td key={field} className="px-3 sm:px-6 py-4 text-sm text-gray-900">
-                                            <div className="max-w-xs truncate" title={field === 'Stunden' ? 
+                                        <td key={field} className="px-3 lg:px-6 py-4 text-sm text-gray-900">
+                                            <div className="max-w-xs break-words" title={field === 'Stunden' ? 
                                                 parseFloat(row[field] || 0).toFixed(1) :
                                                 (row[field] || '-')}>
                                                 {field === 'Stunden' ? 
@@ -340,21 +383,21 @@ const Dashboard = () => {
                                             </div>
                                         </td>
                                     ))}
-                                    <td className="px-3 sm:px-6 py-4 text-sm font-medium">
-                                        <div className="flex flex-col sm:flex-row space-y-1 sm:space-y-0 sm:space-x-2">
+                                    <td className="px-3 lg:px-6 py-4 text-sm font-medium">
+                                        <div className="flex space-x-2">
                                             <button
                                                 onClick={() => handleEdit(row)}
-                                                className="inline-flex items-center justify-center px-2 py-1 text-xs text-blue-600 hover:text-blue-900 border border-blue-300 rounded hover:bg-blue-50 w-full sm:w-auto"
+                                                className="inline-flex items-center justify-center px-2 py-1 text-xs text-blue-600 hover:text-blue-900 border border-blue-300 rounded hover:bg-blue-50"
                                             >
                                                 <PencilIcon className="h-4 w-4 mr-1" />
-                                                <span className="sm:hidden">Bearbeiten</span>
+                                                <span className="hidden lg:inline">Bearbeiten</span>
                                             </button>
                                             <button
                                                 onClick={() => handleDelete(row.id)}
-                                                className="inline-flex items-center justify-center px-2 py-1 text-xs text-red-600 hover:text-red-900 border border-red-300 rounded hover:bg-red-50 w-full sm:w-auto"
+                                                className="inline-flex items-center justify-center px-2 py-1 text-xs text-red-600 hover:text-red-900 border border-red-300 rounded hover:bg-red-50"
                                             >
                                                 <TrashIcon className="h-4 w-4 mr-1" />
-                                                <span className="sm:hidden">Löschen</span>
+                                                <span className="hidden lg:inline">Löschen</span>
                                             </button>
                                         </div>
                                     </td>
