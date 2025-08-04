@@ -5,10 +5,10 @@ import {
     useSearchParams,
     useNavigate
 } from "react-router-dom";
-import axios from "axios";
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import { toast } from "react-toastify";
 import TSVLogo from "../assets/TSV_Tennis.svg";
+import BackendService from "../services/backendService";
 
 const ResetPassword = () => {
     const [searchParams] = useSearchParams();
@@ -27,19 +27,14 @@ const ResetPassword = () => {
                 position: "top-right",
             });
         else {
-            const url = import.meta.env.VITE_BACKEND_URL + "/api/resetPassword";
-            const res = await axios.post(url, {
-                password: newpassword,
-                token: token,
-                userId: userId,
-            });
-            if (res.data.success === false) {
-                toast.error(res.data.message, {
+            const res = await BackendService.resetPassword(token, newpassword, userId);
+            if (res.success === false) {
+                toast.error(res.message, {
                     autoClose: 5000,
                     position: "top-right",
                 });
             } else {
-                toast.success(res.data.message, {
+                toast.success(res.message, {
                     autoClose: 5000,
                     position: "top-right",
                 });

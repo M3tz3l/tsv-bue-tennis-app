@@ -1,7 +1,7 @@
 //ForgotPassword.js
 
 import { React } from "react";
-import axios from "axios";
+import backendService from "../services/backendService";
 import { KeyIcon } from "@heroicons/react/24/solid";
 import { toast } from "react-toastify";
 import TSVLogo from "../assets/TSV_Tennis.svg";
@@ -11,15 +11,14 @@ const ForgotPassword = () => {
         e.preventDefault();
         const data = new FormData(e.currentTarget);
         const email = data.get("email");
-        const url = import.meta.env.VITE_BACKEND_URL + "/api/forgotPassword";
-        const res = await axios.post(url, { email: email });
-        if (res.data.success === false) {
-            toast.error(res.data.message, {
+        const res = await backendService.forgotPassword(email);
+        if (res.success === false) {
+            toast.error(res.message, {
                 autoClose: 5000,
                 position: "top-right",
             });
         } else {
-            toast.success(res.data.message, {
+            toast.success(res.message, {
                 autoClose: 5000,
                 position: "top-right",
             });

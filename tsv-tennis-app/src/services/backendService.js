@@ -4,7 +4,9 @@ class BackendService {
     constructor() {
         // In production, use relative URLs to avoid CORS issues
         // In development, use the explicit backend URL
-        this.baseURL = '/api';
+        this.baseURL = import.meta.env.PROD 
+            ? '/api'  // Use relative URL in production (served by same domain)
+            : (import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api');
 
         this.api = axios.create({
             baseURL: this.baseURL,
@@ -32,7 +34,7 @@ class BackendService {
     // Authentication methods
     async login(email, password) {
         try {
-            const response = await this.api.post('/api/login', { email, password });
+            const response = await this.api.post('/login', { email, password });
             return response.data;
         } catch (error) {
             console.error('Login error:', error);
@@ -45,7 +47,7 @@ class BackendService {
 
     async verifyToken() {
         try {
-            const response = await this.api.get('/api/verify-token');
+            const response = await this.api.get('/verify-token');
             return response.data;
         } catch (error) {
             console.error('Token verification error:', error);
@@ -58,7 +60,7 @@ class BackendService {
 
     async forgotPassword(email) {
         try {
-            const response = await this.api.post('/api/forgotPassword', { email });
+            const response = await this.api.post('/forgotPassword', { email });
             return response.data;
         } catch (error) {
             console.error('Forgot password error:', error);
@@ -71,7 +73,7 @@ class BackendService {
 
     async resetPassword(token, password, userId) {
         try {
-            const response = await this.api.post('/api/resetPassword', { 
+            const response = await this.api.post('/resetPassword', { 
                 token, 
                 password, 
                 userId 
@@ -89,7 +91,7 @@ class BackendService {
     // Work hours methods
     async getArbeitsstunden() {
         try {
-            const response = await this.api.get('/api/arbeitsstunden');
+            const response = await this.api.get('/arbeitsstunden');
             return {
                 success: true,
                 data: response.data.data || response.data
@@ -105,7 +107,7 @@ class BackendService {
 
     async getArbeitsstundenById(id) {
         try {
-            const response = await this.api.get(`/api/arbeitsstunden/${id}`);
+            const response = await this.api.get(`/arbeitsstunden/${id}`);
             return response.data;
         } catch (error) {
             console.error('Error fetching work hour by ID:', error);
@@ -125,7 +127,7 @@ class BackendService {
                 hours: parseFloat(data.Stunden)
             };
             
-            const response = await this.api.post('/api/arbeitsstunden', payload);
+            const response = await this.api.post('/arbeitsstunden', payload);
             return {
                 success: true,
                 data: response.data.data,
@@ -149,7 +151,7 @@ class BackendService {
                 hours: parseFloat(data.Stunden)
             };
             
-            const response = await this.api.put(`/api/arbeitsstunden/${id}`, payload);
+            const response = await this.api.put(`/arbeitsstunden/${id}`, payload);
             return {
                 success: true,
                 data: response.data.data,
@@ -166,7 +168,7 @@ class BackendService {
 
     async deleteArbeitsstunden(id) {
         try {
-            const response = await this.api.delete(`/api/arbeitsstunden/${id}`);
+            const response = await this.api.delete(`/arbeitsstunden/${id}`);
             return {
                 success: true,
                 data: { id },
@@ -184,7 +186,7 @@ class BackendService {
     // Dashboard methods
     async getDashboard(year = new Date().getFullYear()) {
         try {
-            const response = await this.api.get(`/api/dashboard/${year}`);
+            const response = await this.api.get(`/dashboard/${year}`);
             return {
                 success: true,
                 data: response.data
@@ -201,7 +203,7 @@ class BackendService {
     // User methods
     async getUser() {
         try {
-            const response = await this.api.get('/api/user');
+            const response = await this.api.get('/user');
             return response.data;
         } catch (error) {
             console.error('Error fetching user:', error);

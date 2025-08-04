@@ -27,7 +27,8 @@ class BackendService {
     // In development, use the explicit backend URL
     this.baseURL = import.meta.env.PROD 
          ? '/api'  // Use relative URL in production (served by same domain)
-         : (import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api'); 
+         : 'http://localhost:5000/api'; 
+
     this.api = axios.create({
       baseURL: this.baseURL,
       headers: {
@@ -54,7 +55,7 @@ class BackendService {
   // Authentication methods
   async login(email: string, password: string): Promise<LoginResponse | ApiError> {
     try {
-      const response = await this.api.post<LoginResponse>('/api/login', { email, password });
+      const response = await this.api.post<LoginResponse>('/login', { email, password });
       return response.data;
     } catch (error: any) {
       console.error('Login error:', error);
@@ -67,7 +68,7 @@ class BackendService {
 
   async verifyToken(): Promise<ApiResponse> {
     try {
-      const response = await this.api.get<ApiResponse>('/api/verify-token');
+      const response = await this.api.get<ApiResponse>('/verify-token');
       return response.data;
     } catch (error: any) {
       console.error('Token verification error:', error);
@@ -78,10 +79,40 @@ class BackendService {
     }
   }
 
+  async forgotPassword(email: string): Promise<ApiResponse | ApiError> {
+    try {
+      const response = await this.api.post<ApiResponse>('/forgotPassword', { email });
+      return response.data;
+    } catch (error: any) {
+      console.error('Forgot password error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to send reset email'
+      };
+    }
+  }
+
+  async resetPassword(token: string, password: string, userId: string): Promise<ApiResponse | ApiError> {
+    try {
+      const response = await this.api.post<ApiResponse>('/resetPassword', { 
+        token, 
+        password, 
+        userId 
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Reset password error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to reset password'
+      };
+    }
+  }
+
   // Dashboard methods
   async getDashboard(year: number): Promise<DashboardResponse | ApiError> {
     try {
-      const response = await this.api.get<DashboardResponse>(`/api/dashboard/${year}`);
+      const response = await this.api.get<DashboardResponse>(`/dashboard/${year}`);
       return response.data;
     } catch (error: any) {
       console.error('Dashboard error:', error);
@@ -95,7 +126,7 @@ class BackendService {
   // Work hours methods
   async getArbeitsstunden(): Promise<WorkHourResponse[] | ApiError> {
     try {
-      const response = await this.api.get<WorkHourResponse[]>('/api/arbeitsstunden');
+      const response = await this.api.get<WorkHourResponse[]>('/arbeitsstunden');
       return response.data;
     } catch (error: any) {
       console.error('Error fetching work hours:', error);
@@ -108,7 +139,7 @@ class BackendService {
 
   async createArbeitsstunden(data: CreateWorkHourRequest): Promise<ApiResponse | ApiError> {
     try {
-      const response = await this.api.post<ApiResponse>('/api/arbeitsstunden', data);
+      const response = await this.api.post<ApiResponse>('/arbeitsstunden', data);
       return response.data;
     } catch (error: any) {
       console.error('Error creating work hours:', error);
@@ -121,7 +152,7 @@ class BackendService {
 
   async updateArbeitsstunden(id: string, data: CreateWorkHourRequest): Promise<ApiResponse | ApiError> {
     try {
-      const response = await this.api.put<ApiResponse>(`/api/arbeitsstunden/${id}`, data);
+      const response = await this.api.put<ApiResponse>(`/arbeitsstunden/${id}`, data);
       return response.data;
     } catch (error: any) {
       console.error('Error updating work hours:', error);
@@ -134,7 +165,7 @@ class BackendService {
 
   async deleteArbeitsstunden(id: string): Promise<ApiResponse | ApiError> {
     try {
-      const response = await this.api.delete<ApiResponse>(`/api/arbeitsstunden/${id}`);
+      const response = await this.api.delete<ApiResponse>(`/arbeitsstunden/${id}`);
       return response.data;
     } catch (error: any) {
       console.error('Error deleting work hours:', error);
@@ -145,9 +176,9 @@ class BackendService {
     }
   }
 
-  async getArbeitsstundeById(id: string): Promise<ApiResponse | ApiError> {
+  async getArbeitsstundenById(id: string): Promise<ApiResponse | ApiError> {
     try {
-      const response = await this.api.get<ApiResponse>(`/api/arbeitsstunden/${id}`);
+      const response = await this.api.get<ApiResponse>(`/arbeitsstunden/${id}`);
       return response.data;
     } catch (error: any) {
       console.error('Error fetching work hour:', error);

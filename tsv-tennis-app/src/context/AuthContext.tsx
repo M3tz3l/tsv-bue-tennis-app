@@ -1,12 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import axios from 'axios';
+import backendService from '../services/backendService';
 import type { UserResponse } from '@/types';
-
-interface LoginResponse {
-    success: boolean;
-    token: string;
-    user: UserResponse;
-}
 
 interface AuthResult {
     success: boolean;
@@ -52,13 +46,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const verifyToken = async () => {
         try {
             console.log('🔍 AuthContext: Verifying token:', token?.substring(0, 20) + '...');
-            const response = await axios.get(`${(import.meta as any).env.VITE_BACKEND_URL}/api/verify-token`, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
-            console.log('🔍 AuthContext: Token verification response:', response.data);
-            setUser(response.data.user);
+            const response = await backendService.verifyToken();
+            console.log('🔍 AuthContext: Token verification response:', response);
+            if (response.success && (response as any).user) {
+                setUser((response as any).user);
+            } else {
+                throw new Error(response.message || 'Token verification failed');
+            }
         } catch (error) {
             console.error('🚨 AuthContext: Token verification failed:', error);
             logout();
@@ -70,15 +64,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const login = async (email: string, password: string): Promise<AuthResult> => {
         try {
             console.log('🔍 AuthContext: Starting login for:', email);
-            const response = await axios.post<LoginResponse>(`${(import.meta as any).env.VITE_BACKEND_URL}/api/login`, {
-                email,
-                password
-            });
+            const response = await backendService.login(email, password);
             
-            console.log('🔍 AuthContext: Login response:', response.data);
+            console.log('🔍 AuthContext: Login response:', response);
             
-            if (response.data.success) {
-                const { token: newToken, user: userData } = response.data;
+            if (response.success && (response as any).token && (response as any).user) {
+                const newToken = (response as any).token;
+                const userData = (response as any).user;
                 console.log('🔍 AuthContext: Setting token and user data');
                 console.log('🔍 AuthContext: Token length:', newToken?.length);
                 console.log('🔍 AuthContext: User data:', userData);
@@ -88,13 +80,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 localStorage.setItem('authToken', newToken);
                 return { success: true };
             } else {
-                return { success: false, message: 'Login failed' };
+                return { success: false, message: response.message || 'Login failed' };
             }
         } catch (error: any) {
             console.error('🚨 AuthContext: Login error:', error);
             return { 
                 success: false, 
-                message: error.response?.data?.message || 'Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.' 
+                message: error.message || 'Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.' 
             };
         }
     };

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
+import BackendService from '../services/backendService';
 import { 
     PencilIcon, 
     PlusIcon,
@@ -15,8 +15,6 @@ import { toast } from 'react-toastify';
 import TSV_Logo from '../assets/TSV_Tennis.svg';
 import type { DashboardResponse } from '../types/DashboardResponse';
 import type { WorkHourEntry } from '../types/WorkHourEntry';
-
-const API_BASE_URL = (import.meta as any).env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 const Dashboard = () => {
     const { user, logout, token } = useAuth();
@@ -38,16 +36,11 @@ const Dashboard = () => {
                 throw new Error('No authentication token available');
             }
             
-            console.log(`🔍 Dashboard: Making API call to /api/dashboard/${selectedYear}`);
-            const response = await axios.get(`${API_BASE_URL}/api/dashboard/${selectedYear}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            console.log(`🔍 Dashboard: Making API call to dashboard/${selectedYear}`);
+            const response = await BackendService.getDashboard(selectedYear);
             
-            console.log('🔍 Dashboard: Family dashboard response received:', response.data);
-            return response.data;
+            console.log('🔍 Dashboard: Family dashboard response received:', response);
+            return response;
         },
         enabled: !!user && !!token,
         retry: 1,
@@ -62,20 +55,15 @@ const Dashboard = () => {
             console.log('🔍 Fetching work hour details for ID:', row.id);
             
             // Fetch the complete work hour entry using the GET endpoint
-            const response = await axios.get(`${API_BASE_URL}/api/arbeitsstunden/${row.id}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            const response = await BackendService.getArbeitsstundenById(row.id);
             
-            if (response.data.success) {
-                console.log('✅ Fetched work hour data:', response.data.data);
-                setEditingRow(response.data.data);
+            if (response.success) {
+                console.log('✅ Fetched work hour data:', response.data);
+                setEditingRow(response.data);
                 setShowAddForm(false);
             } else {
                 toast.error('Fehler beim Laden der Daten zum Bearbeiten');
-                console.error('Failed to fetch work hour:', response.data.message);
+                console.error('Failed to fetch work hour:', response.message);
             }
         } catch (error) {
             console.error('Error fetching work hour for edit:', error);
@@ -88,18 +76,13 @@ const Dashboard = () => {
             try {
                 console.log('🗑️ Deleting work hour entry:', rowId);
                 
-                const response = await axios.delete(`${API_BASE_URL}/api/arbeitsstunden/${rowId}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
+                const response = await BackendService.deleteArbeitsstunden(rowId);
                 
-                if (response.data.success) {
+                if (response.success) {
                     toast.success('Eintrag erfolgreich gelöscht');
                     queryClient.invalidateQueries({ queryKey: ['dashboard'] });
                 } else {
-                    toast.error(response.data.message || 'Fehler beim Löschen des Eintrags');
+                    toast.error(response.message || 'Fehler beim Löschen des Eintrags');
                 }
             } catch (error) {
                 console.error('Error deleting work hour:', error);
@@ -160,21 +143,16 @@ const Dashboard = () => {
                     return;
                 }
                 
-                const response = await axios.post(`${API_BASE_URL}/api/arbeitsstunden`, formData, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
+                const response = await BackendService.createArbeitsstunden(formData);
                 
-                console.log('✅ Response from backend:', response.data);
+                console.log('✅ Response from backend:', response);
                 
-                if (response.data.success) {
+                if (response.success) {
                     toast.success('Eintrag erfolgreich erstellt');
                     setShowAddForm(false);
                     queryClient.invalidateQueries({ queryKey: ['dashboard'] });
                 } else {
-                    toast.error(response.data.message || 'Fehler beim Erstellen');
+                    toast.error(response.message || 'Fehler beim Erstellen');
                 }
             } else {
                 console.log('🚀 Updating work hours entry:', editingRow.id, formData);
@@ -212,24 +190,19 @@ const Dashboard = () => {
                 // Send the form data as-is (with German field names)
                 console.log('🚀 Sending update data:', formData);
                 
-                const response = await axios.put(`${API_BASE_URL}/api/arbeitsstunden/${editingRow.id}`, formData, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
+                const response = await BackendService.updateArbeitsstunden(editingRow.id, formData);
                 
-                console.log('✅ Update response from backend:', response.data);
+                console.log('✅ Update response from backend:', response);
                 
-                if (response.data.success) {
+                if (response.success) {
                     toast.success('Eintrag erfolgreich aktualisiert');
                     setEditingRow(null);
                     queryClient.invalidateQueries({ queryKey: ['dashboard'] });
                 } else {
-                    toast.error(response.data.error || response.data.message || 'Fehler beim Aktualisieren');
+                    toast.error(response.message || 'Fehler beim Aktualisieren');
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error saving work hours:', error);
             // Handle specific error messages from backend
             if (error.response?.data?.message?.includes('duplicate') || 
