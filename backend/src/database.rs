@@ -63,7 +63,7 @@ impl Database {
     }
 
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<AuthUser>, sqlx::Error> {
-        let row = sqlx::query("SELECT id, email, password, uuid, created_at FROM details WHERE email = ?")
+        let row = sqlx::query("SELECT id, email, password, uuid, created_at FROM details WHERE LOWER(email) = LOWER(?)")
             .bind(email)
             .fetch_optional(&self.pool)
             .await?;
@@ -91,7 +91,7 @@ impl Database {
         let result = sqlx::query(
             "INSERT INTO details (email, password, uuid) VALUES (?, ?, ?)"
         )
-        .bind(&request.email)
+        .bind(&request.email.to_lowercase())
         .bind(&password_hash)
         .bind(&uuid)
         .execute(&self.pool)

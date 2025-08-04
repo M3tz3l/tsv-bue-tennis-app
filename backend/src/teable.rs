@@ -161,13 +161,17 @@ pub async fn get_member_by_email_with_projection(
 ) -> Result<Option<Member>> {
     let (api_url, token, _base_id, members_table_id, _) =
         get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
+    
+    // Normalize email to lowercase for case-insensitive comparison
+    let email_lowercase = email.to_lowercase();
+    
     // Use Teable API filtering to only fetch the specific user
     let filter = serde_json::json!({
         "conjunction": "and",
         "filterSet": [{
             "fieldId": "Email",
             "operator": "is",
-            "value": email
+            "value": email_lowercase
         }]
     });
     let url = format!("{}/table/{}/record", api_url, members_table_id);
@@ -182,8 +186,8 @@ pub async fn get_member_by_email_with_projection(
         }
     }
     info!(
-        "🔍 Fetching member by email: {} with filter and projection: {:?}",
-        email, projection
+        "🔍 Fetching member by email: {} (normalized: {}) with filter and projection: {:?}",
+        email, email_lowercase, projection
     );
     let response = req.send().await?;
     let response_text = handle_teable_response(response, "member_by_email").await?;
@@ -192,29 +196,40 @@ pub async fn get_member_by_email_with_projection(
     let records = teable_response["records"]
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
-    if records.is_empty() {
-        info!("No member found with email: {}", email);
-        return Ok(None);
+    
+    // If direct filter didn't work, do case-insensitive client-side filtering
+    let matching_record = records.iter().find(|record| {
+        let fields = &record["fields"];
+        if let Some(record_email) = fields["Email"].as_str() {
+            record_email.to_lowercase() == email_lowercase
+        } else {
+            false
+        }
+    });
+    
+    if let Some(record) = matching_record {
+        let fields = &record["fields"];
+        let member = Member {
+            id: record["id"].as_str().unwrap_or("").to_string(),
+            first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
+            last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
+            email: fields["Email"].as_str().unwrap_or("").to_string(),
+            family_id: fields["Familie"]
+                .as_str()
+                .map(|s| s.to_string())
+                .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
+            uuid: fields["UUID"].as_str().unwrap_or("").to_string(),
+            birth_date: fields["Geburtsdatum"].as_str().map(|s| s.to_string()),
+        };
+        info!(
+            "✅ Found member: {} {} ({}) - case insensitive match",
+            member.first_name, member.last_name, member.email
+        );
+        Ok(Some(member))
+    } else {
+        info!("No member found with email: {} (case insensitive)", email);
+        Ok(None)
     }
-    let record = &records[0];
-    let fields = &record["fields"];
-    let member = Member {
-        id: record["id"].as_str().unwrap_or("").to_string(),
-        first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
-        last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
-        email: fields["Email"].as_str().unwrap_or("").to_string(),
-        family_id: fields["Familie"]
-            .as_str()
-            .map(|s| s.to_string())
-            .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-        uuid: fields["UUID"].as_str().unwrap_or("").to_string(),
-        birth_date: fields["Geburtsdatum"].as_str().map(|s| s.to_string()),
-    };
-    info!(
-        "✅ Found member: {} {} ({})",
-        member.first_name, member.last_name, member.email
-    );
-    Ok(Some(member))
 }
 
 /// Get family members by family ID - optimized to filter at API level

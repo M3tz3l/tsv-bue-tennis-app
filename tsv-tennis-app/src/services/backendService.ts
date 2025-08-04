@@ -53,7 +53,9 @@ class BackendService {
   // Authentication methods
   async login(email: string, password: string): Promise<LoginResponse | ApiError> {
     try {
-      const response = await this.api.post<LoginResponse>('/login', { email, password });
+      // Normalize email to lowercase for case-insensitive authentication
+      const normalizedEmail = email.toLowerCase().trim();
+      const response = await this.api.post<LoginResponse>('/login', { email: normalizedEmail, password });
       return response.data;
     } catch (error: any) {
       console.error('Login error:', error);
@@ -79,7 +81,9 @@ class BackendService {
 
   async forgotPassword(email: string): Promise<ApiResponse | ApiError> {
     try {
-      const response = await this.api.post<ApiResponse>('/forgotPassword', { email });
+      // Normalize email to lowercase for case-insensitive password reset
+      const normalizedEmail = email.toLowerCase().trim();
+      const response = await this.api.post<ApiResponse>('/forgotPassword', { email: normalizedEmail });
       return response.data;
     } catch (error: any) {
       console.error('Forgot password error:', error);

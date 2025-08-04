@@ -251,12 +251,14 @@ async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    info!("Login attempt for email: {}", payload.email);
+    // Normalize email to lowercase for case-insensitive comparison
+    let normalized_email = payload.email.to_lowercase();
+    info!("Login attempt for email: {} (normalized: {})", payload.email, normalized_email);
     
     // Verify password using MySQL database
     let auth_user = state
         .database
-        .verify_password(&payload.email, &payload.password)
+        .verify_password(&normalized_email, &payload.password)
         .await
         .map_err(|e| {
             error!("Database error during login: {}", e);
@@ -269,13 +271,13 @@ async fn login(
             user
         },
         None => {
-            info!("User not found in database or password incorrect for: {}", payload.email);
+            info!("User not found in database or password incorrect for: {}", normalized_email);
             return Err(StatusCode::UNAUTHORIZED);
         }
     };
 
     // Get profile data from Teable - optimized to fetch only the specific user
-    let teable_user = teable::get_member_by_email(&state.http_client, &payload.email).await
+    let teable_user = teable::get_member_by_email(&state.http_client, &normalized_email).await
         .map_err(|e| {
             error!("Teable error: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
@@ -311,16 +313,18 @@ async fn forgot_password(
     State(state): State<AppState>,
     Json(payload): Json<ForgotPasswordRequest>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    info!("Forgot password request for email: {}", payload.email);
+    // Normalize email to lowercase for case-insensitive comparison
+    let normalized_email = payload.email.to_lowercase();
+    info!("Forgot password request for email: {} (normalized: {})", payload.email, normalized_email);
     
     // Get user from Teable - optimized to fetch only the specific user
-    let user = match teable::get_member_by_email(&state.http_client, &payload.email).await {
+    let user = match teable::get_member_by_email(&state.http_client, &normalized_email).await {
         Ok(Some(user)) => {
             info!("Found user in Teable: {} (ID: {})", user.email, user.id);
             user
         },
         Ok(None) => {
-            info!("User not found in Teable: {}", payload.email);
+            info!("User not found in Teable: {}", normalized_email);
             return Ok(ResponseJson(serde_json::json!({
                 "success": false,
                 "message": "This email address is not registered in our system. Please check your email address or contact support."
