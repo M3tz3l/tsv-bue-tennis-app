@@ -1,3 +1,6 @@
+# Ignore generated TypeScript types except index.ts
+src/types/*.ts
+!src/types/index.ts
 # Logs
 logs
 *.log

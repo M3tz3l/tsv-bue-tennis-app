@@ -2,14 +2,12 @@ use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePool, Row};
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthUser {
     pub id: i32,
     pub email: String,
     pub password_hash: String,
-    pub uuid: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -17,7 +15,6 @@ pub struct AuthUser {
 pub struct CreateUserRequest {
     pub email: String,
     pub password: String,
-    pub uuid: Option<String>,
 }
 
 #[derive(Clone)]
@@ -36,7 +33,6 @@ impl Database {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 email TEXT UNIQUE NOT NULL,
                 password TEXT NOT NULL,
-                uuid TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
             "#,
@@ -63,7 +59,7 @@ impl Database {
     }
 
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<AuthUser>, sqlx::Error> {
-        let row = sqlx::query("SELECT id, email, password, uuid, created_at FROM details WHERE LOWER(email) = LOWER(?)")
+        let row = sqlx::query("SELECT id, email, password, created_at FROM details WHERE LOWER(email) = LOWER(?)")
             .bind(email)
             .fetch_optional(&self.pool)
             .await?;
@@ -73,7 +69,6 @@ impl Database {
                 id: row.get("id"),
                 email: row.get("email"),
                 password_hash: row.get("password"),
-                uuid: row.get("uuid"),
                 created_at: row.get("created_at"),
             }))
         } else {
@@ -86,14 +81,11 @@ impl Database {
         let password_hash = hash(&request.password, DEFAULT_COST)
             .map_err(|e| sqlx::Error::Configuration(Box::new(e)))?;
 
-        let uuid = request.uuid.unwrap_or_else(|| Uuid::new_v4().to_string());
-
         let result = sqlx::query(
-            "INSERT INTO details (email, password, uuid) VALUES (?, ?, ?)"
+            "INSERT INTO details (email, password) VALUES (?, ?)"
         )
         .bind(&request.email.to_lowercase())
         .bind(&password_hash)
-        .bind(&uuid)
         .execute(&self.pool)
         .await?;
 

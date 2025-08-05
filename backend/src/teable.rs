@@ -125,7 +125,6 @@ pub async fn get_member_by_id_with_projection(
             .as_str()
             .map(|s| s.to_string())
             .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-        uuid: fields["UUID"].as_str().unwrap_or("").to_string(),
         birth_date: fields["Geburtsdatum"].as_str().map(|s| s.to_string()),
     };
     info!(
@@ -218,7 +217,6 @@ pub async fn get_member_by_email_with_projection(
                 .as_str()
                 .map(|s| s.to_string())
                 .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-            uuid: fields["UUID"].as_str().unwrap_or("").to_string(),
             birth_date: fields["Geburtsdatum"].as_str().map(|s| s.to_string()),
         };
         info!(
@@ -304,7 +302,6 @@ pub async fn get_family_members_with_projection(
                 .as_str()
                 .map(|s| s.to_string())
                 .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-            uuid: fields["UUID"].as_str().unwrap_or("").to_string(),
             birth_date: fields["Geburtsdatum"].as_str().map(|s| s.to_string()),
         };
         members.push(member);
@@ -491,7 +488,6 @@ pub async fn create_work_hour(
         duration_seconds / 3600.0
     );
     println!("  Mitglied_id: {} (linked record)", member_id);
-    println!("  Mitglied_UUID: {}", member.uuid);
     println!("  Nachname: {}", member.last_name);
     println!("  Vorname: {}", member.first_name);
 

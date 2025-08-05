@@ -448,7 +448,6 @@ async fn reset_password(
             let create_request = database::CreateUserRequest {
                 email: teable_user.email.clone(),
                 password: payload.password.clone(),
-                uuid: Some(teable_user.uuid.clone()),
             };
             
             match state.database.create_user(create_request).await {
@@ -691,7 +690,6 @@ async fn get_user(
             "id": user.id,
             "name": user.name(),
             "email": user.email.clone(),
-            "uuid": user.uuid.clone(),
             "profile": {
                 "nachname": user.last_name.clone(),
                 "vorname": user.first_name.clone(),
@@ -910,7 +908,7 @@ async fn create_work_hour(
             StatusCode::NOT_FOUND
         })?;
 
-    println!("🔍 Create Work Hour: Found user: {} (UUID: {})", current_user.name(), current_user.uuid);
+    println!("🔍 Create Work Hour: Found user: {}", current_user.name());
 
     // Convert hours to seconds for storage (Teable expects seconds)
     let duration_seconds = payload.hours * 3600.0;
@@ -1070,7 +1068,7 @@ async fn update_work_hour(
     let current_user = teable::get_member_by_id_with_projection(
         &state.http_client,
         &user_id,
-        Some(&["Vorname","Nachname","Email","UUID"][..]) // Only fields needed for update_work_hour
+        Some(&["Vorname","Nachname","Email"][..]) // Only fields needed for update_work_hour
     ).await
         .map_err(|e| {
             println!("🚨 Update Work Hour: Failed to get member by id: {}", e);
@@ -1081,7 +1079,7 @@ async fn update_work_hour(
             StatusCode::NOT_FOUND
         })?;
 
-    println!("🔍 Update Work Hour: Found user: {} (UUID: {})", current_user.name(), current_user.uuid);
+    println!("🔍 Update Work Hour: Found user: {}", current_user.name());
 
     // Verify the work hour exists and belongs to the current user (most efficient - direct fetch by ID)
     let existing_work_hour = teable::get_work_hour_by_id(&state.http_client, &work_hour_id).await

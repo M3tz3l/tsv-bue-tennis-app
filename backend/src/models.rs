@@ -146,8 +146,6 @@ pub struct Member {
     pub email: String,
     #[serde(rename = "Familie")]
     pub family_id: Option<String>,
-    #[serde(rename = "UUID")]
-    pub uuid: String,
     #[serde(rename = "Geburtsdatum")]
     pub birth_date: Option<String>,
 }
