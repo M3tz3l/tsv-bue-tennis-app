@@ -15,18 +15,13 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         Ok(Config {
-            database_url: env::var("DATABASE_URL")
-                .map_err(|_| "DATABASE_URL must be set")?,
-            jwt_secret: env::var("JWT_SECRET")
-                .unwrap_or_else(|_| "your-secret-key".to_string()),
+            database_url: env::var("DATABASE_URL").map_err(|_| "DATABASE_URL must be set")?,
+            jwt_secret: env::var("JWT_SECRET").unwrap_or_else(|_| "your-secret-key".to_string()),
             frontend_url: env::var("FRONTEND_URL")
                 .unwrap_or_else(|_| "http://localhost:5173".to_string()),
-            teable_api_url: env::var("TEABLE_API_URL")
-                .map_err(|_| "TEABLE_API_URL must be set")?,
-            teable_token: env::var("TEABLE_TOKEN")
-                .map_err(|_| "TEABLE_TOKEN must be set")?,
-            teable_base_id: env::var("TEABLE_BASE_ID")
-                .map_err(|_| "TEABLE_BASE_ID must be set")?,
+            teable_api_url: env::var("TEABLE_API_URL").map_err(|_| "TEABLE_API_URL must be set")?,
+            teable_token: env::var("TEABLE_TOKEN").map_err(|_| "TEABLE_TOKEN must be set")?,
+            teable_base_id: env::var("TEABLE_BASE_ID").map_err(|_| "TEABLE_BASE_ID must be set")?,
             members_table_id: env::var("MEMBERS_TABLE_ID")
                 .map_err(|_| "MEMBERS_TABLE_ID must be set")?,
             work_hours_table_id: env::var("WORK_HOURS_TABLE_ID")

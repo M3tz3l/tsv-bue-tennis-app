@@ -1,7 +1,7 @@
+use crate::config::Config;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::config::Config;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthClaims {
@@ -11,7 +11,9 @@ pub struct AuthClaims {
 }
 
 pub fn create_token(user_id: &str) -> Result<String, jsonwebtoken::errors::Error> {
-    let config = Config::from_env().map_err(|_| jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat))?;
+    let config = Config::from_env().map_err(|_| {
+        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat)
+    })?;
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -31,7 +33,9 @@ pub fn create_token(user_id: &str) -> Result<String, jsonwebtoken::errors::Error
 }
 
 pub fn verify_token(token: &str) -> Result<AuthClaims, jsonwebtoken::errors::Error> {
-    let config = Config::from_env().map_err(|_| jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat))?;
+    let config = Config::from_env().map_err(|_| {
+        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat)
+    })?;
     decode::<AuthClaims>(
         token,
         &DecodingKey::from_secret(config.jwt_secret.as_ref()),

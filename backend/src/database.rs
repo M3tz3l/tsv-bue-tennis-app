@@ -25,7 +25,7 @@ pub struct Database {
 impl Database {
     pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
         let pool = SqlitePool::connect(database_url).await?;
-        
+
         // Create tables if they don't exist (SQLite syntax)
         sqlx::query(
             r#"
@@ -59,10 +59,12 @@ impl Database {
     }
 
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<AuthUser>, sqlx::Error> {
-        let row = sqlx::query("SELECT id, email, password, created_at FROM details WHERE LOWER(email) = LOWER(?)")
-            .bind(email)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query(
+            "SELECT id, email, password, created_at FROM details WHERE LOWER(email) = LOWER(?)",
+        )
+        .bind(email)
+        .fetch_optional(&self.pool)
+        .await?;
 
         if let Some(row) = row {
             Ok(Some(AuthUser {
@@ -81,19 +83,21 @@ impl Database {
         let password_hash = hash(&request.password, DEFAULT_COST)
             .map_err(|e| sqlx::Error::Configuration(Box::new(e)))?;
 
-        let result = sqlx::query(
-            "INSERT INTO details (email, password) VALUES (?, ?)"
-        )
-        .bind(&request.email.to_lowercase())
-        .bind(&password_hash)
-        .execute(&self.pool)
-        .await?;
+        let result = sqlx::query("INSERT INTO details (email, password) VALUES (?, ?)")
+            .bind(&request.email.to_lowercase())
+            .bind(&password_hash)
+            .execute(&self.pool)
+            .await?;
 
         // For SQLite, use last_insert_rowid
         Ok(result.last_insert_rowid() as i32)
     }
 
-    pub async fn verify_password(&self, email: &str, password: &str) -> Result<Option<AuthUser>, sqlx::Error> {
+    pub async fn verify_password(
+        &self,
+        email: &str,
+        password: &str,
+    ) -> Result<Option<AuthUser>, sqlx::Error> {
         if let Some(user) = self.get_user_by_email(email).await? {
             if verify(password, &user.password_hash)
                 .map_err(|e| sqlx::Error::Configuration(Box::new(e)))?
@@ -108,7 +112,11 @@ impl Database {
     }
 
     #[allow(dead_code)]
-    pub async fn update_password(&self, user_id: i32, new_password: &str) -> Result<(), sqlx::Error> {
+    pub async fn update_password(
+        &self,
+        user_id: i32,
+        new_password: &str,
+    ) -> Result<(), sqlx::Error> {
         let password_hash = hash(new_password, DEFAULT_COST)
             .map_err(|e| sqlx::Error::Configuration(Box::new(e)))?;
 
@@ -122,7 +130,12 @@ impl Database {
     }
 
     #[allow(dead_code)]
-    pub async fn create_reset_token(&self, user_id: i32, token: &str, expires_at: DateTime<Utc>) -> Result<(), sqlx::Error> {
+    pub async fn create_reset_token(
+        &self,
+        user_id: i32,
+        token: &str,
+        expires_at: DateTime<Utc>,
+    ) -> Result<(), sqlx::Error> {
         // Delete any existing tokens for this user
         sqlx::query("DELETE FROM reset_tokens WHERE user_id = ?")
             .bind(user_id)
@@ -141,7 +154,10 @@ impl Database {
     }
 
     #[allow(dead_code)]
-    pub async fn get_reset_token(&self, token: &str) -> Result<Option<(i32, DateTime<Utc>)>, sqlx::Error> {
+    pub async fn get_reset_token(
+        &self,
+        token: &str,
+    ) -> Result<Option<(i32, DateTime<Utc>)>, sqlx::Error> {
         let row = sqlx::query("SELECT user_id, expires_at FROM reset_tokens WHERE token = ?")
             .bind(token)
             .fetch_optional(&self.pool)

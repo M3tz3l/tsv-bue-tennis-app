@@ -1,8 +1,8 @@
-use crate::models::{Member, WorkHour, WorkHourEntry};
 use crate::auth;
+use crate::models::{Member, WorkHour, WorkHourEntry};
 use axum::http::{HeaderMap, StatusCode};
+use chrono::Datelike;
 use tracing::info;
-use chrono::{Datelike};
 
 /// Converts seconds to hours with 2 decimal place precision
 pub fn seconds_to_hours(seconds: f64) -> f64 {
@@ -20,7 +20,7 @@ pub fn filter_work_hours_for_user_by_year(
     work_hours: &[WorkHour],
     user_id: &str,
     year: i32,
-    debug_prefix: &str
+    debug_prefix: &str,
 ) -> Vec<WorkHourEntry> {
     work_hours
         .iter()
@@ -75,7 +75,6 @@ pub fn filter_work_hours_for_user_by_year(
         .collect()
 }
 
-
 /// Calculates total hours from a list of work hour entries
 pub fn calculate_total_hours(entries: &[WorkHourEntry]) -> f64 {
     let total = entries.iter().map(|wh| wh.duration_hours).sum::<f64>();
@@ -86,8 +85,13 @@ pub fn calculate_total_hours(entries: &[WorkHourEntry]) -> f64 {
 pub fn log_work_entries(entries: &[WorkHourEntry], prefix: &str) {
     info!("{} work hours entries:", prefix);
     for (i, entry) in entries.iter().enumerate() {
-        info!("  Entry {}: Date={}, Description={}, Hours={}", 
-            i+1, entry.date, entry.description, entry.duration_hours);
+        info!(
+            "  Entry {}: Date={}, Description={}, Hours={}",
+            i + 1,
+            entry.date,
+            entry.description,
+            entry.duration_hours
+        );
     }
 }
 
@@ -101,20 +105,23 @@ pub fn extract_user_id_from_headers(headers: &HeaderMap) -> Result<String, Statu
         .strip_prefix("Bearer ")
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    info!("🔍 Auth: Verifying token: {}...", &auth_header[..std::cmp::min(auth_header.len(), 20)]);
+    info!(
+        "🔍 Auth: Verifying token: {}...",
+        &auth_header[..std::cmp::min(auth_header.len(), 20)]
+    );
 
     match auth::verify_token(auth_header) {
         Ok(claims) => {
             info!("✅ Auth: Token valid, user ID: {}", claims.sub);
-            
+
             // Check for old numeric user IDs (should be Teable record IDs starting with "rec")
             if claims.sub == "0" || claims.sub.parse::<u32>().is_ok() {
                 info!("🚨 Auth: Old token format detected (numeric user ID), rejecting");
                 return Err(StatusCode::UNAUTHORIZED);
             }
-            
+
             Ok(claims.sub)
-        },
+        }
         Err(e) => {
             info!("🚨 Auth: Token verification failed: {:?}", e);
             Err(StatusCode::UNAUTHORIZED)
@@ -125,15 +132,20 @@ pub fn extract_user_id_from_headers(headers: &HeaderMap) -> Result<String, Statu
 /// Checks if a member is eligible for work hours based on age restrictions
 /// Rules: Mandatory for members aged 16-70, starting the year after turning 16
 pub fn is_member_eligible_for_work_hours(member: &Member, current_year: i32) -> bool {
-    info!("🔍 [DEBUG] Called is_member_eligible_for_work_hours for {} {} (birth_date: {:?})", member.first_name, member.last_name, member.birth_date);
+    info!(
+        "🔍 [DEBUG] Called is_member_eligible_for_work_hours for {} {} (birth_date: {:?})",
+        member.first_name, member.last_name, member.birth_date
+    );
     if let Some(birth_date_str) = &member.birth_date {
         if birth_date_str.trim().is_empty() {
-            info!("🚨 Age Check: Empty birth date for {} {}, assuming eligible", 
-                member.first_name, member.last_name);
+            info!(
+                "🚨 Age Check: Empty birth date for {} {}, assuming eligible",
+                member.first_name, member.last_name
+            );
             return true;
         }
 
-        use chrono::{NaiveDate, DateTime};
+        use chrono::{DateTime, NaiveDate};
 
         // Try RFC3339 (e.g. 2019-10-08T22:21:36.000Z)
         if let Ok(dt) = DateTime::parse_from_rfc3339(birth_date_str) {
@@ -141,23 +153,41 @@ pub fn is_member_eligible_for_work_hours(member: &Member, current_year: i32) -> 
             let birth_year = birth_date.year();
             let age_in_current_year = current_year - birth_year;
             let eligible = age_in_current_year >= 17 && age_in_current_year < 70;
-            info!("🔍 Age Check: {} {} - Birth: {}, Age in {}: {}, Eligible: {}", 
-                member.first_name, member.last_name, birth_date_str, current_year, age_in_current_year, eligible);
+            info!(
+                "🔍 Age Check: {} {} - Birth: {}, Age in {}: {}, Eligible: {}",
+                member.first_name,
+                member.last_name,
+                birth_date_str,
+                current_year,
+                age_in_current_year,
+                eligible
+            );
             return eligible;
         } else if let Ok(birth_date) = NaiveDate::parse_from_str(birth_date_str, "%Y-%m-%d") {
             let birth_year = birth_date.year();
             let age_in_current_year = current_year - birth_year;
             let eligible = age_in_current_year >= 17 && age_in_current_year < 70;
-            info!("🔍 Age Check: {} {} - Birth: {}, Age in {}: {}, Eligible: {}", 
-                member.first_name, member.last_name, birth_date_str, current_year, age_in_current_year, eligible);
+            info!(
+                "🔍 Age Check: {} {} - Birth: {}, Age in {}: {}, Eligible: {}",
+                member.first_name,
+                member.last_name,
+                birth_date_str,
+                current_year,
+                age_in_current_year,
+                eligible
+            );
             return eligible;
         } else {
-            info!("🚨 Age Check: Invalid birth date format for {} {}: '{}', assuming eligible", 
-                member.first_name, member.last_name, birth_date_str);
+            info!(
+                "🚨 Age Check: Invalid birth date format for {} {}: '{}', assuming eligible",
+                member.first_name, member.last_name, birth_date_str
+            );
         }
     } else {
-        info!("🚨 Age Check: No birth date field for {} {}, assuming eligible", 
-            member.first_name, member.last_name);
+        info!(
+            "🚨 Age Check: No birth date field for {} {}, assuming eligible",
+            member.first_name, member.last_name
+        );
     }
     // If no birth date or invalid format, assume eligible (for backward compatibility)
     true
@@ -165,7 +195,10 @@ pub fn is_member_eligible_for_work_hours(member: &Member, current_year: i32) -> 
 
 /// Gets the required work hours for a member based on age eligibility
 pub fn get_required_hours_for_member(member: &Member, current_year: i32) -> f64 {
-    info!("🔍 [DEBUG] Called get_required_hours_for_member for {} {} (birth_date: {:?})", member.first_name, member.last_name, member.birth_date);
+    info!(
+        "🔍 [DEBUG] Called get_required_hours_for_member for {} {} (birth_date: {:?})",
+        member.first_name, member.last_name, member.birth_date
+    );
     if is_member_eligible_for_work_hours(member, current_year) {
         8.0 // Standard required hours
     } else {

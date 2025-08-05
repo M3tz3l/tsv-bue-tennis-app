@@ -1,9 +1,9 @@
+use crate::config::{Config, EmailConfig};
 use lettre::{
     message::{header::ContentType, Mailbox},
     transport::smtp::{authentication::Credentials, PoolConfig},
     Message, SmtpTransport, Transport,
 };
-use crate::config::{Config, EmailConfig};
 use tracing::{error, info};
 
 pub struct EmailService {
@@ -76,7 +76,10 @@ impl EmailService {
         user_id: String, // Changed from u32 to String
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let config = Config::from_env()?;
-        let reset_url = format!("{}/resetPassword?token={}&id={}", config.frontend_url, reset_token, user_id);
+        let reset_url = format!(
+            "{}/resetPassword?token={}&id={}",
+            config.frontend_url, reset_token, user_id
+        );
 
         let html_content = format!(
             r#"

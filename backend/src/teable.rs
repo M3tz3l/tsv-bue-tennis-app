@@ -160,10 +160,10 @@ pub async fn get_member_by_email_with_projection(
 ) -> Result<Option<Member>> {
     let (api_url, token, _base_id, members_table_id, _) =
         get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-    
+
     // Normalize email to lowercase for case-insensitive comparison
     let email_lowercase = email.to_lowercase();
-    
+
     // Use Teable API filtering to only fetch the specific user
     let filter = serde_json::json!({
         "conjunction": "and",
@@ -195,7 +195,7 @@ pub async fn get_member_by_email_with_projection(
     let records = teable_response["records"]
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
-    
+
     // If direct filter didn't work, do case-insensitive client-side filtering
     let matching_record = records.iter().find(|record| {
         let fields = &record["fields"];
@@ -205,7 +205,7 @@ pub async fn get_member_by_email_with_projection(
             false
         }
     });
-    
+
     if let Some(record) = matching_record {
         let fields = &record["fields"];
         let member = Member {

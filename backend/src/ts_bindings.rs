@@ -1,8 +1,8 @@
 // This test generates TypeScript definitions
 #[cfg(test)]
 mod tests {
-    use ts_rs::TS;
     use crate::models::*;
+    use ts_rs::TS;
 
     #[test]
     fn export_typescript_bindings() {
@@ -22,7 +22,7 @@ mod tests {
         FamilyMember::export();
         MemberContribution::export();
         WorkHourEntry::export();
-        
+
         println!("✅ TypeScript bindings exported to bindings/ directory");
     }
 }

@@ -192,7 +192,9 @@ impl WorkHour {
             Some(value) => {
                 if let Some(obj) = value.as_object() {
                     // Linked record format: {"id": "member_id"}
-                    obj.get("id").and_then(|v| v.as_str()).map(|s| s.to_string())
+                    obj.get("id")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
                 } else if let Some(id_str) = value.as_str() {
                     // Direct string format
                     Some(id_str.to_string())
