@@ -52,7 +52,7 @@ struct AppState {
     database: Database,
 }
 
-// Custom key extractor for user-based rate limiting
+// Custom key extractor for user-based rate limiting (for authenticated endpoints)
 #[derive(Clone)]
 pub struct UserKeyExtractor;
 
@@ -96,6 +96,70 @@ impl KeyExtractor for UserKeyExtractor {
     }
 }
 
+// IP-based key extractor for authentication endpoints (before login)
+#[derive(Clone)]
+pub struct IpKeyExtractor;
+
+impl KeyExtractor for IpKeyExtractor {
+    type Key = String;
+
+    fn name(&self) -> &'static str {
+        "client_ip"
+    }
+
+    fn extract<T>(&self, req: &Request<T>) -> Result<Self::Key, GovernorError> {
+        // Try to get the real IP from various headers (for proxy scenarios)
+        let headers = req.headers();
+
+        // Check X-Forwarded-For header first (most common for reverse proxies)
+        if let Some(forwarded_for) = headers.get("x-forwarded-for") {
+            if let Ok(forwarded_str) = forwarded_for.to_str() {
+                // X-Forwarded-For can contain multiple IPs, take the first one (original client)
+                if let Some(first_ip) = forwarded_str.split(',').next() {
+                    let ip = first_ip.trim();
+                    if !ip.is_empty() {
+                        return Ok(ip.to_string());
+                    }
+                }
+            }
+        }
+
+        // Check X-Real-IP header (used by some reverse proxies)
+        if let Some(real_ip) = headers.get("x-real-ip") {
+            if let Ok(ip_str) = real_ip.to_str() {
+                if !ip_str.trim().is_empty() {
+                    return Ok(ip_str.trim().to_string());
+                }
+            }
+        }
+
+        // Check CF-Connecting-IP header (Cloudflare)
+        if let Some(cf_ip) = headers.get("cf-connecting-ip") {
+            if let Ok(ip_str) = cf_ip.to_str() {
+                if !ip_str.trim().is_empty() {
+                    return Ok(ip_str.trim().to_string());
+                }
+            }
+        }
+
+        // Fallback: use a combination of User-Agent and a timestamp to create a semi-unique key
+        // This ensures rate limiting still works even if we can't get the real IP
+        let user_agent = headers
+            .get("user-agent")
+            .and_then(|ua| ua.to_str().ok())
+            .unwrap_or("unknown");
+
+        // Create a hash of the user agent for anonymity
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        user_agent.hash(&mut hasher);
+        let ua_hash = hasher.finish();
+
+        Ok(format!("fallback_{}", ua_hash))
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Load .env file
@@ -134,44 +198,85 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             axum::http::header::ACCEPT,
         ]);
 
-    let public_routes = Router::new()
-        .route("/health", get(health_check))
+    // Configure rate limiting for authentication and security-sensitive endpoints (restrictive)
+    let auth_governor_conf = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(1) // 1 request per second for all auth/security endpoints
+            .burst_size(3) // Allow small bursts for retry scenarios
+            .key_extractor(IpKeyExtractor) // Use IP-based extraction for auth endpoints
+            .finish()
+            .unwrap(),
+    );
+
+    // Health check route (no rate limiting)
+    let health_routes = Router::new().route("/health", get(health_check));
+
+    // Authentication and security-sensitive routes with restrictive rate limiting
+    let auth_routes = Router::new()
         .route("/login", post(login))
         .route("/register", post(register))
+        .route("/select-member", post(select_member))
         .route("/forgotPassword", post(forgot_password))
         .route("/resetPassword", post(reset_password))
-        .route("/select-member", post(select_member));
+        .layer(GovernorLayer {
+            config: auth_governor_conf,
+        })
+        .layer(middleware::from_fn(rewrite_429_to_json));
+
+    let public_routes = Router::new().merge(health_routes).merge(auth_routes);
 
     // Configure user-based rate limiting: reasonable limits per authenticated user
     // This prevents API abuse while allowing normal frontend usage patterns
-    let governor_conf = Arc::new(
+    let read_governor_conf = Arc::new(
         GovernorConfigBuilder::default()
-            .per_second(2) // 10 requests per second per user (generous for normal usage)
-            .burst_size(5) // Allow bursts up to 20 requests for page loads
+            .per_second(5) // 5 read requests per second per user (generous for normal usage)
+            .burst_size(10) // Allow bursts up to 10 requests for page loads
             .key_extractor(UserKeyExtractor) // Use our custom user-based extractor
             .finish()
             .unwrap(),
     );
 
-    let protected_routes = Router::new()
+    // More restrictive rate limiting for write operations
+    let write_governor_conf = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(1) // 1 write request per second per user
+            .burst_size(3) // Allow small bursts for quick operations
+            .key_extractor(UserKeyExtractor)
+            .finish()
+            .unwrap(),
+    );
+
+    // Read-only protected routes with generous rate limiting
+    let read_routes = Router::new()
         .route("/verify-token", get(get_user))
         .route("/dashboard/:year", get(dashboard))
         .route("/user", get(get_user))
         .route("/workHours", get(work_hours))
         .route("/workHours/:id", get(get_work_hour_by_id))
+        .route("/arbeitsstunden", get(work_hours)) // Frontend expects this endpoint
+        .route("/arbeitsstunden/:id", get(get_work_hour_by_id)) // Get single entry for editing
+        .layer(GovernorLayer {
+            config: read_governor_conf,
+        })
+        .layer(middleware::from_fn(rewrite_429_to_json));
+
+    // Write operations with stricter rate limiting
+    let write_routes = Router::new()
         .route("/workHours", post(create_work_hour))
         .route("/workHours/:id", put(update_work_hour))
         .route("/workHours/:id", delete(delete_work_hour))
-        .route("/arbeitsstunden", get(work_hours)) // Frontend expects this endpoint
-        .route("/arbeitsstunden/:id", get(get_work_hour_by_id)) // Get single entry for editing
         .route("/arbeitsstunden", post(create_work_hour)) // Frontend expects this endpoint
         .route("/arbeitsstunden/:id", put(update_work_hour)) // Frontend expects this endpoint
         .route("/arbeitsstunden/:id", delete(delete_work_hour)) // Frontend expects this endpoint
-        .route_layer(middleware::from_fn(auth_middleware))
         .layer(GovernorLayer {
-            config: governor_conf,
+            config: write_governor_conf,
         })
         .layer(middleware::from_fn(rewrite_429_to_json));
+
+    let protected_routes = Router::new()
+        .merge(read_routes)
+        .merge(write_routes)
+        .route_layer(middleware::from_fn(auth_middleware));
 
     let api_routes = Router::new().merge(public_routes).merge(protected_routes);
 

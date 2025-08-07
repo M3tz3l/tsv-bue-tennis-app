@@ -8,6 +8,11 @@ backend/target/
 backend/tennis_app.db
 backend/nohup.out
 
+# TypeScript bindings - don't commit generated files
+# They should be regenerated during build/development
+backend/bindings/
+tsv-tennis-app/src/types/types.ts
+
 # Node.js/Frontend
 tsv-tennis-app/node_modules/
 tsv-tennis-app/dist/

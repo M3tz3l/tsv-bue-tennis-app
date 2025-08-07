@@ -1,6 +1,9 @@
 target/
-bindings/
 .env
 *.log
 .DS_Store
+
+# TypeScript bindings - don't commit generated files
+# They should be regenerated during build/development
+bindings/
 

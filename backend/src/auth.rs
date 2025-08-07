@@ -1,8 +1,8 @@
 use crate::config::Config;
+use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
-use chrono::{Duration, Utc};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthClaims {
@@ -62,7 +62,11 @@ pub fn create_selection_token(email: &str) -> Result<String, jsonwebtoken::error
         exp: expiration.timestamp() as usize,
         typ: "selection".to_string(),
     };
-    encode(&Header::default(), &claims, &EncodingKey::from_secret(config.jwt_secret.as_ref()))
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(config.jwt_secret.as_ref()),
+    )
 }
 
 pub fn verify_selection_token(token: &str) -> Result<String, jsonwebtoken::errors::Error> {
@@ -75,7 +79,9 @@ pub fn verify_selection_token(token: &str) -> Result<String, jsonwebtoken::error
         &Validation::default(),
     )?;
     if token_data.claims.typ != "selection" {
-        return Err(jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidToken));
+        return Err(jsonwebtoken::errors::Error::from(
+            jsonwebtoken::errors::ErrorKind::InvalidToken,
+        ));
     }
     Ok(token_data.claims.sub)
 }

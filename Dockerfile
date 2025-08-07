@@ -4,18 +4,14 @@ FROM rust as backend-builder
 WORKDIR /app
 COPY backend/Cargo.toml backend/Cargo.lock ./
 
-# Create dummy main to cache dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release
-RUN rm -rf src
-
 # Copy actual source and build
-COPY backend/src ./src
+COPY backend/src/ ./src/
+RUN ls -la ./src/
 RUN touch src/main.rs
 RUN cargo build --release
 
-# Generate TypeScript types
-RUN cargo test export_typescript_bindings --quiet
+# Generate TypeScript bindings using the dedicated binary
+RUN cargo run --bin generate-types
 
 # Frontend build stage
 FROM node:20-alpine as frontend-builder
@@ -32,7 +28,7 @@ RUN npm ci --silent
 COPY tsv-tennis-app/ .
 
 # Copy generated TypeScript types from Rust backend
-COPY --from=backend-builder /app/bindings/*.ts ./src/types/
+COPY --from=backend-builder /app/bindings/types.ts ./src/types/
 
 # Build frontend with fresh types
 RUN npm run build

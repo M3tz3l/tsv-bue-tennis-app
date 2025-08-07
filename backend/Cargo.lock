@@ -395,6 +395,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.1.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d2301688392eb071b0bf1a37be05c469d3cc4dbbd95df672fe28ab021e6a096"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "dashmap"
 version = "5.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -448,6 +458,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.104",
+]
+
+[[package]]
+name = "document-features"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95249b50c6c185bee49034bcb378a49dc2b5dff0be90ff6616d31d64febab05d"
+dependencies = [
+ "litrs",
 ]
 
 [[package]]
@@ -1132,6 +1151,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "indoc"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfa799dd5ed20a7e349f3b4639aa80d74549c81716d9ec4f994c9b5815598306"
+
+[[package]]
 name = "inout"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1156,6 +1181,15 @@ name = "ipnet"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "469fb0b9cefa57e3ef31275ee7cacb78f2fdca44e4765491884a2b119d4eb130"
+
+[[package]]
+name = "itertools"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
+dependencies = [
+ "either",
+]
 
 [[package]]
 name = "itoa"
@@ -1259,6 +1293,12 @@ name = "litemap"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
+
+[[package]]
+name = "litrs"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5e54036fe321fd421e10d732f155734c4e4afd610dd556d9a82833ab3ee0bed"
 
 [[package]]
 name = "lock_api"
@@ -2190,6 +2230,69 @@ dependencies = [
 ]
 
 [[package]]
+name = "specta"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2240c3aa020aa61d2c569087d213baafbb212f4ceb9de9dd162376ea6aa0fe3"
+dependencies = [
+ "chrono",
+ "ctor",
+ "document-features",
+ "indoc",
+ "once_cell",
+ "paste",
+ "serde",
+ "serde_json",
+ "specta-macros",
+ "thiserror 1.0.69",
+ "uuid",
+]
+
+[[package]]
+name = "specta"
+version = "2.0.0-rc.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ccbb212565d2dc177bc15ecb7b039d66c4490da892436a4eee5b394d620c9bc"
+dependencies = [
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "specta-macros"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4605306321c356e03873b8ee71d7592a5e7c508add325c3ed0677c16fdf1bcfb"
+dependencies = [
+ "Inflector",
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+ "termcolor",
+]
+
+[[package]]
+name = "specta-serde"
+version = "0.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12260cbb21abb2e83a0375b1521867910e3aed8a7afa782206150ce552cd2e5a"
+dependencies = [
+ "specta 2.0.0-rc.20",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "specta-typescript"
+version = "0.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1e4472229365ceb6395487e3a60d921ad8e21f9ad06eaecc396f098902c9adc"
+dependencies = [
+ "specta 2.0.0-rc.20",
+ "specta-serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2873,29 +2976,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
-name = "ts-rs"
-version = "7.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc2cae1fc5d05d47aa24b64f9a4f7cba24cdc9187a2084dd97ac57bef5eccae6"
-dependencies = [
- "thiserror 1.0.69",
- "ts-rs-macros",
-]
-
-[[package]]
-name = "ts-rs-macros"
-version = "7.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73f7f9b821696963053a89a7bd8b292dc34420aea8294d7b225274d488f3ec92"
-dependencies = [
- "Inflector",
- "proc-macro2",
- "quote",
- "syn 2.0.104",
- "termcolor",
-]
-
-[[package]]
 name = "tsv-tennis-backend"
 version = "0.1.0"
 dependencies = [
@@ -2913,6 +2993,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "specta 1.0.5",
+ "specta-typescript",
  "sqlx",
  "tokio",
  "tower 0.4.13",
@@ -2920,7 +3002,6 @@ dependencies = [
  "tower_governor",
  "tracing",
  "tracing-subscriber",
- "ts-rs",
  "urlencoding",
  "uuid",
 ]

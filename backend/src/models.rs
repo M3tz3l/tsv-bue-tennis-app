@@ -1,24 +1,21 @@
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
+use specta::Type;
 
 // Request/Response models
-#[derive(Debug, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Deserialize, Type)]
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
 }
 
-#[derive(Debug, Serialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Type)]
 pub struct LoginResponse {
     pub success: bool,
     pub token: String,
     pub user: UserResponse,
 }
 
-#[derive(Debug, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Deserialize, Type)]
 #[allow(dead_code)]
 pub struct RegisterRequest {
     pub name: String,
@@ -26,14 +23,12 @@ pub struct RegisterRequest {
     pub password: String,
 }
 
-#[derive(Debug, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Deserialize, Type)]
 pub struct ForgotPasswordRequest {
     pub email: String,
 }
 
-#[derive(Debug, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Deserialize, Type)]
 #[allow(dead_code)]
 pub struct ResetPasswordRequest {
     pub token: String,
@@ -41,16 +36,14 @@ pub struct ResetPasswordRequest {
     pub id: Option<String>, // Changed from u32 to String to match Teable record IDs
 }
 
-#[derive(Debug, Serialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Type)]
 pub struct UserResponse {
     pub id: String, // Changed from u32 to String to match Teable record IDs
     pub name: String,
     pub email: String,
 }
 
-#[derive(Debug, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Deserialize, Type)]
 pub struct CreateWorkHourRequest {
     #[serde(rename = "Datum")]
     pub date: String,
@@ -109,8 +102,7 @@ where
     deserializer.deserialize_any(StringOrF64Visitor)
 }
 
-#[derive(Debug, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Deserialize, Type)]
 #[allow(dead_code)]
 pub struct UpdateWorkHourRequest {
     pub date: String,
@@ -118,8 +110,7 @@ pub struct UpdateWorkHourRequest {
     pub duration_seconds: f64,
 }
 
-#[derive(Debug, Serialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Type)]
 pub struct WorkHourResponse {
     pub id: String,
     pub date: String,
@@ -132,6 +123,7 @@ pub struct WorkHourResponse {
 #[serde(rename_all = "camelCase")]
 pub struct TeableResponse<T> {
     pub results: Vec<T>,
+    #[allow(dead_code)] // This field is set by teable.rs but may not always be read
     pub count: Option<usize>,
 }
 
@@ -208,8 +200,7 @@ impl WorkHour {
 }
 
 // Dashboard models
-#[derive(Debug, Serialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Type)]
 pub struct DashboardResponse {
     pub success: bool,
     pub family: Option<FamilyData>,
@@ -217,8 +208,7 @@ pub struct DashboardResponse {
     pub year: i32,
 }
 
-#[derive(Debug, Serialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Type)]
 pub struct FamilyData {
     pub name: String,
     pub members: Vec<FamilyMember>,
@@ -230,8 +220,7 @@ pub struct FamilyData {
     pub member_contributions: Vec<MemberContribution>,
 }
 
-#[derive(Debug, Serialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Type)]
 pub struct PersonalData {
     pub name: String,
     pub hours: f64,
@@ -239,16 +228,14 @@ pub struct PersonalData {
     pub entries: Vec<WorkHourEntry>,
 }
 
-#[derive(Debug, Serialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Type)]
 pub struct FamilyMember {
     pub id: String, // Changed from u32 to String to match Teable record IDs
     pub name: String,
     pub email: String,
 }
 
-#[derive(Debug, Serialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Type)]
 pub struct MemberContribution {
     pub name: String,
     pub hours: f64,
@@ -256,8 +243,7 @@ pub struct MemberContribution {
     pub entries: Vec<WorkHourEntry>,
 }
 
-#[derive(Debug, Serialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Type)]
 pub struct WorkHourEntry {
     pub id: String,
     #[serde(rename = "Datum")]
@@ -268,4 +254,5 @@ pub struct WorkHourEntry {
     pub duration_hours: f64, // Now represents hours with German field name
 }
 
+#[allow(unused_imports)] // These are used in main.rs via re-export
 pub use crate::member_selection::{MemberSelectionResponse, SelectMemberRequest};
