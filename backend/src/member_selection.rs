@@ -3,9 +3,11 @@ use ts_rs::TS;
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
-#[serde(untagged)]
+#[serde(tag = "type")]
 pub enum LoginResponseVariant {
+    #[serde(rename = "single")]
     SingleUser(super::LoginResponse),
+    #[serde(rename = "multiple")]
     MultipleUsers(MemberSelectionResponse),
 }
 

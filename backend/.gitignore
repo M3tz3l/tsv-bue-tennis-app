@@ -1,4 +1,6 @@
 target/
+bindings/
 .env
 *.log
 .DS_Store
+

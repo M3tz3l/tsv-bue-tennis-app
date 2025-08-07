@@ -11,21 +11,15 @@ interface MemberSelectionProps {
 
 export const MemberSelection = ({ users, selectionToken, onComplete, onCancel }: MemberSelectionProps) => {
     const { selectMember } = useAuth();
-    const [selectedMemberId, setSelectedMemberId] = useState<string>('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>('');
 
-    const handleSelectMember = async () => {
-        if (!selectedMemberId) {
-            setError('Bitte wählen Sie ein Mitglied aus.');
-            return;
-        }
-
+    const handleSelectMember = async (memberId: string) => {
         setLoading(true);
         setError('');
 
         try {
-            const result = await selectMember(selectedMemberId, selectionToken);
+            const result = await selectMember(memberId, selectionToken);
             if (result.success) {
                 onComplete();
             } else {
@@ -46,25 +40,19 @@ export const MemberSelection = ({ users, selectionToken, onComplete, onCancel }:
                 </h2>
 
                 <p className="text-gray-600 mb-6 text-center">
-                    Mehrere Mitglieder mit dieser E-Mail-Adresse gefunden. Bitte wählen Sie das gewünschte Mitglied aus:
+                    Mehrere Mitglieder mit dieser E-Mail-Adresse gefunden. Klicken Sie auf das gewünschte Mitglied:
                 </p>
 
                 <div className="space-y-3 mb-6">
                     {users
                         .sort((a, b) => a.name.localeCompare(b.name, 'de'))
                         .map((user) => (
-                            <label
+                            <button
                                 key={user.id}
-                                className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                                onClick={() => handleSelectMember(user.id)}
+                                disabled={loading}
+                                className="w-full flex items-center p-4 border rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 text-left"
                             >
-                                <input
-                                    type="radio"
-                                    name="member"
-                                    value={user.id}
-                                    checked={selectedMemberId === user.id}
-                                    onChange={(e) => setSelectedMemberId(e.target.value)}
-                                    className="mr-3 text-blue-600"
-                                />
                                 <div className="flex-1">
                                     <div className="font-semibold text-gray-800">
                                         {user.name}
@@ -75,7 +63,16 @@ export const MemberSelection = ({ users, selectionToken, onComplete, onCancel }:
                                         </div>
                                     )}
                                 </div>
-                            </label>
+                                <div className="ml-3 text-blue-600">
+                                    {loading ? (
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                                    ) : (
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    )}
+                                </div>
+                            </button>
                         ))}
                 </div>
 
@@ -85,20 +82,13 @@ export const MemberSelection = ({ users, selectionToken, onComplete, onCancel }:
                     </div>
                 )}
 
-                <div className="flex space-x-3">
+                <div className="flex justify-center">
                     <button
                         onClick={onCancel}
                         disabled={loading}
-                        className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                         Abbrechen
-                    </button>
-                    <button
-                        onClick={handleSelectMember}
-                        disabled={loading || !selectedMemberId}
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                        {loading ? 'Wird geladen...' : 'Auswählen'}
                     </button>
                 </div>
             </div>

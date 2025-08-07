@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import backendService from '../services/backendService.ts';
-import type { UserResponse, MemberSelectionResponse } from '@/types';
+import type { UserResponse, MemberSelectionResponse, LoginResponse } from '@/types';
 
 interface AuthResult {
     success: boolean;
@@ -83,8 +83,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             }
 
             // Check if this is a multi-member selection response
-            if ('multiple' in response && response.multiple) {
-                const memberResponse = response as MemberSelectionResponse;
+            if (response.type === 'multiple') {
+                const memberResponse = response as MemberSelectionResponse & { type: 'multiple' };
                 return {
                     success: true,
                     multiple: true,
@@ -95,8 +95,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             }
 
             // Single user login response
-            if ('token' in response && 'user' in response) {
-                const loginResponse = response as any;
+            if (response.type === 'single') {
+                const loginResponse = response as LoginResponse & { type: 'single' };
                 const newToken = loginResponse.token;
                 const userData = loginResponse.user;
 

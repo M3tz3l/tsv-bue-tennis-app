@@ -4,7 +4,6 @@ import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { MemberSelection } from "../components/MemberSelection";
-import { LockClosedIcon } from "@heroicons/react/24/solid";
 import { toast } from "react-toastify";
 import TSVLogo from "../assets/TSV_Tennis.svg";
 import type { UserResponse } from "@/types";
