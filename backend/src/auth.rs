@@ -1,13 +1,22 @@
 use crate::config::Config;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
+use chrono::{Duration, Utc};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthClaims {
     pub sub: String, // User ID
     pub exp: usize,  // Expiration time
     pub iat: usize,  // Issued at
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SelectionTokenClaims {
+    pub sub: String, // email
+    pub exp: usize,
+    pub typ: String, // always "selection"
 }
 
 pub fn create_token(user_id: &str) -> Result<String, jsonwebtoken::errors::Error> {
@@ -42,4 +51,28 @@ pub fn verify_token(token: &str) -> Result<AuthClaims, jsonwebtoken::errors::Err
         &Validation::default(),
     )
     .map(|data| data.claims)
+}
+
+pub fn create_selection_token(email: &str) -> Result<String, jsonwebtoken::errors::Error> {
+    let secret = env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
+    let expiration = Utc::now() + Duration::minutes(5);
+    let claims = SelectionTokenClaims {
+        sub: email.to_string(),
+        exp: expiration.timestamp() as usize,
+        typ: "selection".to_string(),
+    };
+    encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes()))
+}
+
+pub fn verify_selection_token(token: &str) -> Result<String, jsonwebtoken::errors::Error> {
+    let secret = env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
+    let token_data: jsonwebtoken::TokenData<SelectionTokenClaims> = decode::<SelectionTokenClaims>(
+        token,
+        &DecodingKey::from_secret(secret.as_bytes()),
+        &Validation::default(),
+    )?;
+    if token_data.claims.typ != "selection" {
+        return Err(jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidToken));
+    }
+    Ok(token_data.claims.sub)
 }

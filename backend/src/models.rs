@@ -267,3 +267,5 @@ pub struct WorkHourEntry {
     #[serde(rename = "Stunden")]
     pub duration_hours: f64, // Now represents hours with German field name
 }
+
+pub use crate::member_selection::{MemberSelectionResponse, SelectMemberRequest};

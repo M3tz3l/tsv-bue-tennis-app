@@ -3,6 +3,9 @@
 
 export type { LoginRequest } from './LoginRequest';
 export type { LoginResponse } from './LoginResponse';
+export type { LoginResponseVariant } from './LoginResponseVariant';
+export type { MemberSelectionResponse } from './MemberSelectionResponse';
+export type { SelectMemberRequest } from './SelectMemberRequest';
 export type { RegisterRequest } from './RegisterRequest';
 export type { ForgotPasswordRequest } from './ForgotPasswordRequest';
 export type { ResetPasswordRequest } from './ResetPasswordRequest';

@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import BackendService from '../services/backendService.ts';
-import { 
-    PencilIcon, 
+import {
+    PencilIcon,
     PlusIcon,
     TrashIcon,
     ArrowRightOnRectangleIcon,
@@ -31,14 +31,14 @@ const Dashboard = () => {
             console.log('🔍 Dashboard: Token available:', !!token);
             console.log('🔍 Dashboard: User available:', !!user);
             console.log('🔍 Dashboard: Selected year:', selectedYear);
-            
+
             if (!token) {
                 throw new Error('Kein Authentifizierungs-Token verfügbar');
             }
-            
+
             console.log(`🔍 Dashboard: Making API call to dashboard/${selectedYear}`);
             const response = await BackendService.getDashboard(selectedYear);
-            
+
             console.log('🔍 Dashboard: Family dashboard response received:', response);
             return response;
         },
@@ -53,10 +53,10 @@ const Dashboard = () => {
     const handleEdit = async (row) => {
         try {
             console.log('🔍 Fetching work hour details for ID:', row.id);
-            
+
             // Fetch the complete work hour entry using the GET endpoint
             const response = await BackendService.getArbeitsstundenById(row.id);
-            
+
             if (response.success) {
                 console.log('✅ Fetched work hour data:', response.data);
                 setEditingRow(response.data);
@@ -75,9 +75,9 @@ const Dashboard = () => {
         if (window.confirm('Möchten Sie diesen Eintrag wirklich löschen?')) {
             try {
                 console.log('🗑️ Deleting work hour entry:', rowId);
-                
+
                 const response = await BackendService.deleteArbeitsstunden(rowId);
-                
+
                 if (response.success) {
                     toast.success('Eintrag erfolgreich gelöscht');
                     queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -97,56 +97,56 @@ const Dashboard = () => {
             if (!editingRow) {
                 console.log('🚀 Creating new work hours entry:', formData);
                 console.log('🚀 Stunden value:', formData.Stunden, 'type:', typeof formData.Stunden);
-                
+
                 // Check for existing entry on the same date (client-side check)
                 let existingEntries = [];
-                
+
                 // Get all entries from both personal and family data
                 if (dashboardData?.personal?.entries) {
                     existingEntries = dashboardData.personal.entries;
                 } else if (dashboardData?.family?.memberContributions) {
                     existingEntries = dashboardData.family.memberContributions.flatMap(m => m.entries || []);
                 }
-                
+
                 console.log('🔍 Checking for duplicates. Existing entries:', existingEntries.length);
                 console.log('🔍 Looking for date:', formData.Datum, 'name:', formData.Vorname, formData.Nachname);
-                console.log('🔍 All existing entries:', existingEntries.map(e => ({ 
-                    id: e.id, 
-                    Datum: e.Datum, 
-                    Nachname: e.Nachname, 
-                    Vorname: e.Vorname 
+                console.log('🔍 All existing entries:', existingEntries.map(e => ({
+                    id: e.id,
+                    Datum: e.Datum,
+                    Nachname: e.Nachname,
+                    Vorname: e.Vorname
                 })));
-                
+
                 const sameDate = existingEntries.find(entry => {
                     // Since the dashboard data doesn't include names, we'll check by date only
                     // This is still valid because each person can only have one entry per day
                     const entryDate = entry.Datum;
                     const formDate = formData.Datum;
-                    
+
                     const dateMatch = entryDate === formDate;
-                    
+
                     console.log('🔍 Comparing dates only (names not available in dashboard data):', {
                         existingDate: entryDate,
                         newDate: formDate,
                         dateMatch: dateMatch
                     });
-                    
+
                     if (dateMatch) {
                         console.log('🔍 Found matching date:', entry);
                     }
                     return dateMatch;
                 });
-                
+
                 if (sameDate) {
                     console.log('❌ Duplicate entry found, blocking creation');
                     toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
                     return;
                 }
-                
+
                 const response = await BackendService.createArbeitsstunden(formData);
-                
+
                 console.log('✅ Response from backend:', response);
-                
+
                 if (response.success) {
                     toast.success('Eintrag erfolgreich erstellt');
                     setShowAddForm(false);
@@ -156,44 +156,44 @@ const Dashboard = () => {
                 }
             } else {
                 console.log('🚀 Updating work hours entry:', editingRow.id, formData);
-                
+
                 // For updates, check if we're changing the date and if so, check for duplicates
                 if (editingRow.Datum !== formData.Datum) {
                     console.log('🔍 Date changed from', editingRow.Datum, 'to', formData.Datum, '- checking for duplicates');
-                    
+
                     let existingEntries = [];
-                    
+
                     // Get all entries from both personal and family data
                     if (dashboardData?.personal?.entries) {
                         existingEntries = dashboardData.personal.entries;
                     } else if (dashboardData?.family?.memberContributions) {
                         existingEntries = dashboardData.family.memberContributions.flatMap(m => m.entries || []);
                     }
-                    
+
                     // Check if there's already an entry for the new date (excluding current entry being edited)
                     const duplicateEntry = existingEntries.find(entry => {
                         // Since dashboard data doesn't include names, check by date only (excluding current entry)
                         const entryDate = entry.Datum;
                         const formDate = formData.Datum;
-                        
+
                         return entry.id !== editingRow.id && // Exclude the current entry being edited
-                               entryDate === formDate;
+                            entryDate === formDate;
                     });
-                    
+
                     if (duplicateEntry) {
                         console.log('❌ Duplicate entry found for new date, blocking update');
                         toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
                         return;
                     }
                 }
-                
+
                 // Send the form data as-is (with German field names)
                 console.log('🚀 Sending update data:', formData);
-                
+
                 const response = await BackendService.updateArbeitsstunden(editingRow.id, formData);
-                
+
                 console.log('✅ Update response from backend:', response);
-                
+
                 if (response.success) {
                     toast.success('Eintrag erfolgreich aktualisiert');
                     setEditingRow(null);
@@ -205,7 +205,7 @@ const Dashboard = () => {
         } catch (error: any) {
             console.error('Error saving work hours:', error);
             // Handle specific error messages from backend
-            if (error.response?.data?.message?.includes('duplicate') || 
+            if (error.response?.data?.message?.includes('duplicate') ||
                 error.response?.data?.message?.includes('bereits vorhanden')) {
                 toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
             } else {
@@ -240,8 +240,8 @@ const Dashboard = () => {
         }
 
         // Get work hours data from personal or family context
-        let data = dashboardData?.personal?.entries || 
-                  (dashboardData?.family?.memberContributions.flatMap(m => m.entries)) || [];
+        let data = dashboardData?.personal?.entries ||
+            (dashboardData?.family?.memberContributions.flatMap(m => m.entries)) || [];
 
         // Sort entries by Datum descending (most recent first)
         data = [...data].sort((a, b) => {
@@ -275,9 +275,9 @@ const Dashboard = () => {
         const sampleRow = data[0];
         console.log("🔍 Sample row keys:", Object.keys(sampleRow));
         console.log("🔍 Sample row data:", sampleRow);
-        
-        const fieldNames = Object.keys(sampleRow).filter(key => 
-            key !== 'order' && 
+
+        const fieldNames = Object.keys(sampleRow).filter(key =>
+            key !== 'order' &&
             !key.startsWith('_') &&
             key !== 'User_UUID' &&
             key !== 'Mitglied_UUID' &&
@@ -288,7 +288,7 @@ const Dashboard = () => {
             key !== 'Nachname' &&
             key.toLowerCase() !== 'id'
         );
-        
+
         console.log("🔍 Filtered field names:", fieldNames);
 
         return (
@@ -308,7 +308,7 @@ const Dashboard = () => {
                         Hinzufügen
                     </button>
                 </div>
-                
+
                 {/* Mobile card layout */}
                 <div className="block md:hidden">
                     <div className="divide-y divide-gray-200">
@@ -321,7 +321,7 @@ const Dashboard = () => {
                                                 {field.replace(/_/g, ' ')}:
                                             </span>
                                             <span className="text-sm text-gray-900 ml-2 break-words text-right flex-1">
-                                                {field === 'Stunden' ? 
+                                                {field === 'Stunden' ?
                                                     parseFloat(row[field] || 0).toFixed(1) :
                                                     (row[field] || '-')
                                                 }
@@ -373,10 +373,10 @@ const Dashboard = () => {
                                 <tr key={row.id} className="hover:bg-gray-50">
                                     {fieldNames.map((field) => (
                                         <td key={field} className="px-3 lg:px-6 py-4 text-sm text-gray-900">
-                                            <div className="max-w-xs break-words" title={field === 'Stunden' ? 
+                                            <div className="max-w-xs break-words" title={field === 'Stunden' ?
                                                 parseFloat(row[field] || 0).toFixed(1) :
                                                 (row[field] || '-')}>
-                                                {field === 'Stunden' ? 
+                                                {field === 'Stunden' ?
                                                     parseFloat(row[field] || 0).toFixed(1) :
                                                     (row[field] || '-')
                                                 }
@@ -441,8 +441,8 @@ const Dashboard = () => {
                 {/* Year Selector */}
                 <div className="mb-4 sm:mb-6">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Jahr auswählen:</label>
-                    <select 
-                        value={selectedYear} 
+                    <select
+                        value={selectedYear}
                         onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                         className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                     >
@@ -461,7 +461,7 @@ const Dashboard = () => {
                                 <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
                                     🏠 Familie - {selectedYear}
                                 </h2>
-                                
+
                                 {/* Family Progress Bar */}
                                 <div className="mb-4">
                                     <div className="flex flex-col sm:flex-row sm:justify-between text-sm text-gray-600 mb-1 space-y-1 sm:space-y-0">
@@ -469,11 +469,10 @@ const Dashboard = () => {
                                         <span><span className="font-bold">{dashboardData.family.completed.toFixed(1)} Std</span> von <span className="font-bold">{dashboardData.family.required.toFixed(1)} Std</span></span>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-3">
-                                        <div 
-                                            className={`h-3 rounded-full transition-all duration-300 ${
-                                                dashboardData.family.percentage >= 100 ? 'bg-green-500' :
+                                        <div
+                                            className={`h-3 rounded-full transition-all duration-300 ${dashboardData.family.percentage >= 100 ? 'bg-green-500' :
                                                 dashboardData.family.percentage >= 75 ? 'bg-yellow-500' : 'bg-red-500'
-                                            }`}
+                                                }`}
                                             style={{ width: `${Math.min(100, dashboardData.family.percentage)}%` }}
                                         ></div>
                                     </div>
@@ -485,14 +484,28 @@ const Dashboard = () => {
                                 {/* Family Members Contributions */}
                                 <div className="space-y-3">
                                     <h3 className="font-medium text-gray-800">Familienmitglieder:</h3>
-                                    {dashboardData.family.memberContributions.map((member, index) => (
-                                        <div key={index} className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 px-3 bg-gray-50 rounded space-y-1 sm:space-y-0">
-                                            <span className="font-medium">{member.name}</span>
-                                            <span className="text-blue-600 font-bold text-sm sm:text-base">
-                                                {member.hours.toFixed(1)} / {member.required.toFixed(1)} Std
-                                            </span>
-                                        </div>
-                                    ))}
+                                    {dashboardData.family.memberContributions
+                                        .sort((a, b) => a.name.localeCompare(b.name, 'de'))
+                                        .map((member, index) => {
+                                            const isCurrentUser = user?.name === member.name;
+                                            return (
+                                                <div
+                                                    key={index}
+                                                    className={`flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 px-3 rounded space-y-1 sm:space-y-0 ${isCurrentUser
+                                                        ? 'bg-blue-100 border-2 border-blue-300'
+                                                        : 'bg-gray-50'
+                                                        }`}
+                                                >
+                                                    <span className={`font-medium ${isCurrentUser ? 'text-blue-800' : ''}`}>
+                                                        {member.name} {isCurrentUser ? '(Sie)' : ''}
+                                                    </span>
+                                                    <span className={`font-bold text-sm sm:text-base ${isCurrentUser ? 'text-blue-700' : 'text-blue-600'
+                                                        }`}>
+                                                        {member.hours.toFixed(1)} / {member.required.toFixed(1)} Std
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
                                     {dashboardData.family.remaining > 0 && (
                                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 px-3 bg-red-50 rounded border border-red-200 space-y-1 sm:space-y-0">
                                             <span className="font-medium text-red-700">Noch zu erledigen</span>
@@ -507,7 +520,7 @@ const Dashboard = () => {
                                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
                                     👤 {dashboardData?.personal?.name || 'Ihre Arbeitsstunden'} - {selectedYear}
                                 </h2>
-                                
+
                                 {/* Personal Progress Bar */}
                                 <div className="mb-4">
                                     <div className="flex justify-between text-sm text-gray-600 mb-1">
@@ -518,16 +531,16 @@ const Dashboard = () => {
                                         </span>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-3">
-                                        <div 
+                                        <div
                                             className={`h-3 rounded-full ${(() => {
                                                 const personalHours = dashboardData?.personal?.hours || 0;
                                                 const requiredHours = dashboardData?.personal?.required || 8;
                                                 const percentage = (personalHours / requiredHours) * 100;
                                                 return percentage >= 100 ? 'bg-green-500' :
-                                                       percentage >= 75 ? 'bg-yellow-500' : 'bg-red-500';
+                                                    percentage >= 75 ? 'bg-yellow-500' : 'bg-red-500';
                                             })()}`}
-                                            style={{ 
-                                                width: `${Math.min(100, ((dashboardData?.personal?.hours || 0) / (dashboardData?.personal?.required || 8)) * 100)}%` 
+                                            style={{
+                                                width: `${Math.min(100, ((dashboardData?.personal?.hours || 0) / (dashboardData?.personal?.required || 8)) * 100)}%`
                                             }}
                                         ></div>
                                     </div>
@@ -560,11 +573,11 @@ const Dashboard = () => {
                             // If personal.name exists, parse it
                             Nachname: dashboardData.personal.name.split(' ').slice(1).join(' '),
                             Vorname: dashboardData.personal.name.split(' ')[0]
-                        } : 
-                        // Fallback to family members lookup
-                        dashboardData?.family?.members?.find(m => m.email === user?.email) ||
-                        // Final fallback
-                        { Nachname: '', Vorname: '' }
+                        } :
+                            // Fallback to family members lookup
+                            dashboardData?.family?.members?.find(m => m.email === user?.email) ||
+                            // Final fallback
+                            { Nachname: '', Vorname: '' }
                     }
                     selectedYear={selectedYear}
                 />
@@ -628,15 +641,15 @@ const ArbeitsstundenFormModal = ({ isOpen, onClose, onSave, initialData, userPro
             toast.error('Das Datum darf nicht in der Zukunft liegen');
             return;
         }
-        
+
         // Validate year with one-month grace period
         const selectedYear = selectedDate.getFullYear();
         const currentYear = today.getFullYear();
         const currentMonth = today.getMonth(); // 0-based (0 = January, 1 = February, etc.)
-        
+
         // Calculate minimum allowed year based on grace period
         const minAllowedYear = currentMonth === 0 ? currentYear - 1 : currentYear; // January = month 0
-        
+
         if (selectedYear < minAllowedYear) {
             if (currentMonth === 0) {
                 toast.error(`Arbeitsstunden können nur für ${currentYear} oder ${currentYear - 1} (Nachfrist bis Ende Januar) eingetragen werden.`);
@@ -645,7 +658,7 @@ const ArbeitsstundenFormModal = ({ isOpen, onClose, onSave, initialData, userPro
             }
             return;
         }
-        
+
         // Validate hours is positive and reasonable
         const hours = parseFloat(formData.Stunden);
         if (isNaN(hours) || hours <= 0) {
@@ -665,14 +678,14 @@ const ArbeitsstundenFormModal = ({ isOpen, onClose, onSave, initialData, userPro
     };
 
     const today = new Date().toISOString().split('T')[0];
-    
+
     // Calculate minimum allowed date with one-month grace period
     const currentDate = new Date();
     const currentYear = currentDate.getFullYear();
     const currentMonth = currentDate.getMonth(); // 0-based (0 = January)
     const minAllowedYear = currentMonth === 0 ? currentYear - 1 : currentYear; // January = month 0
     const minDate = `${minAllowedYear}-01-01`;
-    
+
     const fieldNames = ['Nachname', 'Vorname', 'Datum', 'Stunden', 'Tätigkeit'];
 
     return (
@@ -704,11 +717,11 @@ const ArbeitsstundenFormModal = ({ isOpen, onClose, onSave, initialData, userPro
                                 <div key={field}>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         {field === 'Datum' ? 'Datum' :
-                                         field === 'Nachname' ? 'Nachname' :
-                                         field === 'Vorname' ? 'Vorname' :
-                                         field === 'Stunden' ? 'Stunden' :
-                                         field === 'Tätigkeit' ? 'Tätigkeit' :
-                                         field.replace(/_/g, ' ')}
+                                            field === 'Nachname' ? 'Nachname' :
+                                                field === 'Vorname' ? 'Vorname' :
+                                                    field === 'Stunden' ? 'Stunden' :
+                                                        field === 'Tätigkeit' ? 'Tätigkeit' :
+                                                            field.replace(/_/g, ' ')}
                                     </label>
                                     {field === 'Datum' ? (
                                         <div>
@@ -729,16 +742,16 @@ const ArbeitsstundenFormModal = ({ isOpen, onClose, onSave, initialData, userPro
                                                 style={{ colorScheme: 'light' }}
                                             />
                                             <p className="text-xs text-gray-500 mt-1">
-                                                Datum darf nicht in der Zukunft liegen. {currentMonth === 0 
+                                                Datum darf nicht in der Zukunft liegen. {currentMonth === 0
                                                     ? `Nur ${currentYear} oder ${currentYear - 1} (Nachfrist bis Ende Januar) erlaubt.`
                                                     : `Nur ${currentYear} erlaubt.`}
                                             </p>
                                             <p className="text-xs text-blue-600 mt-1">
-                                                📅 Ausgewähltes Datum: {formData[field] ? new Date(formData[field]).toLocaleDateString('de-DE', { 
-                                                    weekday: 'long', 
-                                                    year: 'numeric', 
-                                                    month: 'long', 
-                                                    day: 'numeric' 
+                                                📅 Ausgewähltes Datum: {formData[field] ? new Date(formData[field]).toLocaleDateString('de-DE', {
+                                                    weekday: 'long',
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric'
                                                 }) : 'Kein Datum ausgewählt'}
                                             </p>
                                         </div>

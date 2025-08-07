@@ -11,7 +11,7 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-use chrono::{Datelike, NaiveDate, Utc};
+use chrono::Datelike;
 use reqwest::Client;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -25,6 +25,7 @@ mod auth;
 mod config;
 mod database;
 mod email;
+mod member_selection;
 mod models;
 mod teable;
 mod token_store;
@@ -35,7 +36,12 @@ mod ts_bindings;
 
 use database::Database;
 use email::EmailService;
-use models::*;
+use member_selection::{LoginResponseVariant, MemberSelectionResponse, SelectMemberRequest};
+use models::{
+    CreateWorkHourRequest, DashboardResponse, FamilyData, FamilyMember, ForgotPasswordRequest,
+    LoginRequest, LoginResponse, Member, MemberContribution, PersonalData, RegisterRequest,
+    ResetPasswordRequest, UserResponse, WorkHourResponse,
+};
 use token_store::TokenStore;
 
 #[derive(Clone)]
@@ -133,7 +139,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .route("/login", post(login))
         .route("/register", post(register))
         .route("/forgotPassword", post(forgot_password))
-        .route("/resetPassword", post(reset_password));
+        .route("/resetPassword", post(reset_password))
+        .route("/select-member", post(select_member));
 
     // Configure user-based rate limiting: reasonable limits per authenticated user
     // This prevents API abuse while allowing normal frontend usage patterns
@@ -291,25 +298,108 @@ async fn login(
         }
     };
 
-    // Get profile data from Teable - optimized to fetch only the specific user
-    let teable_user = teable::get_member_by_email(&state.http_client, &normalized_email)
+    // Get all members with this email
+    let teable_members = teable::get_members_by_email(&state.http_client, &normalized_email)
+        .await
+        .map_err(|e| {
+            error!("Teable error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    if teable_members.is_empty() {
+        error!("No members found in Teable for email: {}", normalized_email);
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    if teable_members.len() == 1 {
+        // Only one member, proceed as before
+        let teable_user = &teable_members[0];
+        let token = auth::create_token(&teable_user.id.to_string())
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        return Ok(Json(LoginResponseVariant::SingleUser(LoginResponse {
+            success: true,
+            token,
+            user: UserResponse {
+                id: teable_user.id.clone(),
+                name: teable_user.name(),
+                email: teable_user.email.clone(),
+            },
+        })));
+    }
+
+    // Multiple members found, return list for selection (no token yet)
+    // Issue a short-lived selection token for this email
+    let selection_token = auth::create_selection_token(&normalized_email)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let users: Vec<UserResponse> = teable_members
+        .iter()
+        .map(|m| UserResponse {
+            id: m.id.clone(),
+            name: m.name(),
+            email: m.email.clone(),
+        })
+        .collect();
+
+    return Ok(Json(LoginResponseVariant::MultipleUsers(
+        MemberSelectionResponse {
+            success: true,
+            multiple: true,
+            users,
+            selection_token,
+            message: "Multiple members found for this email. Please select your profile."
+                .to_string(),
+        },
+    )));
+}
+
+// New endpoint: select member and create token
+async fn select_member(
+    State(state): State<AppState>,
+    Json(payload): Json<SelectMemberRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    // Require selection_token in payload
+    let selection_token = match &payload.selection_token {
+        Some(token) => token,
+        None => {
+            error!("Missing selection_token in select-member request");
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    };
+
+    // Validate selection token and extract email
+    let email = match auth::verify_selection_token(selection_token) {
+        Ok(email) => email,
+        Err(_) => {
+            error!("Invalid or expired selection_token");
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    };
+
+    // Check that the member_id belongs to the email
+    let teable_member = teable::get_member_by_id(&state.http_client, &payload.member_id)
         .await
         .map_err(|e| {
             error!("Teable error: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?; // User should exist in Teable
+        .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let token = auth::create_token(&teable_user.id.to_string())
+    if teable_member.email.to_lowercase() != email.to_lowercase() {
+        error!("Member ID does not belong to the email in selection_token");
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let token = auth::create_token(&teable_member.id.to_string())
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(LoginResponse {
         success: true,
         token,
         user: UserResponse {
-            id: teable_user.id.clone(), // Use Teable ID for frontend compatibility
-            name: teable_user.name(),
-            email: teable_user.email.clone(),
+            id: teable_member.id.clone(),
+            name: teable_member.name(),
+            email: teable_member.email.clone(),
         },
     }))
 }

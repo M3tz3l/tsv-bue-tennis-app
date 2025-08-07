@@ -676,3 +676,55 @@ pub async fn delete_work_hour(client: &Client, work_hour_id: &str) -> Result<()>
 
     Ok(())
 }
+
+/// Get all members by email (case-insensitive, returns Vec<Member>)
+pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Member>> {
+    let (api_url, token, _base_id, members_table_id, _) =
+        get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
+    let email_lowercase = email.to_lowercase();
+    let filter = serde_json::json!({
+        "conjunction": "and",
+        "filterSet": [{
+            "fieldId": "Email",
+            "operator": "is",
+            "value": email_lowercase
+        }]
+    });
+    let url = format!("{}/table/{}/record", api_url, members_table_id);
+    let mut req = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Accept", "application/json")
+        .query(&[("filter", &filter.to_string())]);
+    // Use default projection
+    for field in ["Vorname", "Nachname", "Email", "Familie", "Geburtsdatum"].iter() {
+        req = req.query(&[("projection[]", *field)]);
+    }
+    let response = req.send().await?;
+    let response_text = handle_teable_response(response, "members_by_email").await?;
+    let teable_response: Value = serde_json::from_str(&response_text)?;
+    let records = teable_response["records"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
+    let mut members = Vec::new();
+    for record in records {
+        let fields = &record["fields"];
+        if let Some(record_email) = fields["Email"].as_str() {
+            if record_email.to_lowercase() == email_lowercase {
+                let member = Member {
+                    id: record["id"].as_str().unwrap_or("").to_string(),
+                    first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
+                    last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
+                    email: fields["Email"].as_str().unwrap_or("").to_string(),
+                    family_id: fields["Familie"]
+                        .as_str()
+                        .map(|s| s.to_string())
+                        .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
+                    birth_date: fields["Geburtsdatum"].as_str().map(|s| s.to_string()),
+                };
+                members.push(member);
+            }
+        }
+    }
+    Ok(members)
+}

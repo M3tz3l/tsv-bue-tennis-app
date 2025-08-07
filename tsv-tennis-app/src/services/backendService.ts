@@ -2,6 +2,9 @@ import axios, { AxiosInstance } from 'axios';
 import type {
   LoginRequest,
   LoginResponse,
+  LoginResponseVariant,
+  MemberSelectionResponse,
+  SelectMemberRequest,
   CreateWorkHourRequest,
   WorkHourResponse,
   DashboardResponse
@@ -51,17 +54,33 @@ class BackendService {
   }
 
   // Authentication methods
-  async login(email: string, password: string): Promise<LoginResponse | ApiError> {
+  async login(email: string, password: string): Promise<LoginResponseVariant | ApiError> {
     try {
       // Normalize email to lowercase for case-insensitive authentication
       const normalizedEmail = email.toLowerCase().trim();
-      const response = await this.api.post<LoginResponse>('/login', { email: normalizedEmail, password });
+      const response = await this.api.post<LoginResponseVariant>('/login', { email: normalizedEmail, password });
       return response.data;
     } catch (error: any) {
       console.error('Login error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Anmeldung fehlgeschlagen'
+      };
+    }
+  }
+
+  async selectMember(memberId: string, selectionToken: string): Promise<LoginResponse | ApiError> {
+    try {
+      const response = await this.api.post<LoginResponse>('/select-member', {
+        member_id: memberId,
+        selection_token: selectionToken
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Member selection error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Mitgliederauswahl fehlgeschlagen'
       };
     }
   }
@@ -96,10 +115,10 @@ class BackendService {
 
   async resetPassword(token: string, password: string, userId: string): Promise<ApiResponse | ApiError> {
     try {
-      const response = await this.api.post<ApiResponse>('/resetPassword', { 
-        token, 
-        password, 
-        userId 
+      const response = await this.api.post<ApiResponse>('/resetPassword', {
+        token,
+        password,
+        userId
       });
       return response.data;
     } catch (error: any) {
