@@ -1,0 +1,28 @@
+name: Rust CI
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Install required system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+        working-directory: backend
+      - name: Build
+        run: cargo build --workspace --all-targets
+        working-directory: backend
+      - name: Run tests
+        working-directory: backend
+        env:
+          RUST_TEST_THREADS: 1
+        run: cargo test --workspace --all-targets -- --nocapture --test-threads=1
