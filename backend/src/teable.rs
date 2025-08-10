@@ -123,11 +123,11 @@ pub async fn get_member_by_id_with_projection(
             .as_str()
             .map(|s| s.to_string())
             .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-        birth_date: fields["Geburtsdatum"].as_str().map(|s| s.to_string()),
+        birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
     };
     info!(
-        "Found member: {} {} ({})",
-        member.first_name, member.last_name, member.email
+        "Found member: {} {} ({}) - ID: {}, Birth Date: {}",
+        member.first_name, member.last_name, member.email, member.id, member.birth_date
     );
     Ok(Some(member))
 }
@@ -205,7 +205,7 @@ pub async fn get_member_by_email_with_projection(
                 .as_str()
                 .map(|s| s.to_string())
                 .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-            birth_date: fields["Geburtsdatum"].as_str().map(|s| s.to_string()),
+            birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
         };
         info!(
             "Found member: {} {} ({}) - case insensitive match",
@@ -280,7 +280,7 @@ pub async fn get_family_members_with_projection(
                 .as_str()
                 .map(|s| s.to_string())
                 .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-            birth_date: fields["Geburtsdatum"].as_str().map(|s| s.to_string()),
+            birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
         };
         members.push(member);
     }
@@ -678,7 +678,7 @@ pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Me
                         .as_str()
                         .map(|s| s.to_string())
                         .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-                    birth_date: fields["Geburtsdatum"].as_str().map(|s| s.to_string()),
+                    birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
                 };
                 members.push(member);
             }

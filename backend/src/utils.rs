@@ -134,59 +134,53 @@ pub fn is_member_eligible_for_work_hours(member: &Member, current_year: i32) -> 
         "Called is_member_eligible_for_work_hours for {} {} (birth_date: {:?})",
         member.first_name, member.last_name, member.birth_date
     );
-    if let Some(birth_date_str) = &member.birth_date {
-        if birth_date_str.trim().is_empty() {
-            info!(
-                "Age Check: Empty birth date for {} {}, assuming eligible",
-                member.first_name, member.last_name
-            );
-            return true;
-        }
-
-        use chrono::{DateTime, NaiveDate};
-
-        // Try RFC3339 (e.g. 2019-10-08T22:21:36.000Z)
-        if let Ok(dt) = DateTime::parse_from_rfc3339(birth_date_str) {
-            let birth_date = dt.naive_utc().date();
-            let birth_year = birth_date.year();
-            let age_in_current_year = current_year - birth_year;
-            let eligible = (17..70).contains(&age_in_current_year);
-            debug!(
-                "Age Check: {} {} - Birth: {}, Age in {}: {}, Eligible: {}",
-                member.first_name,
-                member.last_name,
-                birth_date_str,
-                current_year,
-                age_in_current_year,
-                eligible
-            );
-            return eligible;
-        } else if let Ok(birth_date) = NaiveDate::parse_from_str(birth_date_str, "%Y-%m-%d") {
-            let birth_year = birth_date.year();
-            let age_in_current_year = current_year - birth_year;
-            let eligible = (17..70).contains(&age_in_current_year);
-            debug!(
-                "Age Check: {} {} - Birth: {}, Age in {}: {}, Eligible: {}",
-                member.first_name,
-                member.last_name,
-                birth_date_str,
-                current_year,
-                age_in_current_year,
-                eligible
-            );
-            return eligible;
-        } else {
-            warn!(
-                "Age Check: Invalid birth date format for {} {}: '{}', assuming eligible",
-                member.first_name, member.last_name, birth_date_str
-            );
-        }
-    } else {
-        warn!(
-            "Age Check: No birth date field for {} {}, assuming eligible",
+    let birth_date_str = &member.birth_date;
+    if birth_date_str.trim().is_empty() {
+        info!(
+            "Age Check: Empty birth date for {} {}, assuming eligible",
             member.first_name, member.last_name
         );
     }
+
+    use chrono::{DateTime, NaiveDate};
+
+    // Try RFC3339 (e.g. 2019-10-08T22:21:36.000Z)
+    if let Ok(dt) = DateTime::parse_from_rfc3339(birth_date_str) {
+        let birth_date = dt.naive_utc().date();
+        let birth_year = birth_date.year();
+        let age_in_current_year = current_year - birth_year;
+        let eligible = (17..70).contains(&age_in_current_year);
+        debug!(
+            "Age Check: {} {} - Birth: {}, Age in {}: {}, Eligible: {}",
+            member.first_name,
+            member.last_name,
+            birth_date_str,
+            current_year,
+            age_in_current_year,
+            eligible
+        );
+        return eligible;
+    } else if let Ok(birth_date) = NaiveDate::parse_from_str(birth_date_str, "%Y-%m-%d") {
+        let birth_year = birth_date.year();
+        let age_in_current_year = current_year - birth_year;
+        let eligible = (17..70).contains(&age_in_current_year);
+        debug!(
+            "Age Check: {} {} - Birth: {}, Age in {}: {}, Eligible: {}",
+            member.first_name,
+            member.last_name,
+            birth_date_str,
+            current_year,
+            age_in_current_year,
+            eligible
+        );
+        return eligible;
+    } else {
+        warn!(
+            "Age Check: Invalid birth date format for {} {}: '{}', assuming eligible",
+            member.first_name, member.last_name, birth_date_str
+        );
+    }
+
     // If no birth date or invalid format, assume eligible (for backward compatibility)
     true
 }

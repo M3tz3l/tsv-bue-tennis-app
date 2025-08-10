@@ -721,7 +721,7 @@ async fn dashboard(
     let current_user = teable::get_member_by_id_with_projection(
         &state.http_client,
         &user_id,
-        Some(&["Vorname", "Nachname", "Email", "Familie"][..]), // Only fields needed for dashboard
+        Some(&["Vorname", "Nachname", "Email", "Familie", "Geburtsdatum"][..]), // Only fields needed for dashboard
     )
     .await
     .map_err(|e| {
