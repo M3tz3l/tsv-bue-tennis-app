@@ -139,7 +139,7 @@ pub struct Member {
     #[serde(rename = "Familie")]
     pub family_id: Option<String>,
     #[serde(rename = "Geburtsdatum")]
-    pub birth_date: Option<String>,
+    pub birth_date: String,
 }
 
 impl Member {
