@@ -150,7 +150,7 @@ pub fn is_member_eligible_for_work_hours(member: &Member, current_year: i32) -> 
             let birth_date = dt.naive_utc().date();
             let birth_year = birth_date.year();
             let age_in_current_year = current_year - birth_year;
-            let eligible = age_in_current_year >= 17 && age_in_current_year < 70;
+            let eligible = (17..70).contains(&age_in_current_year);
             debug!(
                 "Age Check: {} {} - Birth: {}, Age in {}: {}, Eligible: {}",
                 member.first_name,
@@ -164,7 +164,7 @@ pub fn is_member_eligible_for_work_hours(member: &Member, current_year: i32) -> 
         } else if let Ok(birth_date) = NaiveDate::parse_from_str(birth_date_str, "%Y-%m-%d") {
             let birth_year = birth_date.year();
             let age_in_current_year = current_year - birth_year;
-            let eligible = age_in_current_year >= 17 && age_in_current_year < 70;
+            let eligible = (17..70).contains(&age_in_current_year);
             debug!(
                 "Age Check: {} {} - Birth: {}, Age in {}: {}, Eligible: {}",
                 member.first_name,
@@ -176,13 +176,13 @@ pub fn is_member_eligible_for_work_hours(member: &Member, current_year: i32) -> 
             );
             return eligible;
         } else {
-            info!(
+            warn!(
                 "Age Check: Invalid birth date format for {} {}: '{}', assuming eligible",
                 member.first_name, member.last_name, birth_date_str
             );
         }
     } else {
-        info!(
+        warn!(
             "Age Check: No birth date field for {} {}, assuming eligible",
             member.first_name, member.last_name
         );
