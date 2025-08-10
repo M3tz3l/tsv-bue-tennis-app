@@ -2,7 +2,7 @@ use crate::auth;
 use crate::models::{Member, WorkHour, WorkHourEntry};
 use axum::http::{HeaderMap, StatusCode};
 use chrono::Datelike;
-use tracing::info;
+use tracing::{debug, info, warn};
 
 /// Converts seconds to hours with 2 decimal place precision
 pub fn seconds_to_hours(seconds: f64) -> f64 {
@@ -49,9 +49,9 @@ pub fn filter_work_hours_for_user_by_year(
         .filter_map(|wh| {
             match (&wh.date, &wh.description, wh.duration_seconds) {
                 (Some(date), Some(description), Some(duration)) => {
-                    info!("{} - Raw duration: {} seconds", debug_prefix, duration);
+                    debug!("{} - Raw duration: {} seconds", debug_prefix, duration);
                     let hours = seconds_to_hours(duration);
-                    info!("{} - Converted to hours: {}", debug_prefix, hours);
+                    debug!("{} - Converted to hours: {}", debug_prefix, hours);
                     // Normalize date to YYYY-MM-DD
                     let date_norm = if let Some(idx) = date.find('T') {
                         date[..idx].to_string()
@@ -66,7 +66,7 @@ pub fn filter_work_hours_for_user_by_year(
                     })
                 },
                 _ => {
-                    info!("{} - Skipping entry with missing data: date={:?}, description={:?}, duration={:?}",
+                    debug!("{} - Skipping entry with missing data: date={:?}, description={:?}, duration={:?}",
                         debug_prefix, wh.date, wh.description, wh.duration_seconds);
                     None
                 }
@@ -83,9 +83,9 @@ pub fn calculate_total_hours(entries: &[WorkHourEntry]) -> f64 {
 
 /// Logs work hour entries for debugging
 pub fn log_work_entries(entries: &[WorkHourEntry], prefix: &str) {
-    info!("{} work hours entries:", prefix);
+    debug!("{} work hours entries:", prefix);
     for (i, entry) in entries.iter().enumerate() {
-        info!(
+        debug!(
             "  Entry {}: Date={}, Description={}, Hours={}",
             i + 1,
             entry.date,
@@ -112,18 +112,18 @@ pub fn extract_user_id_from_headers(headers: &HeaderMap) -> Result<String, Statu
 
     match auth::verify_token(auth_header) {
         Ok(claims) => {
-            info!("✅ Auth: Token valid, user ID: {}", claims.sub);
+            info!("Auth: Token valid, user ID: {}", claims.sub);
 
             // Check for old numeric user IDs (should be Teable record IDs starting with "rec")
             if claims.sub == "0" || claims.sub.parse::<u32>().is_ok() {
-                info!("🚨 Auth: Old token format detected (numeric user ID), rejecting");
+                warn!("Auth: Old token format detected (numeric user ID), rejecting");
                 return Err(StatusCode::UNAUTHORIZED);
             }
 
             Ok(claims.sub)
         }
         Err(e) => {
-            info!("🚨 Auth: Token verification failed: {:?}", e);
+            warn!("Auth: Token verification failed: {:?}", e);
             Err(StatusCode::UNAUTHORIZED)
         }
     }
