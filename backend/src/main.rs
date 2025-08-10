@@ -19,7 +19,7 @@ use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::{key_extractor::KeyExtractor, GovernorError, GovernorLayer};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
-use tracing::{error, info};
+use tracing::{debug, error, info, warn};
 
 mod auth;
 mod config;
@@ -464,7 +464,7 @@ async fn select_member(
     let selection_token = match &payload.selection_token {
         Some(token) => token,
         None => {
-            error!("Missing selection_token in select-member request");
+            warn!("Missing selection_token in select-member request");
             return Err(StatusCode::UNAUTHORIZED);
         }
     };
@@ -473,7 +473,7 @@ async fn select_member(
     let email = match auth::verify_selection_token(selection_token) {
         Ok(email) => email,
         Err(_) => {
-            error!("Invalid or expired selection_token");
+            warn!("Invalid or expired selection_token");
             return Err(StatusCode::UNAUTHORIZED);
         }
     };
@@ -535,7 +535,7 @@ async fn forgot_password(
             user
         }
         Ok(None) => {
-            info!("User not found in Teable: {}", normalized_email);
+            warn!("User not found in Teable: {}", normalized_email);
             return Ok(ResponseJson(serde_json::json!({
                 "success": false,
                 "message": "Diese E-Mail-Adresse ist nicht in unserem System registriert. Bitte überprüfen Sie Ihre E-Mail-Adresse oder kontaktieren Sie den Support."
@@ -584,12 +584,12 @@ async fn reset_password(
     State(state): State<AppState>,
     Json(payload): Json<ResetPasswordRequest>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    info!("Password reset attempt for token: {}", payload.token);
-    info!("Reset password payload: {:?}", payload);
+    debug!("Password reset attempt for token: {}", payload.token);
+    debug!("Reset password payload: {:?}", payload);
 
     // Verify token is valid and not expired
     if !state.token_store.is_token_valid(&payload.token).await {
-        info!("Invalid or expired reset token: {}", payload.token);
+        warn!("Invalid or expired reset token: {}", payload.token);
         return Ok(ResponseJson(serde_json::json!({
             "success": false,
             "message": "Invalid or expired reset token"
@@ -605,7 +605,7 @@ async fn reset_password(
             info
         }
         None => {
-            info!("Failed to consume reset token: {}", payload.token);
+            warn!("Failed to consume reset token: {}", payload.token);
             return Ok(ResponseJson(serde_json::json!({
                 "success": false,
                 "message": "Invalid or expired reset token"
@@ -711,14 +711,11 @@ async fn dashboard(
     Path(year): Path<String>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, StatusCode> {
-    println!(
-        "🔍 Dashboard: Starting dashboard request for year: {}",
-        year
-    );
+    debug!("Dashboard: Starting dashboard request for year: {}", year);
 
     let user_id = extract_user_id_from_headers(&headers)?;
 
-    println!("🔍 Dashboard: User ID from token: {}", user_id);
+    debug!("Dashboard: User ID from token: {}", user_id);
 
     // Get current user by ID
     let current_user = teable::get_member_by_id_with_projection(
@@ -728,18 +725,18 @@ async fn dashboard(
     )
     .await
     .map_err(|e| {
-        println!("🚨 Dashboard: Failed to get member by id: {}", e);
+        error!("Dashboard: Failed to get member by id: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?
     .ok_or_else(|| {
-        println!("🚨 Dashboard: User not found with ID: {}", user_id);
+        error!("Dashboard: User not found with ID: {}", user_id);
         StatusCode::NOT_FOUND
     })?;
 
     let work_hours = teable::get_work_hours(&state.http_client)
         .await
         .map_err(|e| {
-            println!("🚨 Dashboard: Failed to get work hours: {}", e);
+            error!("Dashboard: Failed to get work hours: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -753,13 +750,13 @@ async fn dashboard(
         "Personal entry",
     );
 
-    println!(
-        "🔍 Dashboard: Found {} work hours for user",
+    debug!(
+        "Dashboard: Found {} work hours for user",
         user_work_hours.len()
     );
 
     let total_hours = calculate_total_hours(&user_work_hours);
-    println!("🔍 Dashboard: Total hours: {}", total_hours);
+    debug!("Dashboard: Total hours: {}", total_hours);
 
     // Log the personal work hours entries for debugging
     log_work_entries(&user_work_hours, "Personal");
@@ -776,8 +773,8 @@ async fn dashboard(
     // Check if user has a family and create family data
     let family_data = if let Some(family_name) = &current_user.family_id {
         if !family_name.is_empty() {
-            println!(
-                "🔍 Dashboard: Processing family data for family: {}",
+            debug!(
+                "Dashboard: Processing family data for family: {}",
                 family_name
             );
 
@@ -786,15 +783,12 @@ async fn dashboard(
                 teable::get_family_members(&state.http_client, family_name)
                     .await
                     .map_err(|e| {
-                        println!("🚨 Dashboard: Failed to get family members: {}", e);
+                        error!("Dashboard: Failed to get family members: {}", e);
                         StatusCode::INTERNAL_SERVER_ERROR
                     })?;
 
             let family_members: Vec<&Member> = family_members_response.results.iter().collect();
-            println!(
-                "🔍 Dashboard: Found {} family members",
-                family_members.len()
-            );
+            debug!("Dashboard: Found {} family members", family_members.len());
 
             // Calculate work hours for all family members
             let mut member_contributions = Vec::new();
@@ -802,7 +796,7 @@ async fn dashboard(
             let mut family_required_total = 0.0;
 
             for member in &family_members {
-                println!(
+                debug!(
                     "[FAMILY DEBUG] Member: {} | id: {} | family_id: {:?}",
                     member.name(),
                     member.id,
@@ -848,7 +842,7 @@ async fn dashboard(
                 100.0 // If no hours required, consider it 100% complete
             };
 
-            println!("🔍 Dashboard: Family stats - Required: {}, Completed: {}, Remaining: {}, Percentage: {}%", 
+            debug!("Dashboard: Family stats - Required: {}, Completed: {}, Remaining: {}, Percentage: {}%", 
                 family_required_total, family_total_rounded, family_remaining, family_percentage);
 
             Some(FamilyData {
@@ -881,34 +875,8 @@ async fn dashboard(
         year: year_int,
     };
 
-    // Debug: Show the final response structure
-    println!("🔍 Dashboard: Final response structure:");
-    if let Some(ref personal) = response.personal {
-        println!(
-            "  Personal data - Name: {}, Hours: {}, Required: {}",
-            personal.name, personal.hours, personal.required
-        );
-        println!("  Personal entries count: {}", personal.entries.len());
-        for (i, entry) in personal.entries.iter().enumerate() {
-            println!(
-                "    Entry {}: Date={}, Description={}, Hours={}",
-                i + 1,
-                entry.date,
-                entry.description,
-                entry.duration_hours
-            );
-        }
-    }
-
-    if let Some(ref family) = response.family {
-        println!(
-            "  Family data - Name: {}, Required: {}, Completed: {}",
-            family.name, family.required, family.completed
-        );
-    }
-
-    println!(
-        "✅ Dashboard: Sending response with {} personal hours and family data: {}",
+    info!(
+        "Dashboard: Sending response with {} personal hours and family data: {}",
         total_hours,
         if response.family.is_some() {
             "included"
@@ -916,12 +884,6 @@ async fn dashboard(
             "none"
         }
     );
-
-    // Debug: Show the actual JSON that will be sent to frontend
-    match serde_json::to_string_pretty(&response) {
-        Ok(json) => println!("🔍 Dashboard: Final JSON response:\n{}", json),
-        Err(e) => println!("🚨 Dashboard: Failed to serialize response: {}", e),
-    }
 
     Ok(ResponseJson(response))
 }
@@ -932,7 +894,7 @@ async fn get_user(
 ) -> Result<impl IntoResponse, StatusCode> {
     let user_id = extract_user_id_from_headers(&headers)?;
 
-    println!("🔍 Get User: Looking for user with ID: {}", user_id);
+    debug!("Get User: Looking for user with ID: {}", user_id);
 
     // Get user by ID
     let user = teable::get_member_by_id_with_projection(
@@ -942,15 +904,15 @@ async fn get_user(
     )
     .await
     .map_err(|e| {
-        println!("🚨 Get User: Failed to get member by id: {}", e);
+        error!("Get User: Failed to get member by id: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?
     .ok_or_else(|| {
-        println!("🚨 Get User: User not found with ID: {}", user_id);
+        error!("Get User: User not found with ID: {}", user_id);
         StatusCode::NOT_FOUND
     })?;
 
-    println!("✅ Get User: Found user: {} ({})", user.name(), user.email);
+    info!("Get User: Found user: {} ({})", user.name(), user.email);
 
     // Return the response format expected by the frontend
     Ok(ResponseJson(serde_json::json!({
@@ -1012,8 +974,8 @@ async fn get_work_hour_by_id(
 ) -> Result<impl IntoResponse, StatusCode> {
     let user_id = extract_user_id_from_headers(&headers)?;
 
-    println!(
-        "🔍 Get Work Hour: Looking for work hour ID {} for user {}",
+    debug!(
+        "Get Work Hour: Looking for work hour ID {} for user {}",
         work_hour_id, user_id
     );
 
@@ -1021,11 +983,11 @@ async fn get_work_hour_by_id(
     let current_user = teable::get_member_by_id(&state.http_client, &user_id)
         .await
         .map_err(|e| {
-            println!("🚨 Get Work Hour: Failed to get member by id: {}", e);
+            error!("Get Work Hour: Failed to get member by id: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or_else(|| {
-            println!("🚨 Get Work Hour: User not found with ID: {}", user_id);
+            error!("Get Work Hour: User not found with ID: {}", user_id);
             StatusCode::NOT_FOUND
         })?;
 
@@ -1033,7 +995,7 @@ async fn get_work_hour_by_id(
     let work_hour = teable::get_work_hour_by_id(&state.http_client, &work_hour_id)
         .await
         .map_err(|e| {
-            println!("🚨 Get Work Hour: Failed to get work hour by id: {}", e);
+            error!("Get Work Hour: Failed to get work hour by id: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -1047,8 +1009,8 @@ async fn get_work_hour_by_id(
             };
 
             if !belongs_to_user {
-                println!(
-                    "🚨 Get Work Hour: Work hour {} does not belong to user {}",
+                error!(
+                    "Get Work Hour: Work hour {} does not belong to user {}",
                     work_hour_id, user_id
                 );
                 return Ok(ResponseJson(serde_json::json!({
@@ -1061,8 +1023,8 @@ async fn get_work_hour_by_id(
             match (&wh.date, &wh.description, &wh.duration_seconds) {
                 (Some(date), Some(description), Some(duration_seconds)) => {
                     let hours = duration_seconds / 3600.0; // Convert seconds back to hours
-                    println!(
-                        "✅ Get Work Hour: Found work hour {} for user {}",
+                    debug!(
+                        "Get Work Hour: Found work hour {} for user {}",
                         work_hour_id,
                         current_user.name()
                     );
@@ -1079,10 +1041,7 @@ async fn get_work_hour_by_id(
                     })))
                 }
                 _ => {
-                    println!(
-                        "🚨 Get Work Hour: Work hour {} has missing data",
-                        work_hour_id
-                    );
+                    error!("Get Work Hour: Work hour {} has missing data", work_hour_id);
                     Ok(ResponseJson(serde_json::json!({
                         "success": false,
                         "message": "Work hour entry has incomplete data"
@@ -1091,7 +1050,7 @@ async fn get_work_hour_by_id(
             }
         }
         None => {
-            println!("🚨 Get Work Hour: Work hour {} not found", work_hour_id);
+            error!("Get Work Hour: Work hour {} not found", work_hour_id);
             Ok(ResponseJson(serde_json::json!({
                 "success": false,
                 "message": "Work hour entry not found or you don't have permission to access it"
@@ -1108,18 +1067,18 @@ async fn create_work_hour(
     let user_id = match extract_user_id_from_headers(&headers) {
         Ok(id) => id,
         Err(e) => {
-            println!("🚨 Create Work Hour: Auth error: {:?}", e);
+            error!("Create Work Hour: Auth error: {:?}", e);
             return Err(e);
         }
     };
 
     let payload = match payload {
         Ok(Json(data)) => {
-            println!("🔍 Create Work Hour: Successfully parsed JSON: {:?}", data);
+            debug!("Create Work Hour: Successfully parsed JSON: {:?}", data);
             data
         }
         Err(rejection) => {
-            println!("🚨 Create Work Hour: JSON parsing error: {:?}", rejection);
+            error!("Create Work Hour: JSON parsing error: {:?}", rejection);
             return Ok(ResponseJson(serde_json::json!({
                 "success": false,
                 "error": "Invalid JSON format",
@@ -1128,20 +1087,20 @@ async fn create_work_hour(
         }
     };
 
-    println!("🔍 Create Work Hour: User ID: {}", user_id);
-    println!("🔍 Create Work Hour: Raw payload: {:?}", payload);
+    debug!("Create Work Hour: User ID: {}", user_id);
+    debug!("Create Work Hour: Raw payload: {:?}", payload);
 
     // Validate required fields
     if payload.date.is_empty() {
-        println!("🚨 Create Work Hour: Missing date");
+        warn!("Create Work Hour: Missing date");
         return Err(StatusCode::BAD_REQUEST);
     }
     if payload.description.is_empty() {
-        println!("🚨 Create Work Hour: Missing description");
+        warn!("Create Work Hour: Missing description");
         return Err(StatusCode::BAD_REQUEST);
     }
     if payload.hours <= 0.0 {
-        println!("🚨 Create Work Hour: Invalid hours: {}", payload.hours);
+        warn!("Create Work Hour: Invalid hours: {}", payload.hours);
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -1161,8 +1120,8 @@ async fn create_work_hour(
         };
 
         if work_year < min_allowed_year {
-            println!(
-                "🚨 Create Work Hour: Year validation failed - work year: {}, min allowed: {}",
+            debug!(
+                "Create Work Hour: Year validation failed - work year: {}, min allowed: {}",
                 work_year, min_allowed_year
             );
             if current_month == 1 {
@@ -1178,7 +1137,7 @@ async fn create_work_hour(
             }
         }
     } else {
-        println!("🚨 Create Work Hour: Invalid date format: {}", payload.date);
+        warn!("Create Work Hour: Invalid date format: {}", payload.date);
         return Ok(ResponseJson(serde_json::json!({
             "success": false,
             "message": "Ungültiges Datumsformat. Bitte verwenden Sie YYYY-MM-DD."
@@ -1193,21 +1152,21 @@ async fn create_work_hour(
     )
     .await
     .map_err(|e| {
-        println!("🚨 Create Work Hour: Failed to get member by id: {}", e);
+        error!("Create Work Hour: Failed to get member by id: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?
     .ok_or_else(|| {
-        println!("🚨 Create Work Hour: User not found with ID: {}", user_id);
+        error!("Create Work Hour: User not found with ID: {}", user_id);
         StatusCode::NOT_FOUND
     })?;
 
-    println!("🔍 Create Work Hour: Found user: {}", current_user.name());
+    debug!("Create Work Hour: Found user: {}", current_user.name());
 
     // Convert hours to seconds for storage (Teable expects seconds)
     let duration_seconds = payload.hours * 3600.0;
 
-    println!(
-        "🔍 Create Work Hour: Converting {} hours to {} seconds",
+    debug!(
+        "Create Work Hour: Converting {} hours to {} seconds",
         payload.hours, duration_seconds
     );
 
@@ -1215,8 +1174,8 @@ async fn create_work_hour(
     let existing_hours = teable::get_work_hours_for_member(&state.http_client, &current_user.id)
         .await
         .map_err(|e| {
-            println!(
-                "🚨 Create Work Hour: Failed to fetch work hours for duplicate check: {}",
+            error!(
+                "Create Work Hour: Failed to fetch work hours for duplicate check: {}",
                 e
             );
             StatusCode::INTERNAL_SERVER_ERROR
@@ -1228,8 +1187,8 @@ async fn create_work_hour(
         .any(|wh| wh.date.as_deref() == Some(&payload.date));
 
     if duplicate {
-        println!(
-            "🚨 Create Work Hour: Duplicate entry for member {} on date {}",
+        error!(
+            "Create Work Hour: Duplicate entry for member {} on date {}",
             current_user.id, payload.date
         );
         return Ok(ResponseJson(serde_json::json!({
@@ -1249,8 +1208,8 @@ async fn create_work_hour(
     .await
     {
         Ok(work_hour) => {
-            println!(
-                "✅ Create Work Hour: Successfully created work hour with ID: {}",
+            info!(
+                "Create Work Hour: Successfully created work hour with ID: {}",
                 work_hour.id
             );
             Ok(ResponseJson(serde_json::json!({
@@ -1267,7 +1226,7 @@ async fn create_work_hour(
             })))
         }
         Err(e) => {
-            println!("🚨 Create Work Hour: Failed to create in Teable: {}", e);
+            error!("Create Work Hour: Failed to create in Teable: {}", e);
             // Return success anyway for now, just log the error
             Ok(ResponseJson(serde_json::json!({
                 "success": true,
@@ -1294,18 +1253,18 @@ async fn update_work_hour(
     let user_id = match extract_user_id_from_headers(&headers) {
         Ok(id) => id,
         Err(e) => {
-            println!("🚨 Update Work Hour: Auth error: {:?}", e);
+            error!("Update Work Hour: Auth error: {:?}", e);
             return Err(e);
         }
     };
 
     let payload = match payload {
         Ok(Json(data)) => {
-            println!("🔍 Update Work Hour: Successfully parsed JSON: {:?}", data);
+            debug!("Update Work Hour: Successfully parsed JSON: {:?}", data);
             data
         }
         Err(rejection) => {
-            println!("🚨 Update Work Hour: JSON parsing error: {:?}", rejection);
+            error!("Update Work Hour: JSON parsing error: {:?}", rejection);
             return Ok(ResponseJson(serde_json::json!({
                 "success": false,
                 "error": "Invalid JSON format",
@@ -1314,29 +1273,29 @@ async fn update_work_hour(
         }
     };
 
-    println!(
-        "🔍 Update Work Hour: User ID: {}, Work Hour ID: {}",
+    debug!(
+        "Update Work Hour: User ID: {}, Work Hour ID: {}",
         user_id, work_hour_id
     );
-    println!("🔍 Update Work Hour: Payload: {:?}", payload);
+    debug!("Update Work Hour: Payload: {:?}", payload);
 
     // Validate required fields
     if payload.date.is_empty() {
-        println!("🚨 Update Work Hour: Missing date");
+        warn!("Update Work Hour: Missing date");
         return Ok(ResponseJson(serde_json::json!({
             "success": false,
             "error": "Date is required"
         })));
     }
     if payload.description.is_empty() {
-        println!("🚨 Update Work Hour: Missing description");
+        warn!("Update Work Hour: Missing description");
         return Ok(ResponseJson(serde_json::json!({
             "success": false,
             "error": "Description is required"
         })));
     }
     if payload.hours <= 0.0 {
-        println!("🚨 Update Work Hour: Invalid hours: {}", payload.hours);
+        warn!("Update Work Hour: Invalid hours: {}", payload.hours);
         return Ok(ResponseJson(serde_json::json!({
             "success": false,
             "error": "Hours must be greater than 0"
@@ -1359,8 +1318,8 @@ async fn update_work_hour(
         };
 
         if work_year < min_allowed_year {
-            println!(
-                "🚨 Update Work Hour: Year validation failed - work year: {}, min allowed: {}",
+            debug!(
+                "Update Work Hour: Year validation failed - work year: {}, min allowed: {}",
                 work_year, min_allowed_year
             );
             if current_month == 1 {
@@ -1376,7 +1335,7 @@ async fn update_work_hour(
             }
         }
     } else {
-        println!("🚨 Update Work Hour: Invalid date format: {}", payload.date);
+        warn!("Update Work Hour: Invalid date format: {}", payload.date);
         return Ok(ResponseJson(serde_json::json!({
             "success": false,
             "message": "Ungültiges Datumsformat. Bitte verwenden Sie YYYY-MM-DD."
@@ -1391,21 +1350,21 @@ async fn update_work_hour(
     )
     .await
     .map_err(|e| {
-        println!("🚨 Update Work Hour: Failed to get member by id: {}", e);
+        error!("Update Work Hour: Failed to get member by id: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?
     .ok_or_else(|| {
-        println!("🚨 Update Work Hour: User not found with ID: {}", user_id);
+        error!("Update Work Hour: User not found with ID: {}", user_id);
         StatusCode::NOT_FOUND
     })?;
 
-    println!("🔍 Update Work Hour: Found user: {}", current_user.name());
+    debug!("Update Work Hour: Found user: {}", current_user.name());
 
     // Verify the work hour exists and belongs to the current user (most efficient - direct fetch by ID)
     let existing_work_hour = teable::get_work_hour_by_id(&state.http_client, &work_hour_id)
         .await
         .map_err(|e| {
-            println!("🚨 Update Work Hour: Failed to get work hour by id: {}", e);
+            error!("Update Work Hour: Failed to get work hour by id: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -1419,8 +1378,8 @@ async fn update_work_hour(
             };
 
             if !belongs_to_user {
-                println!(
-                    "🚨 Update Work Hour: Work hour {} does not belong to user {}",
+                error!(
+                    "Update Work Hour: Work hour {} does not belong to user {}",
                     work_hour_id, user_id
                 );
                 return Ok(ResponseJson(serde_json::json!({
@@ -1430,7 +1389,7 @@ async fn update_work_hour(
             }
         }
         None => {
-            println!("🚨 Update Work Hour: Work hour {} not found", work_hour_id);
+            error!("Update Work Hour: Work hour {} not found", work_hour_id);
             return Ok(ResponseJson(serde_json::json!({
                 "success": false,
                 "error": "Work hour entry not found or you don't have permission to edit it"
@@ -1441,8 +1400,8 @@ async fn update_work_hour(
     // Convert hours to seconds for storage (Teable expects seconds)
     let duration_seconds = payload.hours * 3600.0;
 
-    println!(
-        "🔍 Update Work Hour: Converting {} hours to {} seconds",
+    debug!(
+        "Update Work Hour: Converting {} hours to {} seconds",
         payload.hours, duration_seconds
     );
 
@@ -1458,7 +1417,7 @@ async fn update_work_hour(
     .await
     {
         Ok(updated_work_hour) => {
-            println!(
+            info!(
                 "✅ Update Work Hour: Successfully updated work hour with ID: {}",
                 updated_work_hour.id
             );
@@ -1476,7 +1435,7 @@ async fn update_work_hour(
             })))
         }
         Err(e) => {
-            println!("🚨 Update Work Hour: Failed to update in Teable: {}", e);
+            error!("Update Work Hour: Failed to update in Teable: {}", e);
             Ok(ResponseJson(serde_json::json!({
                 "success": false,
                 "error": format!("Failed to update work hour: {}", e)
@@ -2146,7 +2105,7 @@ mod tests {
 
         // The test now passes authentication (token works) but fails on Teable API calls
         // Status could be 500 (Teable API error), 404 (not found), or 200 (JSON error but handled gracefully)
-        println!("Response status: {}", response.status_code());
+        info!("Response status: {}", response.status_code());
         assert!(
             response.status_code() == 500
                 || response.status_code() == 404
@@ -2458,11 +2417,11 @@ mod tests {
         assert_eq!(json["user"]["name"], "Integration Test");
         assert_eq!(json["user"]["email"], "integration@test.com");
 
-        println!(
-            "✅ Successfully tested with mocked Teable server at: {}",
+        tracing::info!(
+            "Successfully tested with mocked Teable server at: {}",
             teable_server.url()
         );
-        println!("✅ Mocked APIs are now actually being used in tests!");
+        tracing::info!("Mocked APIs are now actually being used in tests!");
     }
 
     #[tokio::test]
@@ -2484,7 +2443,7 @@ mod tests {
         let test_user_id = "jwt_test_user_456";
 
         // Debug: Check if environment variables are set
-        println!("JWT_SECRET env var: {:?}", std::env::var("JWT_SECRET"));
+        tracing::debug!("JWT_SECRET env var: {:?}", std::env::var("JWT_SECRET"));
 
         // Create a token
         let token = auth::create_token(test_user_id).expect("Failed to create token");
@@ -2495,7 +2454,7 @@ mod tests {
         let parts: Vec<&str> = token.split('.').collect();
         assert_eq!(parts.len(), 3, "JWT should have 3 parts separated by dots");
 
-        println!("Created valid JWT token: {}", token);
+        tracing::info!("Created valid JWT token: {}", token);
     }
 
     #[tokio::test]
@@ -2525,9 +2484,10 @@ mod tests {
         let parts: Vec<&str> = selection_token.split('.').collect();
         assert_eq!(parts.len(), 3, "Selection token should be a valid JWT");
 
-        println!(
+        tracing::info!(
             "Created selection token for {}: {}",
-            test_email, selection_token
+            test_email,
+            selection_token
         );
     }
 }
