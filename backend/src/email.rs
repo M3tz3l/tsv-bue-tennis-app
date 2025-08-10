@@ -87,14 +87,13 @@ impl EmailService {
                 <h2 style="color: #333;">Passwort zurücksetzen</h2>
                 <p>Sie haben eine Passwort-Zurücksetzung für Ihr TSV BÜ Tennis App Konto angefordert.</p>
                 <p>Klicken Sie auf die Schaltfläche unten, um Ihr Passwort zurückzusetzen:</p>
-                <a href="{}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 16px 0;">Passwort zurücksetzen</a>
+                <a href="{reset_url}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 16px 0;">Passwort zurücksetzen</a>
                 <p>Oder kopieren Sie diese URL und fügen Sie sie in Ihren Browser ein:</p>
-                <p style="word-break: break-all; color: #666;">{}</p>
+                <p style="word-break: break-all; color: #666;">{reset_url}</p>
                 <p style="color: #666; font-size: 14px;">Dieser Link läuft in 24 Stunden ab.</p>
                 <p style="color: #666; font-size: 14px;">Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese E-Mail bitte.</p>
             </div>
-            "#,
-            reset_url, reset_url
+            "#
         );
 
         let text_content = format!(
@@ -103,13 +102,12 @@ Passwort zurücksetzen
 
 Sie haben eine Passwort-Zurücksetzung für Ihr TSV BÜ Tennis App Konto angefordert.
 
-Klicken Sie auf diesen Link, um Ihr Passwort zurückzusetzen: {}
+Klicken Sie auf diesen Link, um Ihr Passwort zurückzusetzen: {reset_url}
 
 Dieser Link läuft in 24 Stunden ab.
 
 Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese E-Mail bitte.
-            "#,
-            reset_url
+            "#
         );
 
         self.send_email(

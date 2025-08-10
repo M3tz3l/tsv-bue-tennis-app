@@ -84,7 +84,7 @@ impl Database {
             .map_err(|e| sqlx::Error::Configuration(Box::new(e)))?;
 
         let result = sqlx::query("INSERT INTO details (email, password) VALUES (?, ?)")
-            .bind(&request.email.to_lowercase())
+            .bind(request.email.to_lowercase())
             .bind(&password_hash)
             .execute(&self.pool)
             .await?;
