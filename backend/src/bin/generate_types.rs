@@ -5,7 +5,7 @@
 
 use specta::ts;
 use std::path::Path;
-use tracing::{info, debug};
+use tracing::{debug, info};
 
 // Import the types we want to export
 use tsv_tennis_backend::member_selection::*;
@@ -58,7 +58,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::write(&output_path, typescript_code)?;
 
     info!("TypeScript bindings exported to {}", output_path.display());
-    debug!("Copy to frontend with: cp {} ../tsv-tennis-app/src/types/", output_path.display());
+    debug!(
+        "Copy to frontend with: cp {} ../tsv-tennis-app/src/types/",
+        output_path.display()
+    );
 
     Ok(())
 }
