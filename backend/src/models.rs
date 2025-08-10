@@ -181,12 +181,7 @@ impl WorkHour {
                     obj.get("id")
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_string())
-                } else if let Some(id_str) = value.as_str() {
-                    // Direct string format
-                    Some(id_str.to_string())
-                } else {
-                    None
-                }
+                } else { value.as_str().map(|id_str| id_str.to_string()) }
             }
             None => None,
         }

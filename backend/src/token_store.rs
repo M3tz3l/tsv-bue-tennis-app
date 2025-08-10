@@ -19,6 +19,12 @@ pub struct TokenStore {
     user_tokens: Arc<RwLock<HashMap<String, String>>>, // user_id -> token_id mapping (changed to String keys)
 }
 
+impl Default for TokenStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TokenStore {
     pub fn new() -> Self {
         Self {

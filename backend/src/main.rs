@@ -153,7 +153,7 @@ impl KeyExtractor for IpKeyExtractor {
         user_agent.hash(&mut hasher);
         let ua_hash = hasher.finish();
 
-        Ok(format!("fallback_{}", ua_hash))
+        Ok(format!("fallback_{ua_hash}"))
     }
 }
 
@@ -443,7 +443,7 @@ async fn login(
         })
         .collect();
 
-    return Ok(Json(LoginResponseVariant::MultipleUsers(
+    Ok(Json(LoginResponseVariant::MultipleUsers(
         MemberSelectionResponse {
             success: true,
             multiple: true,
@@ -452,7 +452,7 @@ async fn login(
             message: "Multiple members found for this email. Please select your profile."
                 .to_string(),
         },
-    )));
+    )))
 }
 
 // New endpoint: select member and create token
@@ -572,10 +572,10 @@ async fn forgot_password(
                 "Failed to send password reset email to {}: {}",
                 user.email, e
             );
-            return Ok(ResponseJson(serde_json::json!({
+            Ok(ResponseJson(serde_json::json!({
                 "success": false,
                 "message": "Failed to send password reset email. Please try again later."
-            })));
+            })))
         }
     }
 }
@@ -1981,7 +1981,7 @@ mod tests {
         // Test that we can access protected endpoint with valid token
         let response = server
             .get("/api/user")
-            .add_header("authorization", &format!("Bearer {}", valid_token))
+            .add_header("authorization", &format!("Bearer {valid_token}"))
             .await;
 
         // Now the test should work with the mocked Teable API
@@ -2067,7 +2067,7 @@ mod tests {
         // Test work hours endpoint with valid token
         let response = server
             .get("/api/workHours")
-            .add_header("authorization", &format!("Bearer {}", valid_token))
+            .add_header("authorization", &format!("Bearer {valid_token}"))
             .await;
 
         // Now the test should work with the mocked Teable API
@@ -2099,7 +2099,7 @@ mod tests {
         // Test creating work hour with valid token
         let response = server
             .post("/api/workHours")
-            .add_header("authorization", &format!("Bearer {}", valid_token))
+            .add_header("authorization", &format!("Bearer {valid_token}"))
             .json(&work_hour_request)
             .await;
 
@@ -2125,7 +2125,7 @@ mod tests {
         // Test dashboard endpoint with valid token
         let response = server
             .get("/api/dashboard/2025")
-            .add_header("authorization", &format!("Bearer {}", valid_token))
+            .add_header("authorization", &format!("Bearer {valid_token}"))
             .await;
 
         // Will fail because Teable API calls will fail, but shows valid token usage
@@ -2406,7 +2406,7 @@ mod tests {
         // Test protected endpoint with valid token - now actually using the mock!
         let response = server
             .get("/api/user")
-            .add_header("authorization", &format!("Bearer {}", test_token))
+            .add_header("authorization", &format!("Bearer {test_token}"))
             .await;
 
         // Now this should work because we're using the mocked Teable API
