@@ -25,11 +25,9 @@ pub fn filter_work_hours_for_user_by_year(
     work_hours
         .iter()
         .filter(|wh| {
-            // Try to match using the linked record field first, then fall back to UUID
+            // Try to match using the linked record field
             if let Some(member_id) = wh.get_member_id() {
                 member_id == user_id
-            } else if let Some(ref uuid) = wh.member_uuid {
-                uuid == user_id
             } else {
                 false
             }

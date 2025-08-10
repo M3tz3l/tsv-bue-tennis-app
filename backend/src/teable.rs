@@ -65,16 +65,7 @@ pub async fn get_member_by_id(client: &Client, id: &str) -> Result<Option<Member
     get_member_by_id_with_projection(
         client,
         id,
-        Some(
-            &[
-                "Vorname",
-                "Nachname",
-                "Email",
-                "Familie",
-                "UUID",
-                "Geburtsdatum",
-            ][..],
-        ),
+        Some(&["Vorname", "Nachname", "Email", "Familie", "Geburtsdatum"][..]),
     )
     .await
 }
@@ -139,16 +130,7 @@ pub async fn get_member_by_email(client: &Client, email: &str) -> Result<Option<
     get_member_by_email_with_projection(
         client,
         email,
-        Some(
-            &[
-                "Vorname",
-                "Nachname",
-                "Email",
-                "Familie",
-                "UUID",
-                "Geburtsdatum",
-            ][..],
-        ),
+        Some(&["Vorname", "Nachname", "Email", "Familie", "Geburtsdatum"][..]),
     )
     .await
 }
@@ -238,16 +220,7 @@ pub async fn get_family_members(
     get_family_members_with_projection(
         client,
         family_id,
-        Some(
-            &[
-                "Vorname",
-                "Nachname",
-                "Email",
-                "Familie",
-                "UUID",
-                "Geburtsdatum",
-            ][..],
-        ),
+        Some(&["Vorname", "Nachname", "Email", "Familie", "Geburtsdatum"][..]),
     )
     .await
 }
@@ -352,9 +325,7 @@ pub async fn get_work_hour_by_id(client: &Client, work_hour_id: &str) -> Result<
 
     let work_hour = WorkHour {
         id: record["id"].as_str().unwrap_or("").to_string(),
-        order: "".to_string(),
         member_id: Some(fields["Mitglied_id"].clone()),
-        member_uuid: None, // This field doesn't exist in Teable schema
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
         created_on: fields["Created on"].as_str().map(|s| s.to_string()),
@@ -432,9 +403,7 @@ async fn get_work_hours_filtered(
 
         let work_hour = WorkHour {
             id: record["id"].as_str().unwrap_or("").to_string(),
-            order: "".to_string(),
             member_id: Some(member_id_value), // Store the linked record field
-            member_uuid: None,                // This field doesn't exist in Teable schema
             last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
             first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
             created_on: fields["Created on"].as_str().map(|s| s.to_string()),
@@ -529,9 +498,7 @@ pub async fn create_work_hour(
 
     Ok(WorkHour {
         id: record["id"].as_str().unwrap_or("").to_string(),
-        order: "".to_string(),
         member_id: Some(fields["Mitglied_id"].clone()),
-        member_uuid: None, // This field doesn't exist in Teable, will be populated from member_id
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
         created_on: None,
@@ -632,9 +599,7 @@ pub async fn update_work_hour(
 
     Ok(WorkHour {
         id: record_id,
-        order: "".to_string(),
         member_id: Some(fields["Mitglied_id"].clone()),
-        member_uuid: None, // This field doesn't exist in Teable, will be populated from member_id
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
         created_on: None,

@@ -151,15 +151,9 @@ impl Member {
 #[derive(Debug, Deserialize)]
 pub struct WorkHour {
     pub id: String,
-    #[serde(rename = "order")]
-    #[allow(dead_code)]
-    pub order: String,
     // Linked record field that references member records
     #[serde(rename = "Mitglied_id")]
     pub member_id: Option<serde_json::Value>, // Can be object with id or just string
-    // UUID field for backward compatibility and direct UUID access
-    #[serde(rename = "Mitglied_UUID")]
-    pub member_uuid: Option<String>,
     #[serde(rename = "Nachname")]
     #[allow(dead_code)]
     pub last_name: Option<String>,

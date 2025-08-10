@@ -279,11 +279,8 @@ const Dashboard = () => {
         const fieldNames = Object.keys(sampleRow).filter(key =>
             key !== 'order' &&
             !key.startsWith('_') &&
-            key !== 'User_UUID' &&
-            key !== 'Mitglied_UUID' &&
             key !== 'User' &&
             key !== 'Mitglied' &&
-            key !== 'UUID' &&
             key !== 'Vorname' &&
             key !== 'Nachname' &&
             key.toLowerCase() !== 'id'
