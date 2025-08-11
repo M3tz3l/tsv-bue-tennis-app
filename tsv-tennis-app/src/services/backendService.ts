@@ -144,20 +144,6 @@ class BackendService {
     }
   }
 
-  // Work hours methods
-  async getArbeitsstunden(): Promise<WorkHourResponse[] | ApiError> {
-    try {
-      const response = await this.api.get<WorkHourResponse[]>('/arbeitsstunden');
-      return response.data;
-    } catch (error: any) {
-      console.error('Error fetching work hours:', error);
-      return {
-        success: false,
-        message: error.response?.data?.message || 'Arbeitsstunden konnten nicht geladen werden'
-      };
-    }
-  }
-
   async createArbeitsstunden(data: CreateWorkHourRequest): Promise<ApiResponse | ApiError> {
     try {
       const response = await this.api.post<ApiResponse>('/arbeitsstunden', data);

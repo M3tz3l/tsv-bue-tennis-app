@@ -107,7 +107,7 @@ where
 pub struct UpdateWorkHourRequest {
     pub date: String,
     pub description: String,
-    pub duration_seconds: f64,
+    pub duration_hours: f64,
 }
 
 #[derive(Debug, Serialize, Type)]
@@ -115,7 +115,7 @@ pub struct WorkHourResponse {
     pub id: String,
     pub date: String,
     pub description: String,
-    pub duration_seconds: f64,
+    pub duration_hours: f64,
 }
 
 // Teable API models
@@ -167,8 +167,8 @@ pub struct WorkHour {
     pub date: Option<String>,
     #[serde(rename = "Tätigkeit")]
     pub description: Option<String>,
-    #[serde(rename = "Stunden")] // This field stores seconds as a floating point number
-    pub duration_seconds: Option<f64>,
+    #[serde(rename = "Stunden")] // This field stores hours as a floating point number
+    pub duration_hours: Option<f64>,
 }
 
 impl WorkHour {

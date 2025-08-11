@@ -4,52 +4,19 @@ use axum::http::{HeaderMap, StatusCode};
 use chrono::Datelike;
 use tracing::{debug, info, warn};
 
-/// Converts seconds to hours with 2 decimal place precision
-pub fn seconds_to_hours(seconds: f64) -> f64 {
-    let hours = seconds / 3600.0;
-    (hours * 100.0).round() / 100.0
-}
-
-/// Rounds a number to 2 decimal places
-pub fn round_to_2_decimals(value: f64) -> f64 {
-    (value * 100.0).round() / 100.0
-}
-
-/// Filters and converts work hours for a specific user ID and year
-pub fn filter_work_hours_for_user_by_year(
+/// Converts a list of WorkHour to WorkHourEntry (no filtering)
+pub fn convert_work_hours_to_entries(
     work_hours: &[WorkHour],
-    user_id: &str,
-    year: i32,
     debug_prefix: &str,
 ) -> Vec<WorkHourEntry> {
     work_hours
         .iter()
-        .filter(|wh| {
-            // Try to match using the linked record field
-            if let Some(member_id) = wh.get_member_id() {
-                member_id == user_id
-            } else {
-                false
-            }
-        })
-        .filter(|wh| {
-            // Filter by year if date is available
-            if let Some(ref date_str) = wh.date {
-                // Date format is typically YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ
-                if let Some(year_part) = date_str.split('-').next() {
-                    if let Ok(entry_year) = year_part.parse::<i32>() {
-                        return entry_year == year;
-                    }
-                }
-            }
-            false // If no date or parsing fails, exclude the entry
-        })
         .filter_map(|wh| {
-            match (&wh.date, &wh.description, wh.duration_seconds) {
-                (Some(date), Some(description), Some(duration)) => {
-                    debug!("{} - Raw duration: {} seconds", debug_prefix, duration);
-                    let hours = seconds_to_hours(duration);
-                    debug!("{} - Converted to hours: {}", debug_prefix, hours);
+            match (&wh.date, &wh.description, wh.duration_hours) {
+                (Some(date), Some(description), Some(hours)) => {
+                    debug!("{} - Duration: {} hours", debug_prefix, hours);
+                    let hours = (hours * 100.0).round() / 100.0; // Round to 2 decimal places
+                    debug!("{} - Rounded hours: {}", debug_prefix, hours);
                     // Normalize date to YYYY-MM-DD
                     let date_norm = if let Some(idx) = date.find('T') {
                         date[..idx].to_string()
@@ -65,7 +32,7 @@ pub fn filter_work_hours_for_user_by_year(
                 },
                 _ => {
                     debug!("{} - Skipping entry with missing data: date={:?}, description={:?}, duration={:?}",
-                        debug_prefix, wh.date, wh.description, wh.duration_seconds);
+                        debug_prefix, wh.date, wh.description, wh.duration_hours);
                     None
                 }
             }
@@ -75,8 +42,7 @@ pub fn filter_work_hours_for_user_by_year(
 
 /// Calculates total hours from a list of work hour entries
 pub fn calculate_total_hours(entries: &[WorkHourEntry]) -> f64 {
-    let total = entries.iter().map(|wh| wh.duration_hours).sum::<f64>();
-    round_to_2_decimals(total)
+    entries.iter().map(|wh| wh.duration_hours).sum::<f64>()
 }
 
 /// Logs work hour entries for debugging
