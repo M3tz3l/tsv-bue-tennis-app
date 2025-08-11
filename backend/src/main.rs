@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::utils::{
-    calculate_total_hours, extract_user_id_from_headers, filter_work_hours_for_user_by_year,
-    get_required_hours_for_member, log_work_entries, round_to_2_decimals,
+    calculate_total_hours, convert_work_hours_to_entries, extract_user_id_from_headers,
+    get_required_hours_for_member, log_work_entries,
 };
 use axum::{
     extract::{Json, Path, State},
@@ -37,7 +37,7 @@ use member_selection::{LoginResponseVariant, MemberSelectionResponse, SelectMemb
 use models::{
     CreateWorkHourRequest, DashboardResponse, FamilyData, FamilyMember, ForgotPasswordRequest,
     LoginRequest, LoginResponse, Member, MemberContribution, PersonalData, RegisterRequest,
-    ResetPasswordRequest, UserResponse, WorkHourResponse,
+    ResetPasswordRequest, UserResponse,
 };
 use token_store::TokenStore;
 
@@ -248,9 +248,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .route("/verify-token", get(get_user))
         .route("/dashboard/:year", get(dashboard))
         .route("/user", get(get_user))
-        .route("/workHours", get(work_hours))
-        .route("/workHours/:id", get(get_work_hour_by_id))
-        .route("/arbeitsstunden", get(work_hours)) // Frontend expects this endpoint
         .route("/arbeitsstunden/:id", get(get_work_hour_by_id)) // Get single entry for editing
         .layer(GovernorLayer {
             config: read_governor_conf,
@@ -259,9 +256,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // Write operations with stricter rate limiting
     let write_routes = Router::new()
-        .route("/workHours", post(create_work_hour))
-        .route("/workHours/:id", put(update_work_hour))
-        .route("/workHours/:id", delete(delete_work_hour))
         .route("/arbeitsstunden", post(create_work_hour)) // Frontend expects this endpoint
         .route("/arbeitsstunden/:id", put(update_work_hour)) // Frontend expects this endpoint
         .route("/arbeitsstunden/:id", delete(delete_work_hour)) // Frontend expects this endpoint
@@ -733,22 +727,22 @@ async fn dashboard(
         StatusCode::NOT_FOUND
     })?;
 
-    let work_hours = teable::get_work_hours(&state.http_client)
-        .await
-        .map_err(|e| {
-            error!("Dashboard: Failed to get work hours: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
     let year_int: i32 = year.parse().unwrap_or(2024);
 
-    // Get user's work hours using year-aware utility function
-    let user_work_hours = filter_work_hours_for_user_by_year(
-        &work_hours.results,
-        &current_user.id,
-        year_int,
-        "Personal entry",
-    );
+    // Fetch user's work hours for the given year directly from Teable (API-level filtering)
+    let work_hours =
+        teable::get_work_hours_for_member_by_year(&state.http_client, &current_user.id, year_int)
+            .await
+            .map_err(|e| {
+                error!(
+                    "Dashboard: Failed to get work hours for user {} and year {}: {}",
+                    current_user.id, year_int, e
+                );
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+    let user_work_hours_raw = work_hours.results;
+    let user_work_hours = convert_work_hours_to_entries(&user_work_hours_raw, "Personal");
 
     debug!(
         "Dashboard: Found {} work hours for user",
@@ -765,7 +759,7 @@ async fn dashboard(
     let personal_required_hours = get_required_hours_for_member(&current_user, year_int);
     let personal_data = PersonalData {
         name: current_user.name(),
-        hours: round_to_2_decimals(total_hours),
+        hours: total_hours,
         required: personal_required_hours,
         entries: user_work_hours,
     };
@@ -802,10 +796,25 @@ async fn dashboard(
                     member.id,
                     member.family_id
                 );
-                let member_work_hours = filter_work_hours_for_user_by_year(
-                    &work_hours.results,
+                // Fetch work hours for this member and year
+                let member_work_hours_raw = match teable::get_work_hours_for_member_by_year(
+                    &state.http_client,
                     &member.id,
                     year_int,
+                )
+                .await
+                {
+                    Ok(resp) => resp.results,
+                    Err(e) => {
+                        error!(
+                            "Dashboard: Failed to get work hours for family member {}: {}",
+                            member.id, e
+                        );
+                        Vec::new()
+                    }
+                };
+                let member_work_hours = convert_work_hours_to_entries(
+                    &member_work_hours_raw,
                     &format!("Family member {}", member.name()),
                 );
 
@@ -815,26 +824,18 @@ async fn dashboard(
                 family_total_hours += member_hours;
                 family_required_total += member_required;
 
-                // Normalize date format for each entry to YYYY-MM-DD
-                let entries_normalized = member_work_hours
-                    .into_iter()
-                    .map(|mut entry| {
-                        if let Some(idx) = entry.date.find('T') {
-                            entry.date = entry.date[..idx].to_string();
-                        }
-                        entry
-                    })
-                    .collect();
+                // entries_normalized is just member_work_hours now
+                let entries_normalized = member_work_hours;
 
                 member_contributions.push(MemberContribution {
                     name: member.name(),
-                    hours: round_to_2_decimals(member_hours),
+                    hours: member_hours,
                     required: member_required,
                     entries: entries_normalized,
                 });
             }
 
-            let family_total_rounded = round_to_2_decimals(family_total_hours);
+            let family_total_rounded = family_total_hours;
             let family_remaining = (family_required_total - family_total_rounded).max(0.0);
             let family_percentage = if family_required_total > 0.0 {
                 (family_total_rounded / family_required_total) * 100.0
@@ -858,7 +859,7 @@ async fn dashboard(
                 required: family_required_total,
                 completed: family_total_rounded,
                 remaining: family_remaining,
-                percentage: round_to_2_decimals(family_percentage),
+                percentage: family_percentage,
                 member_contributions,
             })
         } else {
@@ -930,43 +931,6 @@ async fn get_user(
     })))
 }
 
-async fn work_hours(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Result<impl IntoResponse, StatusCode> {
-    let user_id = extract_user_id_from_headers(&headers)?;
-
-    // Get current user by ID
-    let current_user = teable::get_member_by_id(&state.http_client, &user_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
-
-    // Get work hours only for this specific user (optimized)
-    let work_hours = teable::get_work_hours_for_member(&state.http_client, &current_user.id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let user_work_hours: Vec<WorkHourResponse> = work_hours
-        .results
-        .iter()
-        .filter_map(|wh| {
-            // Only include entries with valid data - no need to filter by user since API already did that
-            match (&wh.date, &wh.description, wh.duration_seconds) {
-                (Some(date), Some(description), Some(duration)) => Some(WorkHourResponse {
-                    id: wh.id.clone(),
-                    date: date.clone(),
-                    description: description.clone(),
-                    duration_seconds: duration,
-                }),
-                _ => None,
-            }
-        })
-        .collect();
-
-    Ok(ResponseJson(user_work_hours))
-}
-
 async fn get_work_hour_by_id(
     State(state): State<AppState>,
     Path(work_hour_id): Path<String>,
@@ -1020,9 +984,8 @@ async fn get_work_hour_by_id(
             }
 
             // Validate that all required fields are present
-            match (&wh.date, &wh.description, &wh.duration_seconds) {
-                (Some(date), Some(description), Some(duration_seconds)) => {
-                    let hours = duration_seconds / 3600.0; // Convert seconds back to hours
+            match (&wh.date, &wh.description, &wh.duration_hours) {
+                (Some(date), Some(description), Some(hours)) => {
                     debug!(
                         "Get Work Hour: Found work hour {} for user {}",
                         work_hour_id,
@@ -1162,31 +1125,27 @@ async fn create_work_hour(
 
     debug!("Create Work Hour: Found user: {}", current_user.name());
 
-    // Convert hours to seconds for storage (Teable expects seconds)
-    let duration_seconds = payload.hours * 3600.0;
+    debug!("Create Work Hour: Using {} hours directly", payload.hours);
 
-    debug!(
-        "Create Work Hour: Converting {} hours to {} seconds",
-        payload.hours, duration_seconds
-    );
-
-    // Check for duplicate entry for this member and date
-    let existing_hours = teable::get_work_hours_for_member(&state.http_client, &current_user.id)
-        .await
-        .map_err(|e| {
+    // Check for duplicate entry for this member and date using teable.rs helper
+    let work_hours_at_date = match teable::get_work_hours_for_member_at_date(
+        &state.http_client,
+        &current_user.id,
+        &payload.date,
+    )
+    .await
+    {
+        Ok(records) => records,
+        Err(e) => {
             error!(
-                "Create Work Hour: Failed to fetch work hours for duplicate check: {}",
+                "Create Work Hour: Error fetching work hours for date: {}",
                 e
             );
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
 
-    let duplicate = existing_hours
-        .results
-        .iter()
-        .any(|wh| wh.date.as_deref() == Some(&payload.date));
-
-    if duplicate {
+    if !work_hours_at_date.is_empty() {
         error!(
             "Create Work Hour: Duplicate entry for member {} on date {}",
             current_user.id, payload.date
@@ -1202,7 +1161,7 @@ async fn create_work_hour(
         &state.http_client,
         &payload.date,
         &payload.description,
-        duration_seconds,
+        payload.hours,
         current_user.id.clone(),
     )
     .await
@@ -1221,7 +1180,7 @@ async fn create_work_hour(
                     "date": payload.date,
                     "description": payload.description,
                     "hours": payload.hours,
-                    "duration_seconds": duration_seconds
+                    "duration_hours": payload.hours
                 }
             })))
         }
@@ -1236,7 +1195,7 @@ async fn create_work_hour(
                     "date": payload.date,
                     "description": payload.description,
                     "hours": payload.hours,
-                    "duration_seconds": duration_seconds
+                    "duration_hours": payload.hours
                 },
                 "error": format!("Teable error: {}", e)
             })))
@@ -1397,13 +1356,7 @@ async fn update_work_hour(
         }
     }
 
-    // Convert hours to seconds for storage (Teable expects seconds)
-    let duration_seconds = payload.hours * 3600.0;
-
-    debug!(
-        "Update Work Hour: Converting {} hours to {} seconds",
-        payload.hours, duration_seconds
-    );
+    debug!("Update Work Hour: Using {} hours directly", payload.hours);
 
     // Try to update the work hour in Teable
     match teable::update_work_hour(
@@ -1411,7 +1364,7 @@ async fn update_work_hour(
         &work_hour_id,
         &payload.date,
         &payload.description,
-        duration_seconds,
+        payload.hours,
         current_user.id.clone(),
     )
     .await
@@ -1430,7 +1383,7 @@ async fn update_work_hour(
                     "date": payload.date,
                     "description": payload.description,
                     "hours": payload.hours,
-                    "duration_seconds": duration_seconds
+                    "duration_hours": payload.hours
                 }
             })))
         }
@@ -1547,13 +1500,6 @@ mod tests {
             .route("/verify-token", get(get_user))
             .route("/dashboard/:year", get(dashboard))
             .route("/user", get(get_user))
-            .route("/workHours", get(work_hours))
-            .route("/workHours/:id", get(get_work_hour_by_id))
-            .route("/workHours", post(create_work_hour))
-            .route("/workHours/:id", put(update_work_hour))
-            .route("/workHours/:id", delete(delete_work_hour))
-            // German aliases
-            .route("/arbeitsstunden", get(work_hours))
             .route("/arbeitsstunden/:id", get(get_work_hour_by_id))
             .route("/arbeitsstunden", post(create_work_hour))
             .route("/arbeitsstunden/:id", put(update_work_hour))
@@ -1624,7 +1570,7 @@ mod tests {
         let app = create_test_app().await;
         let server = TestServer::new(app).unwrap();
 
-        let response = server.get("/api/workHours").await;
+        let response = server.get("/api/arbeitsstunden").await;
         assert_eq!(response.status_code(), 401);
     }
 
@@ -1705,7 +1651,10 @@ mod tests {
             "hours": 2.5
         });
 
-        let response = server.post("/api/workHours").json(&work_hour_request).await;
+        let response = server
+            .post("/api/arbeitsstunden")
+            .json(&work_hour_request)
+            .await;
 
         assert_eq!(response.status_code(), 401);
     }
@@ -1722,7 +1671,7 @@ mod tests {
         });
 
         let response = server
-            .put("/api/workHours/123")
+            .put("/api/arbeitsstunden/123")
             .json(&work_hour_request)
             .await;
 
@@ -1734,7 +1683,7 @@ mod tests {
         let app = create_test_app().await;
         let server = TestServer::new(app).unwrap();
 
-        let response = server.delete("/api/workHours/123").await;
+        let response = server.delete("/api/arbeitsstunden/123").await;
         assert_eq!(response.status_code(), 401);
     }
 
@@ -1752,7 +1701,7 @@ mod tests {
         let app = create_test_app().await;
         let server = TestServer::new(app).unwrap();
 
-        let response = server.get("/api/workHours/123").await;
+        let response = server.get("/api/arbeitsstunden/123").await;
         assert_eq!(response.status_code(), 401);
     }
 
@@ -1994,7 +1943,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_work_hours_with_valid_token_and_mock() {
+    async fn test_work_hour_by_id_with_valid_token_and_mock() {
         use mockito::Server;
 
         // Set ALL required environment variables for this specific test
@@ -2037,24 +1986,19 @@ mod tests {
             .await;
 
         // Mock work hours API call
-        let _work_hours_mock = teable_server
-            .mock("GET", "/table/test_work_hours_table/record")
-            .match_query(mockito::Matcher::Any)
+        let _work_hour_by_id_mock = teable_server
+            .mock("GET", "/table/test_work_hours_table/record/work_hour_1")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
                 r#"{
-                "records": [
-                    {
-                        "id": "work_hour_1",
-                        "fields": {
-                            "Datum": "2024-01-15",
-                            "Tätigkeit": "Test work",
-                            "Stunden": 2.5,
-                            "Mitglied_id": "test_user_456"
-                        }
-                    }
-                ]
+                "id": "work_hour_1",
+                "fields": {
+                    "Datum": "2024-01-15",
+                    "Tätigkeit": "Test work",
+                    "Stunden": 2.5,
+                    "Mitglied_id": "test_user_456"
+                }
             }"#,
             )
             .create_async()
@@ -2064,9 +2008,9 @@ mod tests {
         let app = create_test_app_with_teable_url(&teable_server.url()).await;
         let server = TestServer::new(app).unwrap();
 
-        // Test work hours endpoint with valid token
+        // Test work hours endpoint with valid token - use dashboard endpoint
         let response = server
-            .get("/api/workHours")
+            .get("/api/arbeitsstunden/work_hour_1")
             .add_header("authorization", &format!("Bearer {valid_token}"))
             .await;
 
@@ -2074,11 +2018,12 @@ mod tests {
         assert_eq!(response.status_code(), 200);
 
         let json: serde_json::Value = response.json();
-        assert!(json.is_array());
-        let work_hours = json.as_array().unwrap();
-        assert_eq!(work_hours.len(), 1);
-        assert_eq!(work_hours[0]["description"], "Test work");
-        assert_eq!(work_hours[0]["duration_seconds"], 9000.0); // 2.5 hours * 3600 = 9000 seconds
+        // The get work hour by ID endpoint returns an object with success and data fields
+        assert!(json.is_object());
+        assert_eq!(json["success"], true);
+        let work_hour_data = &json["data"];
+        assert_eq!(work_hour_data["Tätigkeit"], "Test work");
+        assert_eq!(work_hour_data["Stunden"], 2.5); // 2.5 hours directly
     }
 
     #[tokio::test]
@@ -2098,7 +2043,7 @@ mod tests {
 
         // Test creating work hour with valid token
         let response = server
-            .post("/api/workHours")
+            .post("/api/arbeitsstunden")
             .add_header("authorization", &format!("Bearer {valid_token}"))
             .json(&work_hour_request)
             .await;
@@ -2241,7 +2186,7 @@ mod tests {
 
         for invalid_payload in test_cases {
             let response = server
-                .post("/api/workHours")
+                .post("/api/arbeitsstunden")
                 .add_header("authorization", "Bearer valid_token_would_go_here")
                 .json(&invalid_payload)
                 .await;

@@ -22,6 +22,37 @@ fn get_teable_config() -> Result<TeableConfig, Box<dyn std::error::Error + Send 
     })
 }
 
+/// Fetches all work hour records for a member at a specific date (exact date, Europe/Berlin timezone)
+pub async fn get_work_hours_for_member_at_date(
+    http_client: &Client,
+    member_id: &str,
+    date: &str,
+) -> Result<Vec<serde_json::Value>, anyhow::Error> {
+    let filter = serde_json::json!({
+        "conjunction": "and",
+        "filterSet": [
+            { "fieldId": "Mitglied_id", "operator": "is", "value": member_id },
+            { "fieldId": "Datum", "operator": "is", "value": { "mode": "exactDate", "exactDate": format!("{}T00:00:00.000Z", date), "timeZone": "Europe/Berlin" } }
+        ]
+    });
+    let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
+    let url = format!(
+        "{}/table/{}/record?filter={}",
+        cfg.api_url,
+        cfg.work_hours_table_id,
+        urlencoding::encode(&filter.to_string())
+    );
+    let response =
+        make_teable_request(http_client, &url, &cfg.token, "work_hours_for_date").await?;
+    let response_text = handle_teable_response(response, "work_hours_for_date").await?;
+    let teable_response: serde_json::Value = serde_json::from_str(&response_text)?;
+    let records = teable_response["records"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    Ok(records)
+}
+
 /// Makes an authenticated GET request to Teable API
 async fn make_teable_request(
     client: &Client,
@@ -295,17 +326,6 @@ pub async fn get_family_members_with_projection(
     })
 }
 
-pub async fn get_work_hours(client: &Client) -> Result<TeableResponse<WorkHour>> {
-    get_work_hours_filtered(client, None).await
-}
-
-pub async fn get_work_hours_for_member(
-    client: &Client,
-    member_record_id: &str,
-) -> Result<TeableResponse<WorkHour>> {
-    get_work_hours_filtered(client, Some(member_record_id)).await
-}
-
 pub async fn get_work_hour_by_id(client: &Client, work_hour_id: &str) -> Result<Option<WorkHour>> {
     let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
 
@@ -341,7 +361,7 @@ pub async fn get_work_hour_by_id(client: &Client, work_hour_id: &str) -> Result<
                 .unwrap_or_else(|_| s.get(0..10).unwrap_or("").to_string())
         }),
         description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
-        duration_seconds: fields["Stunden"].as_f64().map(|h| h * 3600.0), // Convert hours to seconds
+        duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
     };
 
     info!(
@@ -351,30 +371,55 @@ pub async fn get_work_hour_by_id(client: &Client, work_hour_id: &str) -> Result<
     Ok(Some(work_hour))
 }
 
-async fn get_work_hours_filtered(
+pub async fn get_work_hours_for_member_by_year(
     client: &Client,
-    member_record_id: Option<&str>,
+    member_record_id: &str,
+    year: i32,
 ) -> Result<TeableResponse<WorkHour>> {
     let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
 
     let mut url = format!("{}/table/{}/record", cfg.api_url, cfg.work_hours_table_id);
 
-    // Add filter if member_record_id is provided
-    if let Some(member_id) = member_record_id {
+    // Build filter set
+    let mut filter_set = vec![];
+
+    filter_set.push(serde_json::json!({
+        "fieldId": "Mitglied_id",
+        "operator": "is",
+        "value": member_record_id
+    }));
+
+    // Use date range for the year: isOnOrAfter YYYY-01-01 and isOnOrBefore YYYY-12-31
+    filter_set.push(serde_json::json!({
+        "fieldId": "Datum",
+        "operator": "isOnOrAfter",
+        "value": {
+            "mode": "exactDate",
+            "exactDate": format!("{}-01-01T00:00:00.000Z", year),
+            "timeZone": "Europe/Berlin"
+        }
+    }));
+    filter_set.push(serde_json::json!({
+        "fieldId": "Datum",
+        "operator": "isOnOrBefore",
+        "value": {
+            "mode": "exactDate",
+            "exactDate": format!("{}-12-31T23:59:59.999Z", year),
+            "timeZone": "Europe/Berlin"
+        }
+    }));
+
+    if !filter_set.is_empty() {
         let filter = serde_json::json!({
             "conjunction": "and",
-            "filterSet": [{
-                "fieldId": "Mitglied_id", // The field that links to member records
-                "operator": "is",
-                "value": member_id
-            }]
+            "filterSet": filter_set
         });
         url = format!(
             "{}?filter={}",
             url,
             urlencoding::encode(&filter.to_string())
         );
-        debug!("Filtering work hours for member: {}", member_id);
+        debug!("Filtering work hours with filter: {}", filter);
     }
 
     let response = make_teable_request(client, &url, &cfg.token, "work_hours").await?;
@@ -418,7 +463,7 @@ async fn get_work_hours_filtered(
                     .unwrap_or_else(|_| s.get(0..10).unwrap_or("").to_string())
             }),
             description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
-            duration_seconds: fields["Stunden"].as_f64().map(|h| h * 3600.0), // Convert hours to seconds
+            duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
         };
         work_hours.push(work_hour);
     }
@@ -439,7 +484,7 @@ pub async fn create_work_hour(
     client: &Client,
     date: &str,
     description: &str,
-    duration_seconds: f64,
+    duration_hours: f64,
     member_id: String, // This is the Teable member record ID
 ) -> Result<WorkHour> {
     let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
@@ -454,10 +499,7 @@ pub async fn create_work_hour(
     debug!("Teable: Creating work hour with proper member linkage");
     debug!("Datum: {}", date);
     debug!("Tätigkeit: {}", description);
-    debug!(
-        "Stunden: {} hours (converted from seconds)",
-        duration_seconds / 3600.0
-    );
+    debug!("Stunden: {} hours", duration_hours);
     debug!("Mitglied_id: {} (linked record)", member_id);
     debug!("Nachname: {}", member.last_name);
     debug!("Vorname: {}", member.first_name);
@@ -469,7 +511,7 @@ pub async fn create_work_hour(
                 "Mitglied_id": {"id": member_id}, // CRITICAL: Link to member record (object format)
                 "Nachname": member.last_name,
                 "Vorname": member.first_name,
-                "Stunden": duration_seconds / 3600.0, // Convert seconds back to hours for Teable
+                "Stunden": duration_hours, // Hours as-is for Teable
                 "Datum": date,
                 "Tätigkeit": description
             }
@@ -512,7 +554,7 @@ pub async fn create_work_hour(
                 .unwrap_or_else(|_| s.get(0..10).unwrap_or("").to_string())
         }),
         description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
-        duration_seconds: fields["Stunden"].as_f64().map(|h| h * 3600.0), // Convert back to seconds
+        duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
     })
 }
 
@@ -522,7 +564,7 @@ pub async fn update_work_hour(
     work_hour_id: &str,
     date: &str,
     description: &str,
-    duration_seconds: f64,
+    duration_hours: f64,
     member_id: String, // This is the Teable member record ID
 ) -> Result<WorkHour> {
     let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
@@ -544,10 +586,7 @@ pub async fn update_work_hour(
     );
     debug!("Datum: {}", date);
     debug!("Tätigkeit: {}", description);
-    debug!(
-        "Stunden: {} hours (converted from seconds)",
-        duration_seconds / 3600.0
-    );
+    debug!("Stunden: {} hours", duration_hours);
     debug!("Mitglied_id: {} (linked record)", member_id);
 
     // Create the payload for Teable update - use the format from frontend service
@@ -557,7 +596,7 @@ pub async fn update_work_hour(
                 "Mitglied_id": {"id": member_id}, // CRITICAL: Maintain member record link (object format)
                 "Nachname": member.last_name,
                 "Vorname": member.first_name,
-                "Stunden": duration_seconds / 3600.0, // Convert seconds back to hours for Teable
+                "Stunden": duration_hours, // Hours as-is for Teable
                 "Datum": date,
                 "Tätigkeit": description
             }
@@ -612,7 +651,7 @@ pub async fn update_work_hour(
                 .unwrap_or_else(|_| s.get(0..10).unwrap_or("").to_string())
         }),
         description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
-        duration_seconds: fields["Stunden"].as_f64().map(|h| h * 3600.0), // Convert back to seconds
+        duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
     })
 }
 
