@@ -1,25 +1,20 @@
 import axios, { AxiosInstance } from 'axios';
 import type {
-  LoginRequest,
   LoginResponse,
   LoginResponseVariant,
-  MemberSelectionResponse,
-  SelectMemberRequest,
   CreateWorkHourRequest,
-  WorkHourResponse,
-  DashboardResponse
+  DashboardResponse,
+  WorkHourEntry
 } from '@/types';
 
-// Helper types for API responses
-interface ApiResponse {
+// Generic API result type with optional data payload
+interface ApiResult<T = undefined> {
   success: boolean;
+  data?: T;
   message?: string;
 }
 
-interface ApiError {
-  success: false;
-  message: string;
-}
+type ApiError = { success: false; message: string };
 
 class BackendService {
   private api: AxiosInstance;
@@ -85,9 +80,9 @@ class BackendService {
     }
   }
 
-  async verifyToken(): Promise<ApiResponse> {
+  async verifyToken(): Promise<ApiResult> {
     try {
-      const response = await this.api.get<ApiResponse>('/verify-token');
+      const response = await this.api.get<ApiResult>('/verify-token');
       return response.data;
     } catch (error: any) {
       console.error('Token verification error:', error);
@@ -98,11 +93,11 @@ class BackendService {
     }
   }
 
-  async forgotPassword(email: string): Promise<ApiResponse | ApiError> {
+  async forgotPassword(email: string): Promise<ApiResult | ApiError> {
     try {
       // Normalize email to lowercase for case-insensitive password reset
       const normalizedEmail = email.toLowerCase().trim();
-      const response = await this.api.post<ApiResponse>('/forgotPassword', { email: normalizedEmail });
+      const response = await this.api.post<ApiResult>('/forgotPassword', { email: normalizedEmail });
       return response.data;
     } catch (error: any) {
       console.error('Forgot password error:', error);
@@ -113,9 +108,9 @@ class BackendService {
     }
   }
 
-  async resetPassword(token: string, password: string, userId: string): Promise<ApiResponse | ApiError> {
+  async resetPassword(token: string, password: string, userId: string): Promise<ApiResult | ApiError> {
     try {
-      const response = await this.api.post<ApiResponse>('/resetPassword', {
+      const response = await this.api.post<ApiResult>('/resetPassword', {
         token,
         password,
         userId
@@ -144,9 +139,9 @@ class BackendService {
     }
   }
 
-  async createArbeitsstunden(data: CreateWorkHourRequest): Promise<ApiResponse | ApiError> {
+  async createArbeitsstunden(data: CreateWorkHourRequest): Promise<ApiResult | ApiError> {
     try {
-      const response = await this.api.post<ApiResponse>('/arbeitsstunden', data);
+      const response = await this.api.post<ApiResult>('/arbeitsstunden', data);
       return response.data;
     } catch (error: any) {
       console.error('Error creating work hours:', error);
@@ -157,9 +152,9 @@ class BackendService {
     }
   }
 
-  async updateArbeitsstunden(id: string, data: CreateWorkHourRequest): Promise<ApiResponse | ApiError> {
+  async updateArbeitsstunden(id: string, data: CreateWorkHourRequest): Promise<ApiResult | ApiError> {
     try {
-      const response = await this.api.put<ApiResponse>(`/arbeitsstunden/${id}`, data);
+      const response = await this.api.put<ApiResult>(`/arbeitsstunden/${id}`, data);
       return response.data;
     } catch (error: any) {
       console.error('Error updating work hours:', error);
@@ -170,9 +165,9 @@ class BackendService {
     }
   }
 
-  async deleteArbeitsstunden(id: string): Promise<ApiResponse | ApiError> {
+  async deleteArbeitsstunden(id: string): Promise<ApiResult | ApiError> {
     try {
-      const response = await this.api.delete<ApiResponse>(`/arbeitsstunden/${id}`);
+      const response = await this.api.delete<ApiResult>(`/arbeitsstunden/${id}`);
       return response.data;
     } catch (error: any) {
       console.error('Error deleting work hours:', error);
@@ -183,9 +178,9 @@ class BackendService {
     }
   }
 
-  async getArbeitsstundenById(id: string): Promise<ApiResponse | ApiError> {
+  async getArbeitsstundenById(id: string): Promise<ApiResult<WorkHourEntry> | ApiError> {
     try {
-      const response = await this.api.get<ApiResponse>(`/arbeitsstunden/${id}`);
+      const response = await this.api.get<ApiResult<WorkHourEntry>>(`/arbeitsstunden/${id}`);
       return response.data;
     } catch (error: any) {
       console.error('Error fetching work hour:', error);

@@ -1,33 +1,31 @@
-//ResetPassword.js 
+//ResetPassword.tsx 
 
-import { React } from "react";
 import {
     useSearchParams,
     useNavigate
 } from "react-router-dom";
-import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import { toast } from "react-toastify";
 import TSVLogo from "../assets/TSV_Tennis.svg";
-import BackendService from "../services/backendService.ts";
+import BackendService from "../services/backendService";
 
 const ResetPassword = () => {
     const [searchParams] = useSearchParams();
-    let navigate = useNavigate();
+    const navigate = useNavigate();
     const userId = searchParams.get("id");
     const token = searchParams.get("token");
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const data = new FormData(e.currentTarget);
-        const newpassword = data.get("newpassword");
-        const confirmpassword = data.get("confirmpassword");
-        if (newpassword !== confirmpassword)
-            toast.error(`Neues Passwort und Passwort bestätigen stimmen nicht überein!`, {
+        const data = new FormData(e.currentTarget as HTMLFormElement);
+        const newpassword = String(data.get("newpassword") ?? "");
+        const confirmpassword = String(data.get("confirmpassword") ?? "");
+        if (newpassword !== confirmpassword) {
+            toast.error(`Neues Passwort und Passwort best\u00e4tigen stimmen nicht \u00fcberein!`, {
                 autoClose: 5000,
                 position: "top-right",
             });
-        else {
-            const res = await BackendService.resetPassword(token, newpassword, userId);
+        } else {
+            const res = await BackendService.resetPassword(String(token ?? ""), newpassword, String(userId ?? ""));
             if (res.success === false) {
                 toast.error(res.message, {
                     autoClose: 5000,
@@ -51,9 +49,9 @@ const ResetPassword = () => {
                 <div className="bg-white rounded-xl shadow-xl p-8 backdrop-blur-sm border border-white/20">
                     <div className="flex flex-col items-center">
                         <div className="mx-auto flex items-center justify-center mb-4">
-                            <img 
-                                src={TSVLogo} 
-                                alt="TSV Tennis Logo" 
+                            <img
+                                src={TSVLogo}
+                                alt="TSV Tennis Logo"
                                 className="h-20 w-auto drop-shadow-md hover:drop-shadow-lg transition-all duration-300"
                             />
                         </div>
