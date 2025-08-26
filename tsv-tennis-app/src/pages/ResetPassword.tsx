@@ -20,7 +20,7 @@ const ResetPassword = () => {
         const newpassword = String(data.get("newpassword") ?? "");
         const confirmpassword = String(data.get("confirmpassword") ?? "");
         if (newpassword !== confirmpassword) {
-            toast.error(`Neues Passwort und Passwort best\u00e4tigen stimmen nicht \u00fcberein!`, {
+            toast.error(`Neues Passwort und Passwort bestätigen stimmen nicht überein!`, {
                 autoClose: 5000,
                 position: "top-right",
             });

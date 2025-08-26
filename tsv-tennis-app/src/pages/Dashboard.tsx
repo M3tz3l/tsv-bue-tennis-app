@@ -5,7 +5,7 @@ import BackendService from '../services/backendService.ts';
 import { PencilIcon, PlusIcon, ArrowRightOnRectangleIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 import TSV_Logo from '../assets/TSV_Tennis.svg';
-import type { WorkHourEntry, CreateWorkHourRequest } from '../types';
+import type { WorkHourEntry, CreateWorkHourRequest, MemberContribution } from '../types';
 import useDashboard, { DASHBOARD_QUERY_KEY } from '../hooks/useDashboard';
 import { hasDuplicateEntry } from '../utils/entryUtils';
 import ArbeitsstundenFormModal from '../components/ArbeitsstundenFormModal';
@@ -13,7 +13,7 @@ import ArbeitsstundenFormModal from '../components/ArbeitsstundenFormModal';
 const Dashboard = () => {
     const { user, logout, token } = useAuth();
     const queryClient = useQueryClient();
-    const [editingRow, setEditingRow] = useState<any>(null);
+    const [editingRow, setEditingRow] = useState<WorkHourEntry | null>(null);
     const [showAddForm, setShowAddForm] = useState(false);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
@@ -29,23 +29,23 @@ const Dashboard = () => {
             console.log('🔍 Fetching work hour details for ID:', row.id);
 
             // Fetch the complete work hour entry using the GET endpoint
-            const response = await BackendService.getArbeitsstundenById(row.id) as any;
+            const response = await BackendService.getArbeitsstundenById(String(row.id));
 
-            if (response?.success) {
-                console.log('✅ Fetched work hour data:', response.data);
-                setEditingRow(response.data as WorkHourEntry);
+            if (response && (response as any).success) {
+                console.log('✅ Fetched work hour data:', (response as any).data);
+                setEditingRow(((response as any).data as WorkHourEntry) ?? null);
                 setShowAddForm(false);
             } else {
                 toast.error('Fehler beim Laden der Daten zum Bearbeiten');
-                console.error('Failed to fetch work hour:', (response as any)?.message);
+                console.error('Failed to fetch work hour:', (response as any)?.message ?? 'unknown');
             }
         } catch (error) {
             console.error('Error fetching work hour for edit:', error);
-            toast.error('Fehler beim Laden der Daten zum Bearbeiten');
+            toast.error((error as any)?.message || 'Fehler beim Laden der Daten zum Bearbeiten');
         }
     };
 
-    const handleSave = async (formData: CreateWorkHourRequest | any) => {
+    const handleSave = async (formData: Partial<CreateWorkHourRequest> & { Vorname?: string; Nachname?: string;[key: string]: unknown }) => {
         try {
             // For new entries, use backend API
             if (!editingRow) {
@@ -60,7 +60,7 @@ const Dashboard = () => {
                     existingEntries = dashboardData.personal.entries;
                 }
                 if (dashboardData?.family?.memberContributions) {
-                    existingEntries = existingEntries.concat(dashboardData.family.memberContributions.flatMap(m => m.entries || []));
+                    existingEntries = existingEntries.concat(dashboardData.family.memberContributions.flatMap((m: MemberContribution) => m.entries || []));
                 }
 
                 console.log('🔍 Checking for duplicates. Existing entries:', existingEntries.length);
@@ -96,7 +96,7 @@ const Dashboard = () => {
                 // Use util to detect duplicates across family/personal entries
                 const allExistingEntries = [
                     ...(dashboardData?.personal?.entries || []),
-                    ...(dashboardData?.family?.memberContributions?.flatMap((m: any) => m.entries || []) || [])
+                    ...(dashboardData?.family?.memberContributions?.flatMap((m: MemberContribution) => m.entries || []) || [])
                 ];
 
                 if (hasDuplicateEntry(allExistingEntries, formData)) {
@@ -104,16 +104,16 @@ const Dashboard = () => {
                     return;
                 }
 
-                const response = await BackendService.createArbeitsstunden(formData) as any;
+                const response: { success: boolean; message?: string } = await BackendService.createArbeitsstunden(formData);
 
                 console.log('✅ Response from backend:', response);
 
-                if (response?.success) {
+                if (response && response.success) {
                     toast.success('Eintrag erfolgreich erstellt');
                     setShowAddForm(false);
                     queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
                 } else {
-                    toast.error((response as any)?.message || 'Fehler beim Erstellen');
+                    toast.error(response?.message || 'Fehler beim Erstellen');
                 }
             } else {
                 console.log('🚀 Updating work hours entry:', editingRow.id, formData);
@@ -125,7 +125,7 @@ const Dashboard = () => {
                     // Consolidate entries and use the util to check for duplicates (excluding the edited entry)
                     const allExistingEntries = [
                         ...(dashboardData?.personal?.entries || []),
-                        ...(dashboardData?.family?.memberContributions?.flatMap((m: any) => m.entries || []) || [])
+                        ...(dashboardData?.family?.memberContributions?.flatMap((m: MemberContribution) => m.entries || []) || [])
                     ];
 
                     if (hasDuplicateEntry(allExistingEntries, formData, editingRow.id)) {
@@ -138,26 +138,26 @@ const Dashboard = () => {
                 // Send the form data as-is (with German field names)
                 console.log('🚀 Sending update data:', formData);
 
-                const response = await BackendService.updateArbeitsstunden(editingRow.id, formData) as any;
+                const response: { success: boolean; message?: string } = await BackendService.updateArbeitsstunden(String(editingRow.id), formData as CreateWorkHourRequest);
 
                 console.log('✅ Update response from backend:', response);
 
-                if (response?.success) {
+                if (response && response.success) {
                     toast.success('Eintrag erfolgreich aktualisiert');
                     setEditingRow(null);
                     queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
                 } else {
-                    toast.error((response as any)?.message || 'Fehler beim Aktualisieren');
+                    toast.error(response?.message || 'Fehler beim Aktualisieren');
                 }
             }
         } catch (error: any) {
             console.error('Error saving work hours:', error);
             // Handle specific error messages from backend
-            if (error.response?.data?.message?.includes('duplicate') ||
-                error.response?.data?.message?.includes('bereits vorhanden')) {
+            const msg = error?.response?.data?.message || error?.response?.data?.error || (error as any)?.message || 'Ein Fehler ist aufgetreten';
+            if (typeof msg === 'string' && (msg.includes('duplicate') || msg.includes('bereits vorhanden'))) {
                 toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
             } else {
-                toast.error(error.response?.data?.message || error.response?.data?.error || 'Ein Fehler ist aufgetreten');
+                toast.error(msg as string);
             }
         }
     };
@@ -189,7 +189,7 @@ const Dashboard = () => {
 
         // Get work hours data from personal or family context
         let data = dashboardData?.personal?.entries ||
-            (dashboardData?.family?.memberContributions.flatMap(m => m.entries)) || [];
+            (dashboardData?.family?.memberContributions.flatMap((m: MemberContribution) => m.entries)) || [];
 
         // Sort entries by Datum descending (most recent first)
         data = [...data].sort((a, b) => {
@@ -295,7 +295,10 @@ const Dashboard = () => {
                                         key={field}
                                         className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"
                                     >
-                                        {field.replace(/_/g, ' ')}
+                                        {(() => {
+                                            const fieldKey = String(field);
+                                            return fieldKey.replace(/_/g, ' ');
+                                        })()}
                                     </th>
                                 ))}
                                 <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
@@ -306,18 +309,22 @@ const Dashboard = () => {
                         <tbody className="bg-white divide-y divide-gray-200">
                             {data.map((row: WorkHourEntry) => (
                                 <tr key={row.id} className="hover:bg-gray-50">
-                                    {fieldNames.map((field) => (
-                                        <td key={String(field)} className="px-3 lg:px-6 py-4 text-sm text-gray-900">
-                                            <div className="max-w-xs break-words" title={field === 'Stunden' ?
-                                                Number(row[field]).toFixed(1) :
-                                                String(row[field] ?? '-')}>
-                                                {field === 'Stunden' ?
-                                                    Number(row[field]).toFixed(1) :
-                                                    String(row[field] ?? '-')
-                                                }
-                                            </div>
-                                        </td>
-                                    ))}
+                                    {fieldNames.map((field) => {
+                                        const fieldKey = String(field);
+                                        const value = (row as Record<string, unknown>)[fieldKey];
+                                        return (
+                                            <td key={fieldKey} className="px-3 lg:px-6 py-4 text-sm text-gray-900">
+                                                <div className="max-w-xs break-words" title={fieldKey === 'Stunden' ?
+                                                    String(Number(value ?? 0).toFixed(1)) :
+                                                    String(value ?? '-')}>
+                                                    {fieldKey === 'Stunden' ?
+                                                        Number(value ?? 0).toFixed(1) :
+                                                        String(value ?? '-')
+                                                    }
+                                                </div>
+                                            </td>
+                                        );
+                                    })}
                                     <td className="px-3 lg:px-6 py-4 text-sm font-medium">
                                         <div className="flex space-x-2">
                                             <button
@@ -337,6 +344,20 @@ const Dashboard = () => {
             </div>
         );
     };
+
+    // Prepare user profile for the modal (avoid repeated finds and implicit any)
+    const userProfile = (() => {
+        if (dashboardData?.personal?.name) {
+            const parts = dashboardData.personal.name.split(' ');
+            return { Nachname: parts.slice(1).join(' '), Vorname: parts[0] };
+        }
+        const found = dashboardData?.family?.members?.find((m: { email?: string; name?: string }) => m.email === user?.email);
+        if (found && found.name) {
+            const parts = found.name.split(' ');
+            return { Nachname: parts.slice(1).join(' '), Vorname: parts[0] };
+        }
+        return { Nachname: '', Vorname: '' };
+    })();
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
@@ -413,8 +434,8 @@ const Dashboard = () => {
                                 <div className="space-y-3">
                                     <h3 className="font-medium text-gray-800">Familienmitglieder:</h3>
                                     {dashboardData.family.memberContributions
-                                        .sort((a, b) => a.name.localeCompare(b.name, 'de'))
-                                        .map((member, index) => {
+                                        .sort((a: MemberContribution, b: MemberContribution) => a.name.localeCompare(b.name, 'de'))
+                                        .map((member: MemberContribution, index: number) => {
                                             const isCurrentUser = user?.name === member.name;
                                             return (
                                                 <div
@@ -495,19 +516,7 @@ const Dashboard = () => {
                     }}
                     onSave={handleSave}
                     initialData={editingRow}
-                    userProfile={
-                        // Extract user profile from different sources
-                        (dashboardData?.personal?.name ? {
-                            // If personal.name exists, parse it
-                            Nachname: dashboardData.personal.name.split(' ').slice(1).join(' '),
-                            Vorname: dashboardData.personal.name.split(' ')[0]
-                        } :
-                            // Fallback to family members lookup (map to expected shape)
-                            (dashboardData?.family?.members?.find(m => m.email === user?.email) ? {
-                                Nachname: dashboardData.family.members.find(m => m.email === user?.email)!.name.split(' ').slice(1).join(' ',),
-                                Vorname: dashboardData.family.members.find(m => m.email === user?.email)!.name.split(' ')[0]
-                            } : { Nachname: '', Vorname: '' }))
-                    }
+                    userProfile={userProfile}
                     selectedYear={selectedYear}
                 />
             )}

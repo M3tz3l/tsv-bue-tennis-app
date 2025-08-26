@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { useForm } from 'react-hook-form';
 import type { CreateWorkHourRequest, WorkHourEntry } from '../types';
 import { useQueryClient } from '@tanstack/react-query';
-import BackendService from '../services/backendService.ts';
+import BackendService from '../services/backendService';
 import { useAuth } from '../context/AuthContext';
 import { DASHBOARD_QUERY_KEY } from '../hooks/useDashboard';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
