@@ -1,16 +1,14 @@
-//ForgotPassword.js
+//ForgotPassword.tsx
 
-import { React } from "react";
-import backendService from "../services/backendService.ts";
-import { KeyIcon } from "@heroicons/react/24/solid";
+import backendService from "../services/backendService";
 import { toast } from "react-toastify";
 import TSVLogo from "../assets/TSV_Tennis.svg";
 
 const ForgotPassword = () => {
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const data = new FormData(e.currentTarget);
-        const email = data.get("email");
+        const data = new FormData(e.currentTarget as HTMLFormElement);
+        const email = String(data.get("email") ?? "");
         const res = await backendService.forgotPassword(email);
         if (res.success === false) {
             toast.error(res.message, {
@@ -31,9 +29,9 @@ const ForgotPassword = () => {
                 <div className="bg-white rounded-xl shadow-xl p-8 backdrop-blur-sm border border-white/20">
                     <div className="flex flex-col items-center">
                         <div className="mx-auto flex items-center justify-center mb-4">
-                            <img 
-                                src={TSVLogo} 
-                                alt="TSV Tennis Logo" 
+                            <img
+                                src={TSVLogo}
+                                alt="TSV Tennis Logo"
                                 className="h-20 w-auto drop-shadow-md hover:drop-shadow-lg transition-all duration-300"
                             />
                         </div>

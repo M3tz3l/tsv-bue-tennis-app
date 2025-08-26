@@ -1,16 +1,12 @@
+
 name: Deploy to VPS
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
-    types: [ closed ]
 
 jobs:
   deploy:
-    # Only run on merged PRs or direct pushes to main
-    if: github.event_name == 'push' || (github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
     
     steps:
