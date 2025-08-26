@@ -1,4 +1,6 @@
-export function hasDuplicateEntry(existingEntries: any[] = [], formData: { Datum?: string; Nachname?: string; Vorname?: string }, editingId?: string | number) {
+import type { WorkHourEntry } from '../types';
+
+export function hasDuplicateEntry(existingEntries: WorkHourEntry[] = [], formData: { Datum?: string; Nachname?: string; Vorname?: string }, editingId?: string | number) {
     if (!existingEntries || existingEntries.length === 0) return false;
     const newDate = formData.Datum;
     if (!newDate) return false;
