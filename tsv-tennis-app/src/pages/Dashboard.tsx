@@ -45,7 +45,7 @@ const Dashboard = () => {
         }
     };
 
-    const handleSave = async (formData: Partial<CreateWorkHourRequest> & { Vorname?: string; Nachname?: string;[key: string]: unknown }) => {
+    const handleSave = async (formData: Partial<CreateWorkHourRequest> & { [key: string]: unknown }) => {
         try {
             // For new entries, use backend API
             if (!editingRow) {
@@ -60,7 +60,10 @@ const Dashboard = () => {
                     existingEntries = dashboardData.personal.entries;
                 }
                 if (dashboardData?.family?.memberContributions) {
-                    existingEntries = existingEntries.concat(dashboardData.family.memberContributions.flatMap((m: MemberContribution) => m.entries || []));
+                    const memberEntries = dashboardData.family.memberContributions
+                        .filter((m: MemberContribution) => m.id === user?.id)
+                        .flatMap((m: MemberContribution) => m.entries || []);
+                    existingEntries = existingEntries.concat(memberEntries);
                 }
 
                 console.log('🔍 Checking for duplicates. Existing entries:', existingEntries.length);
@@ -93,10 +96,12 @@ const Dashboard = () => {
                     return;
                 }
 
-                // Use util to detect duplicates across family/personal entries
+                // Use util to detect duplicates across family/personal entries (current member only)
                 const allExistingEntries = [
                     ...(dashboardData?.personal?.entries || []),
-                    ...(dashboardData?.family?.memberContributions?.flatMap((m: MemberContribution) => m.entries || []) || [])
+                    ...((dashboardData?.family?.memberContributions ?? [])
+                        .filter((m: MemberContribution) => m.id === user?.id)
+                        .flatMap((m: MemberContribution) => m.entries || []))
                 ];
 
                 if (hasDuplicateEntry(allExistingEntries, formData)) {
@@ -104,7 +109,13 @@ const Dashboard = () => {
                     return;
                 }
 
-                const response: { success: boolean; message?: string } = await BackendService.createArbeitsstunden(formData);
+                const requestPayload: CreateWorkHourRequest = {
+                    Datum: formData.Datum || '',
+                    Tätigkeit: String(formData.Tätigkeit ?? ''),
+                    Stunden: Number(formData.Stunden) || 0
+                };
+
+                const response = await BackendService.createArbeitsstunden(requestPayload);
 
                 console.log('✅ Response from backend:', response);
 
@@ -125,7 +136,9 @@ const Dashboard = () => {
                     // Consolidate entries and use the util to check for duplicates (excluding the edited entry)
                     const allExistingEntries = [
                         ...(dashboardData?.personal?.entries || []),
-                        ...(dashboardData?.family?.memberContributions?.flatMap((m: MemberContribution) => m.entries || []) || [])
+                        ...((dashboardData?.family?.memberContributions ?? [])
+                            .filter((m: MemberContribution) => m.id === user?.id)
+                            .flatMap((m: MemberContribution) => m.entries || []))
                     ];
 
                     if (hasDuplicateEntry(allExistingEntries, formData, editingRow.id)) {
@@ -138,7 +151,13 @@ const Dashboard = () => {
                 // Send the form data as-is (with German field names)
                 console.log('🚀 Sending update data:', formData);
 
-                const response: { success: boolean; message?: string } = await BackendService.updateArbeitsstunden(String(editingRow.id), formData as CreateWorkHourRequest);
+                const updatePayload: CreateWorkHourRequest = {
+                    Datum: formData.Datum || '',
+                    Tätigkeit: String(formData.Tätigkeit ?? ''),
+                    Stunden: Number(formData.Stunden) || 0
+                };
+
+                const response = await BackendService.updateArbeitsstunden(String(editingRow.id), updatePayload);
 
                 console.log('✅ Update response from backend:', response);
 
@@ -188,8 +207,12 @@ const Dashboard = () => {
         }
 
         // Get work hours data from personal or family context
-        let data = dashboardData?.personal?.entries ||
-            (dashboardData?.family?.memberContributions.flatMap((m: MemberContribution) => m.entries)) || [];
+        // Use personal entries if available; otherwise use entries for the current family member only
+        const currentMemberEntries = dashboardData?.family?.memberContributions
+            ?.filter((m: MemberContribution) => m.id === user?.id)
+            .flatMap((m: MemberContribution) => m.entries || []) || [];
+
+        let data = dashboardData?.personal?.entries || currentMemberEntries;
 
         // Sort entries by Datum descending (most recent first)
         data = [...data].sort((a, b) => {

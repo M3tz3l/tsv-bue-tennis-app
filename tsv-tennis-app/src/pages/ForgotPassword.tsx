@@ -7,7 +7,7 @@ import TSVLogo from "../assets/TSV_Tennis.svg";
 const ForgotPassword = () => {
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const data = new FormData(e.currentTarget as HTMLFormElement);
+        const data = new FormData(e.currentTarget);
         const email = String(data.get("email") ?? "");
         const res = await backendService.forgotPassword(email);
         if (res.success === false) {

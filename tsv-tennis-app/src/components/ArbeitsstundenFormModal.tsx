@@ -53,8 +53,8 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
     useEffect(() => {
         // Reset form when modal opens or initialData / profile changes
         reset({
-            Nachname: initialData ? (initialData as any).Nachname || userProfile?.Nachname || '' : userProfile?.Nachname || '',
-            Vorname: initialData ? (initialData as any).Vorname || userProfile?.Vorname || '' : userProfile?.Vorname || '',
+            Nachname: userProfile?.Nachname || '',
+            Vorname: userProfile?.Vorname || '',
             Datum: initialData?.Datum || today,
             Stunden: initialData ? String(initialData.Stunden) : '',
             Tätigkeit: initialData?.Tätigkeit || ''
@@ -111,8 +111,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
         if (!initialData) return;
         setIsDeleting(true);
         try {
-            const id = (initialData as any).id;
-            const response = await BackendService.deleteArbeitsstunden(id);
+            const response = await BackendService.deleteArbeitsstunden(initialData.id);
             if (response?.success) {
                 toast.success('Eintrag erfolgreich gelöscht');
                 onClose();

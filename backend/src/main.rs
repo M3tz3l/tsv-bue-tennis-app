@@ -828,6 +828,7 @@ async fn dashboard(
                 let entries_normalized = member_work_hours;
 
                 member_contributions.push(MemberContribution {
+                    id: member.id.clone(),
                     name: member.name(),
                     hours: member_hours,
                     required: member_required,

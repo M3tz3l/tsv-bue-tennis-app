@@ -16,7 +16,7 @@ const ResetPassword = () => {
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const data = new FormData(e.currentTarget as HTMLFormElement);
+        const data = new FormData(e.currentTarget);
         const newpassword = String(data.get("newpassword") ?? "");
         const confirmpassword = String(data.get("confirmpassword") ?? "");
         if (newpassword !== confirmpassword) {

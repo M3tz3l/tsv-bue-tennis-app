@@ -28,6 +28,9 @@ jobs:
         env:
           RUST_TEST_THREADS: 1
         run: cargo test --workspace --all-targets -- --nocapture --test-threads=1
+      - name: Generate TypeScript bindings
+        working-directory: backend
+        run: cargo run --bin generate-types
       - name: Upload generated frontend types
         uses: actions/upload-artifact@v4
         with:
