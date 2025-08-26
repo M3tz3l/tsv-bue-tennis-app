@@ -102,14 +102,6 @@ where
     deserializer.deserialize_any(StringOrF64Visitor)
 }
 
-#[derive(Debug, Deserialize, Type)]
-#[allow(dead_code)]
-pub struct UpdateWorkHourRequest {
-    pub date: String,
-    pub description: String,
-    pub duration_hours: f64,
-}
-
 #[derive(Debug, Serialize, Type)]
 pub struct WorkHourResponse {
     pub id: String,
@@ -228,6 +220,7 @@ pub struct FamilyMember {
 
 #[derive(Debug, Serialize, Type)]
 pub struct MemberContribution {
+    pub id: String,
     pub name: String,
     pub hours: f64,
     pub required: f64,

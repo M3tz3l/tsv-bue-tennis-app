@@ -3,6 +3,8 @@ name: Rust CI
 on:
   pull_request:
     branches: [ main ]
+  push:
+    branches: [ main ]
 
 jobs:
   test:
@@ -26,3 +28,36 @@ jobs:
         env:
           RUST_TEST_THREADS: 1
         run: cargo test --workspace --all-targets -- --nocapture --test-threads=1
+      - name: Generate TypeScript bindings
+        working-directory: backend
+        run: cargo run --bin generate-types
+      - name: Upload generated frontend types
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-types
+          path: backend/bindings/types.ts
+
+  frontend-lint-typecheck:
+    name: Frontend — ESLint and TypeScript typecheck
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download generated frontend types
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-types
+          path: tsv-tennis-app/src/types
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install frontend dependencies
+        working-directory: tsv-tennis-app
+        run: npm ci
+      - name: Run ESLint
+        working-directory: tsv-tennis-app
+        run: npm run lint --if-present
+      - name: Run TypeScript typecheck
+        working-directory: tsv-tennis-app
+        run: npx tsc --noEmit

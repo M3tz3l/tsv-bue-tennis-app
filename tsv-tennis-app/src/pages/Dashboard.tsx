@@ -1,97 +1,51 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import BackendService from '../services/backendService.ts';
-import {
-    PencilIcon,
-    PlusIcon,
-    TrashIcon,
-    ArrowRightOnRectangleIcon,
-    ClockIcon,
-    XMarkIcon
-} from '@heroicons/react/24/outline';
-import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
+import { PencilIcon, PlusIcon, ArrowRightOnRectangleIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 import TSV_Logo from '../assets/TSV_Tennis.svg';
-import type { DashboardResponse } from '../types/DashboardResponse';
-import type { WorkHourEntry } from '../types/WorkHourEntry';
+import type { WorkHourEntry, CreateWorkHourRequest, MemberContribution } from '../types';
+import useDashboard, { DASHBOARD_QUERY_KEY } from '../hooks/useDashboard';
+import { hasDuplicateEntry } from '../utils/entryUtils';
+import ArbeitsstundenFormModal from '../components/ArbeitsstundenFormModal';
 
 const Dashboard = () => {
     const { user, logout, token } = useAuth();
     const queryClient = useQueryClient();
-    const [editingRow, setEditingRow] = useState<any>(null);
+    const [editingRow, setEditingRow] = useState<WorkHourEntry | null>(null);
     const [showAddForm, setShowAddForm] = useState(false);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
     // Fetch family dashboard data from the backend API
-    const { data: dashboardData, isLoading, error } = useQuery({
-        queryKey: ['dashboard', user?.id, selectedYear],
-        queryFn: async (): Promise<DashboardResponse> => {
-            console.log('🔍 Dashboard: Starting family dashboard API call');
-            console.log('🔍 Dashboard: Token available:', !!token);
-            console.log('🔍 Dashboard: User available:', !!user);
-            console.log('🔍 Dashboard: Selected year:', selectedYear);
-
-            if (!token) {
-                throw new Error('Kein Authentifizierungs-Token verfügbar');
-            }
-
-            console.log(`🔍 Dashboard: Making API call to dashboard/${selectedYear}`);
-            const response = await BackendService.getDashboard(selectedYear);
-
-            console.log('🔍 Dashboard: Family dashboard response received:', response);
-            return response;
-        },
-        enabled: !!user && !!token,
-        retry: 1,
-    });
+    const { data: dashboardData, isLoading, error } = useDashboard(user?.id, selectedYear, !!user?.id && !!token);
 
     const handleLogout = () => {
         logout();
     };
 
-    const handleEdit = async (row) => {
+    const handleEdit = async (row: WorkHourEntry) => {
         try {
             console.log('🔍 Fetching work hour details for ID:', row.id);
 
             // Fetch the complete work hour entry using the GET endpoint
-            const response = await BackendService.getArbeitsstundenById(row.id);
+            const response = await BackendService.getArbeitsstundenById(String(row.id));
 
-            if (response.success) {
-                console.log('✅ Fetched work hour data:', response.data);
-                setEditingRow(response.data);
+            if (response && (response as any).success) {
+                console.log('✅ Fetched work hour data:', (response as any).data);
+                setEditingRow(((response as any).data as WorkHourEntry) ?? null);
                 setShowAddForm(false);
             } else {
                 toast.error('Fehler beim Laden der Daten zum Bearbeiten');
-                console.error('Failed to fetch work hour:', response.message);
+                console.error('Failed to fetch work hour:', (response as any)?.message ?? 'unknown');
             }
         } catch (error) {
             console.error('Error fetching work hour for edit:', error);
-            toast.error('Fehler beim Laden der Daten zum Bearbeiten');
+            toast.error((error as any)?.message || 'Fehler beim Laden der Daten zum Bearbeiten');
         }
     };
 
-    const handleDelete = async (rowId) => {
-        if (window.confirm('Möchten Sie diesen Eintrag wirklich löschen?')) {
-            try {
-                console.log('🗑️ Deleting work hour entry:', rowId);
-
-                const response = await BackendService.deleteArbeitsstunden(rowId);
-
-                if (response.success) {
-                    toast.success('Eintrag erfolgreich gelöscht');
-                    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-                } else {
-                    toast.error(response.message || 'Fehler beim Löschen des Eintrags');
-                }
-            } catch (error) {
-                console.error('Error deleting work hour:', error);
-                toast.error(error.response?.data?.message || 'Fehler beim Löschen des Eintrags');
-            }
-        }
-    };
-
-    const handleSave = async (formData) => {
+    const handleSave = async (formData: Partial<CreateWorkHourRequest> & { [key: string]: unknown }) => {
         try {
             // For new entries, use backend API
             if (!editingRow) {
@@ -99,23 +53,22 @@ const Dashboard = () => {
                 console.log('🚀 Stunden value:', formData.Stunden, 'type:', typeof formData.Stunden);
 
                 // Check for existing entry on the same date (client-side check)
-                let existingEntries = [];
+                let existingEntries: WorkHourEntry[] = [];
 
                 // Get all entries from both personal and family data
                 if (dashboardData?.personal?.entries) {
                     existingEntries = dashboardData.personal.entries;
-                } else if (dashboardData?.family?.memberContributions) {
-                    existingEntries = dashboardData.family.memberContributions.flatMap(m => m.entries || []);
+                }
+                if (dashboardData?.family?.memberContributions) {
+                    const memberEntries = dashboardData.family.memberContributions
+                        .filter((m: MemberContribution) => m.id === user?.id)
+                        .flatMap((m: MemberContribution) => m.entries || []);
+                    existingEntries = existingEntries.concat(memberEntries);
                 }
 
                 console.log('🔍 Checking for duplicates. Existing entries:', existingEntries.length);
                 console.log('🔍 Looking for date:', formData.Datum, 'name:', formData.Vorname, formData.Nachname);
-                console.log('🔍 All existing entries:', existingEntries.map(e => ({
-                    id: e.id,
-                    Datum: e.Datum,
-                    Nachname: e.Nachname,
-                    Vorname: e.Vorname
-                })));
+                console.log('🔍 All existing entries:', existingEntries.map(e => ({ id: e.id, Datum: e.Datum })));
 
                 const sameDate = existingEntries.find(entry => {
                     // Since the dashboard data doesn't include names, we'll check by date only
@@ -143,16 +96,35 @@ const Dashboard = () => {
                     return;
                 }
 
-                const response = await BackendService.createArbeitsstunden(formData);
+                // Use util to detect duplicates across family/personal entries (current member only)
+                const allExistingEntries = [
+                    ...(dashboardData?.personal?.entries || []),
+                    ...((dashboardData?.family?.memberContributions ?? [])
+                        .filter((m: MemberContribution) => m.id === user?.id)
+                        .flatMap((m: MemberContribution) => m.entries || []))
+                ];
+
+                if (hasDuplicateEntry(allExistingEntries, formData)) {
+                    toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
+                    return;
+                }
+
+                const requestPayload: CreateWorkHourRequest = {
+                    Datum: formData.Datum || '',
+                    Tätigkeit: String(formData.Tätigkeit ?? ''),
+                    Stunden: Number(formData.Stunden) || 0
+                };
+
+                const response = await BackendService.createArbeitsstunden(requestPayload);
 
                 console.log('✅ Response from backend:', response);
 
-                if (response.success) {
+                if (response && response.success) {
                     toast.success('Eintrag erfolgreich erstellt');
                     setShowAddForm(false);
-                    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+                    queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
                 } else {
-                    toast.error(response.message || 'Fehler beim Erstellen');
+                    toast.error(response?.message || 'Fehler beim Erstellen');
                 }
             } else {
                 console.log('🚀 Updating work hours entry:', editingRow.id, formData);
@@ -161,26 +133,15 @@ const Dashboard = () => {
                 if (editingRow.Datum !== formData.Datum) {
                     console.log('🔍 Date changed from', editingRow.Datum, 'to', formData.Datum, '- checking for duplicates');
 
-                    let existingEntries = [];
+                    // Consolidate entries and use the util to check for duplicates (excluding the edited entry)
+                    const allExistingEntries = [
+                        ...(dashboardData?.personal?.entries || []),
+                        ...((dashboardData?.family?.memberContributions ?? [])
+                            .filter((m: MemberContribution) => m.id === user?.id)
+                            .flatMap((m: MemberContribution) => m.entries || []))
+                    ];
 
-                    // Get all entries from both personal and family data
-                    if (dashboardData?.personal?.entries) {
-                        existingEntries = dashboardData.personal.entries;
-                    } else if (dashboardData?.family?.memberContributions) {
-                        existingEntries = dashboardData.family.memberContributions.flatMap(m => m.entries || []);
-                    }
-
-                    // Check if there's already an entry for the new date (excluding current entry being edited)
-                    const duplicateEntry = existingEntries.find(entry => {
-                        // Since dashboard data doesn't include names, check by date only (excluding current entry)
-                        const entryDate = entry.Datum;
-                        const formDate = formData.Datum;
-
-                        return entry.id !== editingRow.id && // Exclude the current entry being edited
-                            entryDate === formDate;
-                    });
-
-                    if (duplicateEntry) {
+                    if (hasDuplicateEntry(allExistingEntries, formData, editingRow.id)) {
                         console.log('❌ Duplicate entry found for new date, blocking update');
                         toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
                         return;
@@ -190,26 +151,32 @@ const Dashboard = () => {
                 // Send the form data as-is (with German field names)
                 console.log('🚀 Sending update data:', formData);
 
-                const response = await BackendService.updateArbeitsstunden(editingRow.id, formData);
+                const updatePayload: CreateWorkHourRequest = {
+                    Datum: formData.Datum || '',
+                    Tätigkeit: String(formData.Tätigkeit ?? ''),
+                    Stunden: Number(formData.Stunden) || 0
+                };
+
+                const response = await BackendService.updateArbeitsstunden(String(editingRow.id), updatePayload);
 
                 console.log('✅ Update response from backend:', response);
 
-                if (response.success) {
+                if (response && response.success) {
                     toast.success('Eintrag erfolgreich aktualisiert');
                     setEditingRow(null);
-                    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+                    queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
                 } else {
-                    toast.error(response.message || 'Fehler beim Aktualisieren');
+                    toast.error(response?.message || 'Fehler beim Aktualisieren');
                 }
             }
         } catch (error: any) {
             console.error('Error saving work hours:', error);
             // Handle specific error messages from backend
-            if (error.response?.data?.message?.includes('duplicate') ||
-                error.response?.data?.message?.includes('bereits vorhanden')) {
+            const msg = error?.response?.data?.message || error?.response?.data?.error || (error as any)?.message || 'Ein Fehler ist aufgetreten';
+            if (typeof msg === 'string' && (msg.includes('duplicate') || msg.includes('bereits vorhanden'))) {
                 toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
             } else {
-                toast.error(error.response?.data?.message || error.response?.data?.error || 'Ein Fehler ist aufgetreten');
+                toast.error(msg as string);
             }
         }
     };
@@ -229,7 +196,7 @@ const Dashboard = () => {
                     <div className="bg-red-50 border border-red-200 rounded-lg p-6">
                         <h3 className="text-lg font-medium text-red-800 mb-2">Fehler beim Laden der Daten</h3>
                         <p className="text-red-600">
-                            {error?.message || dashboardData?.error || 'Fehler beim Laden der Dashboard-Daten'}
+                            {(error as any)?.message || 'Fehler beim Laden der Dashboard-Daten'}
                         </p>
                         <p className="text-sm text-red-500 mt-2">
                             Bitte überprüfen Sie Ihre Konfiguration.
@@ -240,8 +207,12 @@ const Dashboard = () => {
         }
 
         // Get work hours data from personal or family context
-        let data = dashboardData?.personal?.entries ||
-            (dashboardData?.family?.memberContributions.flatMap(m => m.entries)) || [];
+        // Use personal entries if available; otherwise use entries for the current family member only
+        const currentMemberEntries = dashboardData?.family?.memberContributions
+            ?.filter((m: MemberContribution) => m.id === user?.id)
+            .flatMap((m: MemberContribution) => m.entries || []) || [];
+
+        let data = dashboardData?.personal?.entries || currentMemberEntries;
 
         // Sort entries by Datum descending (most recent first)
         data = [...data].sort((a, b) => {
@@ -272,7 +243,7 @@ const Dashboard = () => {
         }
 
         // Get field names from the first data entry, excluding system fields
-        const sampleRow = data[0];
+        const sampleRow = data[0] as WorkHourEntry;
         console.log("🔍 Sample row keys:", Object.keys(sampleRow));
         console.log("🔍 Sample row data:", sampleRow);
 
@@ -284,7 +255,7 @@ const Dashboard = () => {
             key !== 'Vorname' &&
             key !== 'Nachname' &&
             key.toLowerCase() !== 'id'
-        );
+        ) as Array<keyof WorkHourEntry>;
 
         console.log("🔍 Filtered field names:", fieldNames);
 
@@ -306,40 +277,30 @@ const Dashboard = () => {
                     </button>
                 </div>
 
-                {/* Mobile card layout */}
+                {/* Mobile card layout (compact with overflow menu only) */}
                 <div className="block md:hidden">
                     <div className="divide-y divide-gray-200">
-                        {data.map((row) => (
-                            <div key={row.id} className="p-4 hover:bg-gray-50">
-                                <div className="space-y-2">
-                                    {fieldNames.map((field) => (
-                                        <div key={field} className="flex justify-between items-start">
-                                            <span className="text-sm font-medium text-gray-500 min-w-0 flex-1">
-                                                {field.replace(/_/g, ' ')}:
-                                            </span>
-                                            <span className="text-sm text-gray-900 ml-2 break-words text-right flex-1">
-                                                {field === 'Stunden' ?
-                                                    parseFloat(row[field] || 0).toFixed(1) :
-                                                    (row[field] || '-')
-                                                }
-                                            </span>
+                        {data.map((row: WorkHourEntry) => (
+                            <div key={row.id} className="p-3 hover:bg-gray-50">
+                                <div className="flex items-center justify-between space-x-3">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-baseline space-x-2">
+                                            <div className="text-sm font-medium text-gray-700 flex-none whitespace-nowrap">{row.Datum}</div>
+                                            <div className="text-xs text-gray-500">·</div>
+                                            <div className="text-sm text-gray-900 min-w-0 flex-1 truncate">{String(row.Tätigkeit ?? '-')}</div>
                                         </div>
-                                    ))}
-                                    <div className="flex space-x-2 pt-2 border-t border-gray-100">
-                                        <button
-                                            onClick={() => handleEdit(row)}
-                                            className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs text-blue-600 hover:text-blue-900 border border-blue-300 rounded hover:bg-blue-50"
-                                        >
-                                            <PencilIcon className="h-4 w-4 mr-1" />
-                                            Bearbeiten
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(row.id)}
-                                            className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs text-red-600 hover:text-red-900 border border-red-300 rounded hover:bg-red-50"
-                                        >
-                                            <TrashIcon className="h-4 w-4 mr-1" />
-                                            Löschen
-                                        </button>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <div className="text-sm font-semibold text-gray-800 w-14 text-right">{Number(row.Stunden).toFixed(1)}h</div>
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => handleEdit(row)}
+                                                aria-label="Bearbeiten"
+                                                className="p-2 rounded-md text-blue-600 hover:bg-blue-50"
+                                            >
+                                                <PencilIcon className="h-5 w-5" />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -357,7 +318,10 @@ const Dashboard = () => {
                                         key={field}
                                         className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"
                                     >
-                                        {field.replace(/_/g, ' ')}
+                                        {(() => {
+                                            const fieldKey = String(field);
+                                            return fieldKey.replace(/_/g, ' ');
+                                        })()}
                                     </th>
                                 ))}
                                 <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
@@ -366,35 +330,32 @@ const Dashboard = () => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {data.map((row) => (
+                            {data.map((row: WorkHourEntry) => (
                                 <tr key={row.id} className="hover:bg-gray-50">
-                                    {fieldNames.map((field) => (
-                                        <td key={field} className="px-3 lg:px-6 py-4 text-sm text-gray-900">
-                                            <div className="max-w-xs break-words" title={field === 'Stunden' ?
-                                                parseFloat(row[field] || 0).toFixed(1) :
-                                                (row[field] || '-')}>
-                                                {field === 'Stunden' ?
-                                                    parseFloat(row[field] || 0).toFixed(1) :
-                                                    (row[field] || '-')
-                                                }
-                                            </div>
-                                        </td>
-                                    ))}
+                                    {fieldNames.map((field) => {
+                                        const fieldKey = String(field);
+                                        const value = (row as Record<string, unknown>)[fieldKey];
+                                        return (
+                                            <td key={fieldKey} className="px-3 lg:px-6 py-4 text-sm text-gray-900">
+                                                <div className="max-w-xs break-words" title={fieldKey === 'Stunden' ?
+                                                    String(Number(value ?? 0).toFixed(1)) :
+                                                    String(value ?? '-')}>
+                                                    {fieldKey === 'Stunden' ?
+                                                        Number(value ?? 0).toFixed(1) :
+                                                        String(value ?? '-')
+                                                    }
+                                                </div>
+                                            </td>
+                                        );
+                                    })}
                                     <td className="px-3 lg:px-6 py-4 text-sm font-medium">
                                         <div className="flex space-x-2">
                                             <button
                                                 onClick={() => handleEdit(row)}
-                                                className="inline-flex items-center justify-center px-2 py-1 text-xs text-blue-600 hover:text-blue-900 border border-blue-300 rounded hover:bg-blue-50"
+                                                aria-label="Bearbeiten"
+                                                className="p-2 rounded-md text-blue-600 hover:bg-blue-50"
                                             >
-                                                <PencilIcon className="h-4 w-4 mr-1" />
-                                                <span className="hidden lg:inline">Bearbeiten</span>
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(row.id)}
-                                                className="inline-flex items-center justify-center px-2 py-1 text-xs text-red-600 hover:text-red-900 border border-red-300 rounded hover:bg-red-50"
-                                            >
-                                                <TrashIcon className="h-4 w-4 mr-1" />
-                                                <span className="hidden lg:inline">Löschen</span>
+                                                <PencilIcon className="h-5 w-5" />
                                             </button>
                                         </div>
                                     </td>
@@ -406,6 +367,20 @@ const Dashboard = () => {
             </div>
         );
     };
+
+    // Prepare user profile for the modal (avoid repeated finds and implicit any)
+    const userProfile = (() => {
+        if (dashboardData?.personal?.name) {
+            const parts = dashboardData.personal.name.split(' ');
+            return { Nachname: parts.slice(1).join(' '), Vorname: parts[0] };
+        }
+        const found = dashboardData?.family?.members?.find((m: { email?: string; name?: string }) => m.email === user?.email);
+        if (found && found.name) {
+            const parts = found.name.split(' ');
+            return { Nachname: parts.slice(1).join(' '), Vorname: parts[0] };
+        }
+        return { Nachname: '', Vorname: '' };
+    })();
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
@@ -482,8 +457,8 @@ const Dashboard = () => {
                                 <div className="space-y-3">
                                     <h3 className="font-medium text-gray-800">Familienmitglieder:</h3>
                                     {dashboardData.family.memberContributions
-                                        .sort((a, b) => a.name.localeCompare(b.name, 'de'))
-                                        .map((member, index) => {
+                                        .sort((a: MemberContribution, b: MemberContribution) => a.name.localeCompare(b.name, 'de'))
+                                        .map((member: MemberContribution, index: number) => {
                                             const isCurrentUser = user?.name === member.name;
                                             return (
                                                 <div
@@ -564,275 +539,11 @@ const Dashboard = () => {
                     }}
                     onSave={handleSave}
                     initialData={editingRow}
-                    userProfile={
-                        // Extract user profile from different sources
-                        dashboardData?.personal?.name ? {
-                            // If personal.name exists, parse it
-                            Nachname: dashboardData.personal.name.split(' ').slice(1).join(' '),
-                            Vorname: dashboardData.personal.name.split(' ')[0]
-                        } :
-                            // Fallback to family members lookup
-                            dashboardData?.family?.members?.find(m => m.email === user?.email) ||
-                            // Final fallback
-                            { Nachname: '', Vorname: '' }
-                    }
+                    userProfile={userProfile}
                     selectedYear={selectedYear}
                 />
             )}
         </div>
-    );
-};
-
-// Modal component for adding/editing Arbeitsstunden using Headless UI
-const ArbeitsstundenFormModal = ({ isOpen, onClose, onSave, initialData, userProfile, selectedYear }) => {
-    const [formData, setFormData] = useState(() => {
-        if (!initialData && userProfile) {
-            return {
-                Nachname: userProfile.Nachname || userProfile.nachname || '',
-                Vorname: userProfile.Vorname || userProfile.vorname || '',
-                Datum: new Date().toISOString().split('T')[0],
-                Stunden: '',
-                Tätigkeit: ''
-            };
-        }
-        return initialData || {};
-    });
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    useEffect(() => {
-        console.log('🔧 userProfile changed:', userProfile);
-        if (!initialData && userProfile) {
-            console.log('🔧 Updating form data with userProfile:', {
-                Nachname: userProfile.Nachname,
-                Vorname: userProfile.Vorname
-            });
-            setFormData(prev => ({
-                ...prev,
-                Nachname: userProfile.Nachname || userProfile.nachname || '',
-                Vorname: userProfile.Vorname || userProfile.vorname || ''
-            }));
-        }
-    }, [userProfile, initialData]);
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        // Debug: Log form data for debugging
-        console.log('Form submission - current form data:', formData);
-        console.log('Field validation:', {
-            Nachname: !!formData.Nachname,
-            Vorname: !!formData.Vorname,
-            Stunden: !!formData.Stunden,
-            Datum: !!formData.Datum,
-            Tätigkeit: !!formData.Tätigkeit
-        });
-        // Validate required fields
-        if (!formData.Nachname || !formData.Vorname || !formData.Stunden || !formData.Datum || !formData.Tätigkeit) {
-            toast.error('Bitte füllen Sie alle Felder aus');
-            return;
-        }
-        // Validate date is not in the future
-        const selectedDate = new Date(formData.Datum);
-        const today = new Date();
-        today.setHours(23, 59, 59, 999);
-        if (selectedDate > today) {
-            toast.error('Das Datum darf nicht in der Zukunft liegen');
-            return;
-        }
-
-        // Validate year with one-month grace period
-        const selectedYear = selectedDate.getFullYear();
-        const currentYear = today.getFullYear();
-        const currentMonth = today.getMonth(); // 0-based (0 = January, 1 = February, etc.)
-
-        // Calculate minimum allowed year based on grace period
-        const minAllowedYear = currentMonth === 0 ? currentYear - 1 : currentYear; // January = month 0
-
-        if (selectedYear < minAllowedYear) {
-            if (currentMonth === 0) {
-                toast.error(`Arbeitsstunden können nur für ${currentYear} oder ${currentYear - 1} (Nachfrist bis Ende Januar) eingetragen werden.`);
-            } else {
-                toast.error(`Arbeitsstunden können nur für das aktuelle Jahr ${currentYear} eingetragen werden.`);
-            }
-            return;
-        }
-
-        // Validate hours is positive and reasonable
-        const hours = parseFloat(formData.Stunden);
-        if (isNaN(hours) || hours <= 0) {
-            toast.error('Stunden müssen eine positive Zahl sein');
-            return;
-        }
-        if (hours > 24) {
-            toast.error('Mehr als 24 Stunden pro Tag sind nicht möglich');
-            return;
-        }
-        setIsSubmitting(true);
-        try {
-            await onSave(formData);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const today = new Date().toISOString().split('T')[0];
-
-    // Calculate minimum allowed date with one-month grace period
-    const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth(); // 0-based (0 = January)
-    const minAllowedYear = currentMonth === 0 ? currentYear - 1 : currentYear; // January = month 0
-    const minDate = `${minAllowedYear}-01-01`;
-
-    const fieldNames = ['Nachname', 'Vorname', 'Datum', 'Stunden', 'Tätigkeit'];
-
-    return (
-        <Dialog open={isOpen} onClose={onClose} className="relative z-50">
-            <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-            <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
-                <DialogPanel className="max-w-2xl w-full max-h-[80vh] overflow-y-auto bg-white rounded-lg shadow-xl">
-                    <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                        <DialogTitle className="text-lg font-medium text-gray-900">
-                            {initialData ? 'Arbeitsstunden bearbeiten' : 'Neue Arbeitsstunden hinzufügen'}
-                        </DialogTitle>
-                        <button
-                            onClick={onClose}
-                            className="text-gray-400 hover:text-gray-600 transition-colors"
-                        >
-                            <XMarkIcon className="h-6 w-6" />
-                        </button>
-                    </div>
-                    {selectedYear && !initialData && (
-                        <div className="px-6 pt-2">
-                            <p className="text-sm text-gray-600">
-                                Bitte beachten Sie die Zeiträume für die Eingabe von Arbeitsstunden.
-                            </p>
-                        </div>
-                    )}
-                    <form onSubmit={handleSubmit} className="px-6 py-4">
-                        <div className="space-y-4">
-                            {fieldNames.map((field) => (
-                                <div key={field}>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        {field === 'Datum' ? 'Datum' :
-                                            field === 'Nachname' ? 'Nachname' :
-                                                field === 'Vorname' ? 'Vorname' :
-                                                    field === 'Stunden' ? 'Stunden' :
-                                                        field === 'Tätigkeit' ? 'Tätigkeit' :
-                                                            field.replace(/_/g, ' ')}
-                                    </label>
-                                    {field === 'Datum' ? (
-                                        <div>
-                                            <input
-                                                type="date"
-                                                value={formData[field] || ''}
-                                                min={minDate}
-                                                max={today}
-                                                onChange={(e) => {
-                                                    console.log('📅 Date input changed:', e.target.value);
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        [field]: e.target.value
-                                                    }));
-                                                }}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                                lang="de"
-                                                style={{ colorScheme: 'light' }}
-                                            />
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                Datum darf nicht in der Zukunft liegen. {currentMonth === 0
-                                                    ? `Nur ${currentYear} oder ${currentYear - 1} (Nachfrist bis Ende Januar) erlaubt.`
-                                                    : `Nur ${currentYear} erlaubt.`}
-                                            </p>
-                                            <p className="text-xs text-blue-600 mt-1">
-                                                📅 Ausgewähltes Datum: {formData[field] ? new Date(formData[field]).toLocaleDateString('de-DE', {
-                                                    weekday: 'long',
-                                                    year: 'numeric',
-                                                    month: 'long',
-                                                    day: 'numeric'
-                                                }) : 'Kein Datum ausgewählt'}
-                                            </p>
-                                        </div>
-                                    ) : field === 'Stunden' ? (
-                                        <div>
-                                            <input
-                                                type="number"
-                                                step="0.5"
-                                                min="0.5"
-                                                max="24"
-                                                value={formData[field] || ''}
-                                                onChange={(e) => setFormData(prev => ({
-                                                    ...prev,
-                                                    [field]: e.target.value
-                                                }))}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                                placeholder="z.B. 2.5"
-                                            />
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                Zwischen 0.5 und 24 Stunden
-                                            </p>
-                                        </div>
-                                    ) : field === 'Nachname' || field === 'Vorname' ? (
-                                        <input
-                                            type="text"
-                                            value={formData[field] || ''}
-                                            readOnly
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 cursor-not-allowed"
-                                            placeholder={`${field} (aus Ihrem Profil)`}
-                                        />
-                                    ) : field === 'Tätigkeit' ? (
-                                        <div>
-                                            <input
-                                                type="text"
-                                                value={formData[field] || ''}
-                                                onChange={(e) => setFormData(prev => ({
-                                                    ...prev,
-                                                    [field]: e.target.value
-                                                }))}
-                                                maxLength={40}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                                placeholder="z.B. Platzpflege, Vereinsfeier..."
-                                            />
-                                            <div className="text-xs text-gray-500 mt-1">
-                                                {(formData[field] || '').length}/40 Zeichen
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <input
-                                            type="text"
-                                            value={formData[field] || ''}
-                                            onChange={(e) => setFormData(prev => ({
-                                                ...prev,
-                                                [field]: e.target.value
-                                            }))}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                            placeholder={`${field} eingeben`}
-                                        />
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                        <div className="flex justify-end space-x-3 mt-6">
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                                disabled={isSubmitting}
-                            >
-                                Abbrechen
-                            </button>
-                            <button
-                                type="submit"
-                                className={`px-4 py-2 border border-transparent rounded-md text-sm font-medium transition-colors ${isSubmitting ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
-                                disabled={isSubmitting}
-                                style={isSubmitting ? { pointerEvents: 'none' } : {}}
-                            >
-                                {isSubmitting ? 'Speichern...' : (initialData ? 'Aktualisieren' : 'Erstellen')}
-                            </button>
-                        </div>
-                    </form>
-                </DialogPanel>
-            </div>
-        </Dialog>
     );
 };
 

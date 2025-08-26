@@ -44,7 +44,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     export_type!(ResetPasswordRequest);
     export_type!(UserResponse);
     export_type!(CreateWorkHourRequest);
-    export_type!(UpdateWorkHourRequest);
     export_type!(WorkHourResponse);
     export_type!(DashboardResponse);
     export_type!(FamilyData);

@@ -12,7 +12,6 @@ export type {
     ResetPasswordRequest,
     UserResponse,
     CreateWorkHourRequest,
-    UpdateWorkHourRequest,
     WorkHourResponse,
     WorkHourEntry,
     DashboardResponse,
