@@ -34,18 +34,27 @@ pub struct EmailConfig {
     pub port: u16,
     pub user: String,
     pub password: String,
+    pub from_email: String,
+    pub use_implicit_tls: bool,
 }
 
 impl EmailConfig {
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let port = env::var("EMAIL_PORT")
+            .map_err(|_| "EMAIL_PORT must be set")?
+            .parse::<u16>()
+            .map_err(|_| "EMAIL_PORT must be a number")?;
+
+        // Use implicit TLS for port 465, STARTTLS for other ports (like 587)
+        let use_implicit_tls = port == 465;
+
         Ok(EmailConfig {
-            host: env::var("EMAIL_HOST").unwrap_or_else(|_| "smtp.gmail.com".to_string()),
-            port: env::var("EMAIL_PORT")
-                .unwrap_or_else(|_| "587".to_string())
-                .parse::<u16>()
-                .unwrap_or(587),
-            user: env::var("EMAIL_USER")?,
-            password: env::var("EMAIL_PASSWORD")?,
+            host: env::var("EMAIL_HOST").map_err(|_| "EMAIL_HOST must be set")?,
+            port,
+            user: env::var("EMAIL_USER").map_err(|_| "EMAIL_USER must be set")?,
+            password: env::var("EMAIL_PASSWORD").map_err(|_| "EMAIL_PASSWORD must be set")?,
+            from_email: env::var("EMAIL_FROM").map_err(|_| "EMAIL_FROM must be set")?,
+            use_implicit_tls,
         })
     }
 }

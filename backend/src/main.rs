@@ -1438,6 +1438,7 @@ mod tests {
         std::env::set_var("EMAIL_PASSWORD", "dummy_password");
         std::env::set_var("EMAIL_HOST", "smtp.example.com");
         std::env::set_var("EMAIL_PORT", "587");
+        std::env::set_var("EMAIL_FROM", "test@example.com");
 
         // Set JWT secret for token creation in tests
         std::env::set_var(

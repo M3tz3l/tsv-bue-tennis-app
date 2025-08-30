@@ -17,15 +17,25 @@ impl EmailService {
 
         let creds = Credentials::new(email_config.user.clone(), email_config.password);
 
-        let transport = SmtpTransport::starttls_relay(&email_config.host)?
-            .port(email_config.port)
-            .credentials(creds)
-            .pool_config(PoolConfig::new().max_size(1))
-            .build();
+        let transport = if email_config.use_implicit_tls {
+            // For port 465 (implicit TLS) - TLS connection starts immediately
+            SmtpTransport::relay(&email_config.host)?
+                .port(email_config.port)
+                .credentials(creds)
+                .pool_config(PoolConfig::new().max_size(1))
+                .build()
+        } else {
+            // For port 587 (STARTTLS) - connection starts in plaintext then upgrades
+            SmtpTransport::starttls_relay(&email_config.host)?
+                .port(email_config.port)
+                .credentials(creds)
+                .pool_config(PoolConfig::new().max_size(1))
+                .build()
+        };
 
         Ok(EmailService {
             transport,
-            from_email: email_config.user,
+            from_email: email_config.from_email,
         })
     }
 

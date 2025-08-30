@@ -2,7 +2,7 @@ import type { WorkHourEntry } from '../types';
 
 export function hasDuplicateEntry(
     existingEntries: WorkHourEntry[] = [],
-    formData: { Datum?: string; [key: string]: unknown },
+    formData: { Datum?: string;[key: string]: unknown },
     editingId?: string | number
 ) {
     if (!existingEntries || existingEntries.length === 0) return false;
