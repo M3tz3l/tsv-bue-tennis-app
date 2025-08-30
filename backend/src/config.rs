@@ -48,27 +48,12 @@ impl EmailConfig {
         // Use implicit TLS for port 465, STARTTLS for other ports (like 587)
         let use_implicit_tls = port == 465;
 
-        let user = env::var("EMAIL_USER").map_err(|_| "EMAIL_USER must be set")?;
-        let host = env::var("EMAIL_HOST").map_err(|_| "EMAIL_HOST must be set")?;
-
         Ok(EmailConfig {
-            host: host.clone(),
+            host: env::var("EMAIL_HOST").map_err(|_| "EMAIL_HOST must be set")?,
             port,
-            user: user.clone(),
+            user: env::var("EMAIL_USER").map_err(|_| "EMAIL_USER must be set")?,
             password: env::var("EMAIL_PASSWORD").map_err(|_| "EMAIL_PASSWORD must be set")?,
-            from_email: env::var("EMAIL_FROM").unwrap_or_else(|_| {
-                if user.contains('@') {
-                    user
-                } else {
-                    // Extract domain from host (last two labels: domain.tld)
-                    let mut it = host.rsplit('.');
-                    let domain = match (it.next(), it.next()) {
-                        (Some(tld), Some(domain)) => format!("{domain}.{tld}"),
-                        _ => host.clone(),
-                    };
-                    format!("{user}@{domain}")
-                }
-            }),
+            from_email: env::var("EMAIL_FROM").map_err(|_| "EMAIL_FROM must be set")?,
             use_implicit_tls,
         })
     }
