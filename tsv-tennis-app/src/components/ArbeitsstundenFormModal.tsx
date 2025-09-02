@@ -228,7 +228,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                     type="text"
                                     {...register('Tätigkeit', { required: 'Tätigkeit ist erforderlich', maxLength: { value: 40, message: 'Maximal 40 Zeichen' } })}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                    placeholder="z.B. Platzpflege, Vereinsfeier..."
+                                    placeholder="z.B. Platzpflege, Dienst..."
                                 />
                                 <div className="text-xs text-gray-500 mt-1">{/* length shown by API consumer if needed */}</div>
                                 {errors.Tätigkeit && <p className="text-xs text-red-600 mt-1">{errors.Tätigkeit.message}</p>}
