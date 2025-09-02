@@ -25,5 +25,17 @@ export const formatHours = (value: unknown): string => {
     if (!isFinite(num) || isNaN(num)) return '0';
     const rounded = Math.round(num * 100) / 100;
     if (Number.isInteger(rounded)) return String(rounded);
-    return String(rounded).replace(/(\.\d*?)0+$/, '$1');
+    return String(rounded).replace(/\.?0+$/, '');
+};
+
+// Check if a number represents a valid quarter-hour increment (0.25 steps)
+export const isQuarterHour = (hours: number): boolean => {
+    if (!Number.isFinite(hours)) return false;
+    // Allow small floating point errors
+    return Math.abs(hours * 4 - Math.round(hours * 4)) < 1e-9;
+};
+
+// Helper to parse user input that may contain comma as decimal separator
+export const parseHoursInput = (input: string): number => {
+    return parseFloat(String(input).replace(',', '.'));
 };
