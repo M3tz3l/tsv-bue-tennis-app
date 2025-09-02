@@ -1,5 +1,6 @@
+const TODAY = new Date().toLocaleDateString('de-DE');
+
 const Datenschutz = () => {
-    const today = new Date().toLocaleDateString('de-DE');
     return (
         <div className="max-w-3xl mx-auto px-4 py-10">
             <h1 className="text-2xl font-semibold mb-4">Datenschutzerklärung</h1>
@@ -106,7 +107,7 @@ const Datenschutz = () => {
                     </p>
                 </section>
 
-                <p className="text-xs text-gray-500 mt-8">Stand: {today}</p>
+                <p className="text-xs text-gray-500 mt-8">Stand: {TODAY}</p>
             </div>
         </div>
     );

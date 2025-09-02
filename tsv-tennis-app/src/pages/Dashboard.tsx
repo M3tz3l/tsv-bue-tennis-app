@@ -7,8 +7,8 @@ import { toast } from 'react-toastify';
 import TSV_Logo from '../assets/TSV_Tennis.svg';
 import type { WorkHourEntry, CreateWorkHourRequest, MemberContribution } from '../types';
 import useDashboard, { DASHBOARD_QUERY_KEY } from '../hooks/useDashboard';
-import { hasDuplicateEntry } from '../utils/entryUtils';
 import ArbeitsstundenFormModal from '../components/ArbeitsstundenFormModal';
+import { hasDuplicateEntry, formatHours } from '../utils/utils';
 
 const Dashboard = () => {
     const { user, logout, token } = useAuth();
@@ -291,7 +291,7 @@ const Dashboard = () => {
                                         </div>
                                     </div>
                                     <div className="flex items-center space-x-2">
-                                        <div className="text-sm font-semibold text-gray-800 w-14 text-right">{Number(row.Stunden).toFixed(1)}h</div>
+                                        <div className="text-sm font-semibold text-gray-800 w-14 text-right">{formatHours(row.Stunden)}h</div>
                                         <div className="relative">
                                             <button
                                                 onClick={() => handleEdit(row)}
@@ -338,10 +338,10 @@ const Dashboard = () => {
                                         return (
                                             <td key={fieldKey} className="px-3 lg:px-6 py-4 text-sm text-gray-900">
                                                 <div className="max-w-xs break-words" title={fieldKey === 'Stunden' ?
-                                                    String(Number(value ?? 0).toFixed(1)) :
+                                                    formatHours(value) :
                                                     String(value ?? '-')}>
                                                     {fieldKey === 'Stunden' ?
-                                                        Number(value ?? 0).toFixed(1) :
+                                                        formatHours(value) :
                                                         String(value ?? '-')
                                                     }
                                                 </div>
@@ -438,7 +438,7 @@ const Dashboard = () => {
                                 <div className="mb-4">
                                     <div className="flex flex-col sm:flex-row sm:justify-between text-sm text-gray-600 mb-1 space-y-1 sm:space-y-0">
                                         <span>Familien-Fortschritt</span>
-                                        <span><span className="font-bold">{dashboardData.family.completed.toFixed(1)} Std</span> von <span className="font-bold">{dashboardData.family.required.toFixed(1)} Std</span></span>
+                                        <span><span className="font-bold">{formatHours(dashboardData.family.completed)} Std</span> von <span className="font-bold">{formatHours(dashboardData.family.required)} Std</span></span>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-3">
                                         <div
@@ -473,7 +473,7 @@ const Dashboard = () => {
                                                     </span>
                                                     <span className={`font-bold text-sm sm:text-base ${isCurrentUser ? 'text-blue-700' : 'text-blue-600'
                                                         }`}>
-                                                        {member.hours.toFixed(1)} / {member.required.toFixed(1)} Std
+                                                        {formatHours(member.hours)} / {formatHours(member.required)} Std
                                                     </span>
                                                 </div>
                                             );
@@ -481,7 +481,7 @@ const Dashboard = () => {
                                     {dashboardData.family.remaining > 0 && (
                                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 px-3 bg-red-50 rounded border border-red-200 space-y-1 sm:space-y-0">
                                             <span className="font-medium text-red-700">Noch zu erledigen</span>
-                                            <span className="text-red-600 font-bold">{dashboardData.family.remaining.toFixed(1)} Std</span>
+                                            <span className="text-red-600 font-bold">{formatHours(dashboardData.family.remaining)} Std</span>
                                         </div>
                                     )}
                                 </div>
@@ -498,8 +498,8 @@ const Dashboard = () => {
                                     <div className="flex justify-between text-sm text-gray-600 mb-1">
                                         <span>Ihr Fortschritt</span>
                                         <span>
-                                            <span className="font-bold">{(dashboardData?.personal?.hours || 0).toFixed(1)} Std</span> von{' '}
-                                            <span className="font-bold">{(dashboardData?.personal?.required || 8).toFixed(1)} Std</span>
+                                            <span className="font-bold">{formatHours(dashboardData?.personal?.hours || 0)} Std</span> von{' '}
+                                            <span className="font-bold">{formatHours(dashboardData?.personal?.required || 8)} Std</span>
                                         </span>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-3">
