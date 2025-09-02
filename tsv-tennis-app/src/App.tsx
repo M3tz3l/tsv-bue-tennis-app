@@ -11,8 +11,11 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
+import Impressum from "./pages/Impressum";
+import Datenschutz from "./pages/Datenschutz";
 import 'react-toastify/dist/ReactToastify.css';
 import { ToastContainer } from "react-toastify";
+import Footer from "./components/Footer";
 
 // Create a client for TanStack Query
 const queryClient = new QueryClient({
@@ -28,8 +31,8 @@ const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
             <AuthProvider>
-                <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-                    <ToastContainer 
+                <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
+                    <ToastContainer
                         position="top-right"
                         autoClose={5000}
                         hideProgressBar={false}
@@ -42,21 +45,26 @@ const App = () => {
                         theme="light"
                     />
                     <BrowserRouter>
-                        <Routes>
-                            <Route path="/" 
-                                   element={<Navigate to="/login" />} />
-                            <Route path="/login" element={<Login />} />
-                            <Route path="/forgotPassword" 
-                                   element={<ForgotPassword />} />
-                            <Route path="/resetPassword" 
-                                   element={<ResetPassword />} />
-                            <Route path="/dashboard" 
-                                   element={
-                                       <ProtectedRoute>
-                                           <Dashboard />
-                                       </ProtectedRoute>
-                                   } />
-                        </Routes>
+                        <div className="flex-1">
+                            <Routes>
+                                <Route path="/"
+                                    element={<Navigate to="/login" />} />
+                                <Route path="/login" element={<Login />} />
+                                <Route path="/forgotPassword"
+                                    element={<ForgotPassword />} />
+                                <Route path="/resetPassword"
+                                    element={<ResetPassword />} />
+                                <Route path="/dashboard"
+                                    element={
+                                        <ProtectedRoute>
+                                            <Dashboard />
+                                        </ProtectedRoute>
+                                    } />
+                                <Route path="/impressum" element={<Impressum />} />
+                                <Route path="/datenschutz" element={<Datenschutz />} />
+                            </Routes>
+                        </div>
+                        <Footer />
                     </BrowserRouter>
                 </div>
             </AuthProvider>

@@ -3,6 +3,7 @@ import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 import { useForm } from 'react-hook-form';
+import { isQuarterHour, parseHoursInput } from '../utils/utils';
 import type { CreateWorkHourRequest, WorkHourEntry } from '../types';
 import { useQueryClient } from '@tanstack/react-query';
 import BackendService from '../services/backendService';
@@ -81,13 +82,18 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
             return;
         }
 
-        const hours = parseFloat(values.Stunden.replace(',', '.'));
+        const hours = parseHoursInput(values.Stunden);
         if (isNaN(hours) || hours <= 0) {
             toast.error('Stunden müssen eine positive Zahl sein');
             return;
         }
         if (hours > 24) {
             toast.error('Mehr als 24 Stunden pro Tag sind nicht möglich');
+            return;
+        }
+        // Quarter-hour check now handled by field-level validation; keep as defensive check
+        if (!isQuarterHour(hours)) {
+            toast.error('Bitte Viertelstunden verwenden (0.25er Schritte)');
             return;
         }
 
@@ -194,18 +200,26 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Stunden</label>
                                 <input
                                     type="number"
-                                    step="0.5"
-                                    min={0.5}
+                                    step="0.25"
+                                    min={0.25}
                                     max={24}
                                     {...register('Stunden', {
                                         required: 'Stunden sind erforderlich',
-                                        pattern: { value: /^\d+(?:[.,]\d+)?$/, message: 'Ungültiges Stundenformat' }
+                                        pattern: { value: /^\d+(?:[.,]\d+)?$/, message: 'Ungültiges Stundenformat' },
+                                        validate: (v) => {
+                                            const h = parseHoursInput(v);
+                                            if (!Number.isFinite(h)) return 'Ungültige Zahl';
+                                            if (h < 0.25) return 'Mindestens 0.25 Stunden';
+                                            if (h > 24) return 'Maximal 24 Stunden pro Tag';
+                                            if (!isQuarterHour(h)) return 'Bitte Viertelstunden verwenden (0.25er Schritte)';
+                                            return true;
+                                        }
                                     })}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                    placeholder="z.B. 2.5"
+                                    placeholder="z.B. 2.75"
                                 />
                                 {errors.Stunden && <p className="text-xs text-red-600 mt-1">{errors.Stunden.message}</p>}
-                                <p className="text-xs text-gray-500 mt-1">Zwischen 0.5 und 24 Stunden</p>
+                                <p className="text-xs text-gray-500 mt-1">Zwischen 0.25 und 24 Stunden (in 0.25er Schritten)</p>
                             </div>
 
                             <div>
