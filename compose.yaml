@@ -17,11 +17,20 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - proxy-network
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tsv-tennis.rule=Host(`tsv-bue-tennis.de`) || Host(`www.tsv-bue-tennis.de`)
+      - traefik.http.routers.tsv-tennis.tls=true
+      - traefik.http.routers.tsv-tennis.tls.certresolver=letsencrypt
+      - traefik.http.routers.tsv-tennis.service=tsv-tennis
+      - traefik.http.services.tsv-tennis.loadbalancer.server.port=5000
+      - traefik.http.routers.tsv-tennis.middlewares=security-headers@file
+      - traefik.docker.network=traefik_proxy
 volumes:
   tsv_tennis_data:
     driver: local
 networks:
-  proxy-network:
+  proxy:
+    name: traefik_proxy
     external: true
-    

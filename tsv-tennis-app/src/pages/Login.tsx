@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { MemberSelection } from "../components/MemberSelection";
 import { toast } from "react-toastify";
 import TSVLogo from "../assets/TSV_Tennis.svg";
+import { EyeIcon, EyeSlashIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
 import type { UserResponse } from "@/types";
 
 const Login = () => {
@@ -13,6 +14,7 @@ const Login = () => {
     const [showMemberSelection, setShowMemberSelection] = useState<boolean>(false);
     const [users, setUsers] = useState<UserResponse[]>([]);
     const [selectionToken, setSelectionToken] = useState<string>('');
+    const [showPassword, setShowPassword] = useState<boolean>(false);
     const { login } = useAuth();
     const navigate = useNavigate();
 
@@ -103,18 +105,40 @@ const Login = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Passwort
-                                    </label>
-                                    <input
-                                        id="password"
-                                        name="password"
-                                        type="password"
-                                        autoComplete="current-password"
-                                        required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white shadow-sm transition-all duration-200 placeholder:text-gray-400"
-                                        placeholder="Ihr Passwort eingeben"
-                                    />
+                                    <div className="flex items-center mb-2">
+                                        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                                            Passwort
+                                        </label>
+                                        <div className="relative ml-2 group">
+                                            <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                                            <div className="absolute left-0 top-6 w-64 p-2 bg-gray-800 text-white text-xs rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+                                                Bitte setzen Sie Ihr Passwort zurück, bevor Sie sich zum ersten Mal anmelden.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="relative">
+                                        <input
+                                            id="password"
+                                            name="password"
+                                            type={showPassword ? 'text' : 'password'}
+                                            autoComplete="current-password"
+                                            required
+                                            className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white shadow-sm transition-all duration-200 placeholder:text-gray-400"
+                                            placeholder="Ihr Passwort eingeben"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600"
+                                            aria-label={showPassword ? 'Passwort verbergen' : 'Passwort anzeigen'}
+                                        >
+                                            {showPassword ? (
+                                                <EyeSlashIcon className="h-5 w-5" />
+                                            ) : (
+                                                <EyeIcon className="h-5 w-5" />
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
