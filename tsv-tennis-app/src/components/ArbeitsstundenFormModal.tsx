@@ -141,7 +141,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                 <DialogPanel className="max-w-2xl w-full max-h-[80vh] overflow-y-auto bg-white rounded-lg shadow-xl">
                     <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                         <DialogTitle className="text-lg font-medium text-gray-900">
-                            {initialData ? 'Arbeitsstunden bearbeiten' : 'Neue Arbeitsstunden hinzufügen'}
+                            {initialData ? 'Arbeitsstunden bearbeiten' : 'Neue Arbeitsstunden eintragen'}
                         </DialogTitle>
                         <button
                             onClick={onClose}

@@ -11,7 +11,7 @@ RUN touch src/main.rs
 RUN cargo build --release
 
 # Generate TypeScript bindings using the dedicated binary
-RUN cargo run --bin generate-types
+RUN cargo run --release --bin generate-types
 
 # Frontend build stage
 FROM node:20-alpine as frontend-builder

@@ -235,7 +235,7 @@ const Dashboard = () => {
                             className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
                         >
                             <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
-                            Arbeitsstunden hinzufügen
+                            Arbeitsstunden eintragen
                         </button>
                     </div>
                 </div>
@@ -273,7 +273,7 @@ const Dashboard = () => {
                         className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 w-full sm:w-auto"
                     >
                         <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
-                        Hinzufügen
+                        Eintragen
                     </button>
                 </div>
 
