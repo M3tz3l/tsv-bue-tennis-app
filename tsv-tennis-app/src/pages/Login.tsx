@@ -115,7 +115,7 @@ const Login = () => {
                                 Willkommen
                             </h2>
                             <p className="mt-2 text-center text-sm text-gray-600">
-                                Melden Sie sich in Ihrem TSV Tennis Konto an
+                                Melden Sie sich in Ihrem TSV BÜ Tennis Konto zur Arbeitsstundendokumentation an.
                             </p>
                             <div className="mt-4 mb-2 text-center relative" ref={dropdownRef}>
                                 <button
