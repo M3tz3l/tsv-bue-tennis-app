@@ -108,25 +108,11 @@ pub fn is_member_eligible_for_work_hours(member: &Member, current_year: i32) -> 
         );
     }
 
-    use chrono::{DateTime, NaiveDate};
+    use chrono::DateTime;
 
     // Try RFC3339 (e.g. 2019-10-08T22:21:36.000Z)
     if let Ok(dt) = DateTime::parse_from_rfc3339(birth_date_str) {
         let birth_date = dt.naive_utc().date();
-        let birth_year = birth_date.year();
-        let age_in_current_year = current_year - birth_year;
-        let eligible = (17..70).contains(&age_in_current_year);
-        debug!(
-            "Age Check: {} {} - Birth: {}, Age in {}: {}, Eligible: {}",
-            member.first_name,
-            member.last_name,
-            birth_date_str,
-            current_year,
-            age_in_current_year,
-            eligible
-        );
-        return eligible;
-    } else if let Ok(birth_date) = NaiveDate::parse_from_str(birth_date_str, "%Y-%m-%d") {
         let birth_year = birth_date.year();
         let age_in_current_year = current_year - birth_year;
         let eligible = (17..70).contains(&age_in_current_year);
@@ -151,15 +137,57 @@ pub fn is_member_eligible_for_work_hours(member: &Member, current_year: i32) -> 
     true
 }
 
-/// Gets the required work hours for a member based on age eligibility
-pub fn get_required_hours_for_member(member: &Member, current_year: i32) -> f64 {
+/// Gets work hours info including exemption reason for a member
+pub fn get_member_work_hours_info(member: &Member, current_year: i32) -> (f64, Option<String>) {
     debug!(
-        "Called get_required_hours_for_member for {} {} (birth_date: {:?})",
-        member.first_name, member.last_name, member.birth_date
+        "Called get_member_work_hours_info for {} {} (birth_date: {:?}, join_date: {:?})",
+        member.first_name, member.last_name, member.birth_date, member.join_date
     );
-    if is_member_eligible_for_work_hours(member, current_year) {
-        8.0 // Standard required hours
-    } else {
-        0.0 // Not eligible, no hours required
+
+    // Check age eligibility first
+    if !is_member_eligible_for_work_hours(member, current_year) {
+        debug!(
+            "Member {} {} is exempt due to age",
+            member.first_name, member.last_name
+        );
+        return (0.0, Some("Altersbefreiung".to_string()));
     }
+
+    // Check if joined after July 1st (half year)
+    if let Some(join_date_str) = &member.join_date {
+        debug!("Processing join date: {}", join_date_str);
+        if let Ok(join_date) =
+            chrono::NaiveDate::parse_from_str(join_date_str, "%Y-%m-%d").or_else(|_| {
+                chrono::NaiveDateTime::parse_from_str(join_date_str, "%Y-%m-%dT%H:%M:%S%.fZ")
+                    .map(|dt| dt.date())
+            })
+        {
+            let july_first = chrono::NaiveDate::from_ymd_opt(current_year, 7, 1).unwrap();
+            debug!(
+                "Join date: {}, July 1st {}: {}",
+                join_date, current_year, july_first
+            );
+            if join_date >= july_first {
+                debug!(
+                    "Member {} {} is exempt due to late entry",
+                    member.first_name, member.last_name
+                );
+                return (0.0, Some("Eintritt nach Halbjahr".to_string()));
+            }
+        } else {
+            debug!("Failed to parse join date: {}", join_date_str);
+        }
+    } else {
+        debug!(
+            "No join date found for member {} {}",
+            member.first_name, member.last_name
+        );
+    }
+
+    // Member is eligible and joined before July 1st
+    debug!(
+        "Member {} {} has 8 hours required",
+        member.first_name, member.last_name
+    );
+    (8.0, None)
 }

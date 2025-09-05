@@ -460,6 +460,7 @@ const Dashboard = () => {
                                         .sort((a: MemberContribution, b: MemberContribution) => a.name.localeCompare(b.name, 'de'))
                                         .map((member: MemberContribution, index: number) => {
                                             const isCurrentUser = user?.name === member.name;
+
                                             return (
                                                 <div
                                                     key={index}
@@ -468,12 +469,21 @@ const Dashboard = () => {
                                                         : 'bg-gray-50'
                                                         }`}
                                                 >
-                                                    <span className={`font-medium ${isCurrentUser ? 'text-blue-800' : ''}`}>
-                                                        {member.name} {isCurrentUser ? '(Sie)' : ''}
-                                                    </span>
+                                                    <div className="flex flex-col">
+                                                        <span className={`font-medium ${isCurrentUser ? 'text-blue-800' : ''}`}>
+                                                            {member.name} {isCurrentUser ? '(Sie)' : ''}
+                                                        </span>
+                                                        {member.exemption_reason && (
+                                                            <span className="text-xs text-gray-600 italic">
+                                                                Befreit: {member.exemption_reason}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <span className={`font-bold text-sm sm:text-base ${isCurrentUser ? 'text-blue-700' : 'text-blue-600'
-                                                        }`}>
-                                                        {formatHours(member.hours)} / {formatHours(member.required)} Std
+                                                        } ${member.exemption_reason ? 'text-green-600' : ''}`}>
+                                                        {member.exemption_reason ?
+                                                            (member.hours > 0 ? `${formatHours(member.hours)} Std / Befreit` : 'Befreit')
+                                                            : `${formatHours(member.hours)} / ${formatHours(member.required)} Std`}
                                                     </span>
                                                 </div>
                                             );
@@ -493,33 +503,52 @@ const Dashboard = () => {
                                     👤 {dashboardData?.personal?.name || 'Ihre Arbeitsstunden'} - {selectedYear}
                                 </h2>
 
-                                {/* Personal Progress Bar */}
-                                <div className="mb-4">
-                                    <div className="flex justify-between text-sm text-gray-600 mb-1">
-                                        <span>Ihr Fortschritt</span>
-                                        <span>
-                                            <span className="font-bold">{formatHours(dashboardData?.personal?.hours || 0)} Std</span> von{' '}
-                                            <span className="font-bold">{formatHours(dashboardData?.personal?.required || 8)} Std</span>
-                                        </span>
+                                {/* Check if user is exempt */}
+                                {dashboardData?.personal?.required === 0 ? (
+                                    <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-green-600 font-semibold text-lg">✓ Befreit von Arbeitsstunden</span>
+                                            {dashboardData?.personal?.hours > 0 && (
+                                                <span className="text-green-700 font-bold">
+                                                    {formatHours(dashboardData.personal.hours)} Std geleistet
+                                                </span>
+                                            )}
+                                        </div>
+                                        {dashboardData.personal.exemption_reason && (
+                                            <p className="text-sm text-green-700 mt-1">
+                                                Grund: {dashboardData.personal.exemption_reason}
+                                            </p>
+                                        )}
                                     </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-3">
-                                        <div
-                                            className={`h-3 rounded-full ${(() => {
-                                                const personalHours = dashboardData?.personal?.hours || 0;
-                                                const requiredHours = dashboardData?.personal?.required || 8;
-                                                const percentage = (personalHours / requiredHours) * 100;
-                                                return percentage >= 100 ? 'bg-green-500' :
-                                                    percentage >= 75 ? 'bg-yellow-500' : 'bg-red-500';
-                                            })()}`}
-                                            style={{
-                                                width: `${Math.min(100, ((dashboardData?.personal?.hours || 0) / (dashboardData?.personal?.required || 8)) * 100)}%`
-                                            }}
-                                        ></div>
+                                ) : (
+                                    /* Personal Progress Bar */
+                                    <div className="mb-4">
+                                        <div className="flex justify-between text-sm text-gray-600 mb-1">
+                                            <span>Ihr Fortschritt</span>
+                                            <span>
+                                                <span className="font-bold">{formatHours(dashboardData?.personal?.hours || 0)} Std</span> von{' '}
+                                                <span className="font-bold">{formatHours(dashboardData?.personal?.required || 8)} Std</span>
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-3">
+                                            <div
+                                                className={`h-3 rounded-full ${(() => {
+                                                    const personalHours = dashboardData?.personal?.hours || 0;
+                                                    const requiredHours = dashboardData?.personal?.required || 8;
+                                                    const percentage = (personalHours / requiredHours) * 100;
+                                                    return percentage >= 100 ? 'bg-green-500' :
+                                                        percentage >= 75 ? 'bg-yellow-500' : 'bg-red-500';
+                                                })()}`}
+                                                style={{
+                                                    width: `${Math.min(100, ((dashboardData?.personal?.hours || 0) / (dashboardData?.personal?.required || 8)) * 100)}%`
+                                                }}
+                                            ></div>
+                                        </div>
+                                        <div className="text-right text-sm text-gray-600 mt-1">
+                                            {Math.round(Math.min(100, (((dashboardData?.personal?.hours || 0) / (dashboardData?.personal?.required || 8)) * 100)))}% abgeschlossen
+                                        </div>
                                     </div>
-                                    <div className="text-right text-sm text-gray-600 mt-1">
-                                        {Math.round(Math.min(100, (((dashboardData?.personal?.hours || 0) / (dashboardData?.personal?.required || 8)) * 100)))}% abgeschlossen
-                                    </div>
-                                </div>
+                                )}
                             </>
                         )}
                     </div>

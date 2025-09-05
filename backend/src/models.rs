@@ -132,6 +132,8 @@ pub struct Member {
     pub family_id: Option<String>,
     #[serde(rename = "Geburtsdatum")]
     pub birth_date: String,
+    #[serde(rename = "Eintrittsdatum")]
+    pub join_date: Option<String>,
 }
 
 impl Member {
@@ -209,6 +211,7 @@ pub struct PersonalData {
     pub hours: f64,
     pub required: f64,
     pub entries: Vec<WorkHourEntry>,
+    pub exemption_reason: Option<String>,
 }
 
 #[derive(Debug, Serialize, Type)]
@@ -225,6 +228,7 @@ pub struct MemberContribution {
     pub hours: f64,
     pub required: f64,
     pub entries: Vec<WorkHourEntry>,
+    pub exemption_reason: Option<String>,
 }
 
 #[derive(Debug, Serialize, Type)]
