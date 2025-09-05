@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::utils::{
     calculate_total_hours, convert_work_hours_to_entries, extract_user_id_from_headers,
-    get_required_hours_for_member, log_work_entries,
+    get_member_work_hours_info, log_work_entries,
 };
 use axum::{
     extract::{Json, Path, State},
@@ -715,7 +715,16 @@ async fn dashboard(
     let current_user = teable::get_member_by_id_with_projection(
         &state.http_client,
         &user_id,
-        Some(&["Vorname", "Nachname", "Email", "Familie", "Geburtsdatum"][..]), // Only fields needed for dashboard
+        Some(
+            &[
+                "Vorname",
+                "Nachname",
+                "Email",
+                "Familie",
+                "Geburtsdatum",
+                "Eintrittsdatum",
+            ][..],
+        ), // Only fields needed for dashboard
     )
     .await
     .map_err(|e| {
@@ -756,12 +765,14 @@ async fn dashboard(
     log_work_entries(&user_work_hours, "Personal");
 
     // Create personal data with age-based required hours
-    let personal_required_hours = get_required_hours_for_member(&current_user, year_int);
+    let (personal_required_hours, exemption_reason) =
+        get_member_work_hours_info(&current_user, year_int);
     let personal_data = PersonalData {
         name: current_user.name(),
         hours: total_hours,
         required: personal_required_hours,
         entries: user_work_hours,
+        exemption_reason: exemption_reason,
     };
 
     // Check if user has a family and create family data
@@ -819,7 +830,8 @@ async fn dashboard(
                 );
 
                 let member_hours = calculate_total_hours(&member_work_hours);
-                let member_required = get_required_hours_for_member(member, year_int);
+                let (member_required, exemption_reason) =
+                    get_member_work_hours_info(member, year_int);
 
                 family_total_hours += member_hours;
                 family_required_total += member_required;
@@ -833,6 +845,7 @@ async fn dashboard(
                     hours: member_hours,
                     required: member_required,
                     entries: entries_normalized,
+                    exemption_reason: exemption_reason,
                 });
             }
 

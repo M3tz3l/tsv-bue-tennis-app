@@ -101,7 +101,16 @@ pub async fn get_member_by_id(client: &Client, id: &str) -> Result<Option<Member
     get_member_by_id_with_projection(
         client,
         id,
-        Some(&["Vorname", "Nachname", "Email", "Familie", "Geburtsdatum"][..]),
+        Some(
+            &[
+                "Vorname",
+                "Nachname",
+                "Email",
+                "Familie",
+                "Geburtsdatum",
+                "Eintrittsdatum",
+            ][..],
+        ),
     )
     .await
 }
@@ -155,10 +164,16 @@ pub async fn get_member_by_id_with_projection(
             .map(|s| s.to_string())
             .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
         birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
+        join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
     };
     info!(
-        "Found member: {} {} ({}) - ID: {}, Birth Date: {}",
-        member.first_name, member.last_name, member.email, member.id, member.birth_date
+        "Found member: {} {} ({}) - ID: {}, Birth Date: {}, Join Date: {:?}",
+        member.first_name,
+        member.last_name,
+        member.email,
+        member.id,
+        member.birth_date,
+        member.join_date
     );
     Ok(Some(member))
 }
@@ -168,7 +183,16 @@ pub async fn get_member_by_email(client: &Client, email: &str) -> Result<Option<
     get_member_by_email_with_projection(
         client,
         email,
-        Some(&["Vorname", "Nachname", "Email", "Familie", "Geburtsdatum"][..]),
+        Some(
+            &[
+                "Vorname",
+                "Nachname",
+                "Email",
+                "Familie",
+                "Geburtsdatum",
+                "Eintrittsdatum",
+            ][..],
+        ),
     )
     .await
 }
@@ -237,10 +261,11 @@ pub async fn get_member_by_email_with_projection(
                 .map(|s| s.to_string())
                 .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
             birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
+            join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
         };
         info!(
-            "Found member: {} {} ({}) - case insensitive match",
-            member.first_name, member.last_name, member.email
+            "Found member: {} {} ({}) - Birth Date: {}, Join Date: {:?}",
+            member.first_name, member.last_name, member.email, member.birth_date, member.join_date
         );
         Ok(Some(member))
     } else {
@@ -257,7 +282,16 @@ pub async fn get_family_members(
     get_family_members_with_projection(
         client,
         family_id,
-        Some(&["Vorname", "Nachname", "Email", "Familie", "Geburtsdatum"][..]),
+        Some(
+            &[
+                "Vorname",
+                "Nachname",
+                "Email",
+                "Familie",
+                "Geburtsdatum",
+                "Eintrittsdatum",
+            ][..],
+        ),
     )
     .await
 }
@@ -312,6 +346,7 @@ pub async fn get_family_members_with_projection(
                 .map(|s| s.to_string())
                 .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
             birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
+            join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
         };
         members.push(member);
     }
@@ -694,7 +729,16 @@ pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Me
         .header("Accept", "application/json")
         .query(&[("filter", &filter.to_string())]);
     // Use default projection
-    for field in ["Vorname", "Nachname", "Email", "Familie", "Geburtsdatum"].iter() {
+    for field in [
+        "Vorname",
+        "Nachname",
+        "Email",
+        "Familie",
+        "Geburtsdatum",
+        "Eintrittsdatum",
+    ]
+    .iter()
+    {
         req = req.query(&[("projection[]", *field)]);
     }
     let response = req.send().await?;
@@ -718,6 +762,7 @@ pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Me
                         .map(|s| s.to_string())
                         .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
                     birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
+                    join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
                 };
                 members.push(member);
             }
