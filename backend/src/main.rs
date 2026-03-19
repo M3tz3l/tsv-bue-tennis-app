@@ -2450,4 +2450,141 @@ mod tests {
             selection_token
         );
     }
+
+    #[test]
+    fn test_normalize_email_googlemail_to_gmail() {
+        assert_eq!(
+            normalize_email("user@googlemail.com"),
+            "user@gmail.com",
+            "googlemail.com should be mapped to gmail.com"
+        );
+        assert_eq!(
+            normalize_email("User@GoogleMail.com"),
+            "user@gmail.com",
+            "normalization should be case-insensitive"
+        );
+        assert_eq!(
+            normalize_email("user@gmail.com"),
+            "user@gmail.com",
+            "gmail.com addresses should remain unchanged"
+        );
+        assert_eq!(
+            normalize_email("user@example.com"),
+            "user@example.com",
+            "other domains should not be affected"
+        );
+        // Ensure subdomains of googlemail.com are NOT rewritten
+        assert_eq!(
+            normalize_email("user@sub.googlemail.com"),
+            "user@sub.googlemail.com",
+            "subdomains of googlemail.com must not be rewritten"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_login_googlemail_matches_gmail_user() {
+        use mockito::Server;
+
+        let mut teable_server = Server::new_async().await;
+        let teable_url = teable_server.url();
+
+        // Mock Teable: return a member with @gmail.com stored
+        let _member_mock = teable_server
+            .mock("GET", mockito::Matcher::Any)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+                    "records": [{
+                        "id": "rec_gm1",
+                        "fields": {
+                            "Vorname": "Max",
+                            "Nachname": "Muster",
+                            "Email": "max@gmail.com",
+                            "Geburtsdatum": "2000-01-01",
+                            "Eintrittsdatum": "2020-01-01"
+                        }
+                    }]
+                }"#,
+            )
+            .expect_at_least(1)
+            .create_async()
+            .await;
+
+        let app = create_test_app_with_teable_url(&teable_url).await;
+        let _server = TestServer::new(app).unwrap();
+
+        // Register with gmail.com
+        let database = Database::new(":memory:")
+            .await
+            .expect("Failed to create test database");
+        database
+            .create_user(crate::database::CreateUserRequest {
+                email: "max@gmail.com".to_string(),
+                password: "password123".to_string(),
+            })
+            .await
+            .expect("Failed to create user");
+
+        // Attempt login with @googlemail.com — normalize_email should map this to @gmail.com
+        // and the database query must find the @gmail.com row
+        let normalized = normalize_email("max@googlemail.com");
+        assert_eq!(normalized, "max@gmail.com");
+
+        // Verify DB lookup works with the googlemail variant
+        let found = database
+            .get_user_by_email("max@googlemail.com")
+            .await
+            .expect("DB lookup failed");
+        assert!(
+            found.is_some(),
+            "User stored as @gmail.com should be found when querying with @googlemail.com"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_forgot_password_googlemail_variant() {
+        use mockito::Server;
+
+        let mut teable_server = Server::new_async().await;
+        let teable_url = teable_server.url();
+
+        // Mock Teable: return a member stored with @googlemail.com
+        let _member_mock = teable_server
+            .mock("GET", mockito::Matcher::Any)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+                    "records": [{
+                        "id": "rec_gm2",
+                        "fields": {
+                            "Vorname": "Anna",
+                            "Nachname": "Muster",
+                            "Email": "anna@googlemail.com",
+                            "Geburtsdatum": "1990-05-10"
+                        }
+                    }]
+                }"#,
+            )
+            .expect_at_least(1)
+            .create_async()
+            .await;
+
+        let app = create_test_app_with_teable_url(&teable_url).await;
+        let server = TestServer::new(app).unwrap();
+
+        // Request password reset using @gmail.com form while Teable has @googlemail.com
+        let forgot_request = serde_json::json!({
+            "email": "anna@gmail.com"
+        });
+        let response = server
+            .post("/api/forgotPassword")
+            .json(&forgot_request)
+            .await;
+
+        // The endpoint should find the member (Teable returns the googlemail record
+        // and normalize_email maps it to gmail.com for comparison)
+        assert_eq!(response.status_code(), 200);
+    }
 }

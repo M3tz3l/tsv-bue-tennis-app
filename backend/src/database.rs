@@ -61,10 +61,17 @@ impl Database {
 
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<AuthUser>, sqlx::Error> {
         let normalized_email = normalize_email(email);
+        // Build alternate domain form to match rows stored with either @gmail.com or @googlemail.com
+        let alternate_email = if normalized_email.ends_with("@gmail.com") {
+            normalized_email.replace("@gmail.com", "@googlemail.com")
+        } else {
+            normalized_email.clone()
+        };
         let row = sqlx::query(
-            "SELECT id, email, password, created_at FROM details WHERE LOWER(email) = LOWER(?)",
+            "SELECT id, email, password, created_at FROM details WHERE LOWER(email) = LOWER(?) OR LOWER(email) = LOWER(?)",
         )
         .bind(&normalized_email)
+        .bind(&alternate_email)
         .fetch_optional(&self.pool)
         .await?;
 

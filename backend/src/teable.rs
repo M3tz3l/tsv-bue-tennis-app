@@ -23,6 +23,33 @@ fn get_teable_config() -> Result<TeableConfig, Box<dyn std::error::Error + Send 
     })
 }
 
+/// Returns the normalized email and, if it ends with `@gmail.com`, also the `@googlemail.com`
+/// variant. This allows querying the Teable API for both domain forms so that records stored
+/// with either variant are found correctly.
+fn email_query_variants(normalized_email: &str) -> Vec<String> {
+    if normalized_email.ends_with("@gmail.com") {
+        vec![
+            normalized_email.to_string(),
+            normalized_email.replace("@gmail.com", "@googlemail.com"),
+        ]
+    } else {
+        vec![normalized_email.to_string()]
+    }
+}
+
+/// Builds a Teable API filter that selects records whose Email field exactly matches
+/// the given value.
+fn build_email_filter(filter_email: &str) -> serde_json::Value {
+    serde_json::json!({
+        "conjunction": "and",
+        "filterSet": [{
+            "fieldId": "Email",
+            "operator": "is",
+            "value": filter_email
+        }]
+    })
+}
+
 /// Fetches all work hour records for a member at a specific date (exact date, Europe/Berlin timezone)
 pub async fn get_work_hours_for_member_at_date(
     http_client: &Client,
@@ -206,73 +233,74 @@ pub async fn get_member_by_email_with_projection(
     let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
 
     // Normalize email for case-insensitive comparison and Gmail/Google Mail equivalence
-    let email_lowercase = normalize_email(email);
+    let normalized_email = normalize_email(email);
 
-    // Use Teable API filtering to only fetch the specific user
-    let filter = serde_json::json!({
-        "conjunction": "and",
-        "filterSet": [{
-            "fieldId": "Email",
-            "operator": "is",
-            "value": email_lowercase
-        }]
-    });
     let url = format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id);
-    let mut req = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", cfg.token))
-        .header("Accept", "application/json")
-        .query(&[("filter", &filter.to_string())]);
-    if let Some(proj) = projection {
-        for field in proj {
-            req = req.query(&[("projection[]", *field)]);
-        }
-    }
+
     info!(
         "Fetching member by email: {} (normalized: {}) with filter and projection: {:?}",
-        email, email_lowercase, projection
+        email, normalized_email, projection
     );
-    let response = req.send().await?;
-    let response_text = handle_teable_response(response, "member_by_email").await?;
-    // Parse Teable response
-    let teable_response: Value = serde_json::from_str(&response_text)?;
-    let records = teable_response["records"]
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
 
-    // If direct filter didn't work, do case-insensitive client-side filtering
-    let matching_record = records.iter().find(|record| {
-        let fields = &record["fields"];
-        if let Some(record_email) = fields["Email"].as_str() {
-            record_email.to_lowercase() == email_lowercase
-        } else {
-            false
+    // Try the normalized (gmail.com) form first, then fall back to the alternate domain form
+    let mut found_record: Option<Member> = None;
+    for filter_email in email_query_variants(&normalized_email) {
+        let filter = build_email_filter(&filter_email);
+        let mut req = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", cfg.token))
+            .header("Accept", "application/json")
+            .query(&[("filter", &filter.to_string())]);
+        if let Some(proj) = projection {
+            for field in proj {
+                req = req.query(&[("projection[]", *field)]);
+            }
         }
-    });
+        let response = req.send().await?;
+        let response_text = handle_teable_response(response, "member_by_email").await?;
+        let teable_response: Value = serde_json::from_str(&response_text)?;
+        let records = teable_response["records"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
 
-    if let Some(record) = matching_record {
-        let fields = &record["fields"];
-        let member = Member {
-            id: record["id"].as_str().unwrap_or("").to_string(),
-            first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
-            last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
-            email: fields["Email"].as_str().unwrap_or("").to_string(),
-            family_id: fields["Familie"]
-                .as_str()
-                .map(|s| s.to_string())
-                .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-            birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
-            join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
-        };
-        info!(
-            "Found member: {} {} ({}) - Birth Date: {}, Join Date: {:?}",
-            member.first_name, member.last_name, member.email, member.birth_date, member.join_date
-        );
-        Ok(Some(member))
-    } else {
-        warn!("No member found with email: {} (case insensitive)", email);
-        Ok(None)
+        // Do case-insensitive, domain-normalized client-side filtering
+        let matching_record = records.iter().find(|record| {
+            let fields = &record["fields"];
+            if let Some(record_email) = fields["Email"].as_str() {
+                normalize_email(record_email) == normalized_email
+            } else {
+                false
+            }
+        });
+
+        if let Some(record) = matching_record {
+            let fields = &record["fields"];
+            let member = Member {
+                id: record["id"].as_str().unwrap_or("").to_string(),
+                first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
+                last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
+                email: fields["Email"].as_str().unwrap_or("").to_string(),
+                family_id: fields["Familie"]
+                    .as_str()
+                    .map(|s| s.to_string())
+                    .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
+                birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
+                join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
+            };
+            info!(
+                "Found member: {} {} ({}) - Birth Date: {}, Join Date: {:?}",
+                member.first_name, member.last_name, member.email, member.birth_date,
+                member.join_date
+            );
+            found_record = Some(member);
+            break;
+        }
     }
+
+    if found_record.is_none() {
+        warn!("No member found with email: {} (case insensitive)", email);
+    }
+    Ok(found_record)
 }
 
 /// Get family members by family ID - optimized to filter at API level
@@ -714,58 +742,55 @@ pub async fn delete_work_hour(client: &Client, work_hour_id: &str) -> Result<()>
 /// Get all members by email (case-insensitive, returns Vec<Member>)
 pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Member>> {
     let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-    let email_lowercase = normalize_email(email);
-    let filter = serde_json::json!({
-        "conjunction": "and",
-        "filterSet": [{
-            "fieldId": "Email",
-            "operator": "is",
-            "value": email_lowercase
-        }]
-    });
+    let normalized_email = normalize_email(email);
+
     let url = format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id);
-    let mut req = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", cfg.token))
-        .header("Accept", "application/json")
-        .query(&[("filter", &filter.to_string())]);
-    // Use default projection
-    for field in [
+    let projection_fields = [
         "Vorname",
         "Nachname",
         "Email",
         "Familie",
         "Geburtsdatum",
         "Eintrittsdatum",
-    ]
-    .iter()
-    {
-        req = req.query(&[("projection[]", *field)]);
-    }
-    let response = req.send().await?;
-    let response_text = handle_teable_response(response, "members_by_email").await?;
-    let teable_response: Value = serde_json::from_str(&response_text)?;
-    let records = teable_response["records"]
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
-    let mut members = Vec::new();
-    for record in records {
-        let fields = &record["fields"];
-        if let Some(record_email) = fields["Email"].as_str() {
-            if record_email.to_lowercase() == email_lowercase {
-                let member = Member {
-                    id: record["id"].as_str().unwrap_or("").to_string(),
-                    first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
-                    last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
-                    email: fields["Email"].as_str().unwrap_or("").to_string(),
-                    family_id: fields["Familie"]
-                        .as_str()
-                        .map(|s| s.to_string())
-                        .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-                    birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
-                    join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
-                };
-                members.push(member);
+    ];
+
+    let mut members: Vec<Member> = Vec::new();
+
+    // Query for both domain variants to handle records stored with either form
+    for filter_email in email_query_variants(&normalized_email) {
+        let filter = build_email_filter(&filter_email);
+        let mut req = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", cfg.token))
+            .header("Accept", "application/json")
+            .query(&[("filter", &filter.to_string())]);
+        for field in projection_fields.iter() {
+            req = req.query(&[("projection[]", *field)]);
+        }
+        let response = req.send().await?;
+        let response_text = handle_teable_response(response, "members_by_email").await?;
+        let teable_response: Value = serde_json::from_str(&response_text)?;
+        let records = teable_response["records"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
+        for record in records {
+            let fields = &record["fields"];
+            if let Some(record_email) = fields["Email"].as_str() {
+                if normalize_email(record_email) == normalized_email {
+                    let member = Member {
+                        id: record["id"].as_str().unwrap_or("").to_string(),
+                        first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
+                        last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
+                        email: fields["Email"].as_str().unwrap_or("").to_string(),
+                        family_id: fields["Familie"]
+                            .as_str()
+                            .map(|s| s.to_string())
+                            .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
+                        birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
+                        join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
+                    };
+                    members.push(member);
+                }
             }
         }
     }
