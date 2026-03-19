@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::models::{Member, TeableResponse, WorkHour};
+use crate::utils::normalize_email;
 use anyhow::Result;
 use reqwest::Client;
 use serde_json::Value;
@@ -204,8 +205,8 @@ pub async fn get_member_by_email_with_projection(
 ) -> Result<Option<Member>> {
     let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
 
-    // Normalize email to lowercase for case-insensitive comparison
-    let email_lowercase = email.to_lowercase();
+    // Normalize email for case-insensitive comparison and Gmail/Google Mail equivalence
+    let email_lowercase = normalize_email(email);
 
     // Use Teable API filtering to only fetch the specific user
     let filter = serde_json::json!({
@@ -713,7 +714,7 @@ pub async fn delete_work_hour(client: &Client, work_hour_id: &str) -> Result<()>
 /// Get all members by email (case-insensitive, returns Vec<Member>)
 pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Member>> {
     let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-    let email_lowercase = email.to_lowercase();
+    let email_lowercase = normalize_email(email);
     let filter = serde_json::json!({
         "conjunction": "and",
         "filterSet": [{

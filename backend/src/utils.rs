@@ -191,3 +191,11 @@ pub fn get_member_work_hours_info(member: &Member, current_year: i32) -> (f64, O
     );
     (8.0, None)
 }
+
+/// Normalizes an email address to handle Gmail/Google Mail equivalence
+/// Converts the email to lowercase and replaces @googlemail.com with @gmail.com
+/// This ensures that user@gmail.com and user@googlemail.com are treated as the same address
+pub fn normalize_email(email: &str) -> String {
+    let email_lowercase = email.to_lowercase();
+    email_lowercase.replace("@googlemail.com", "@gmail.com")
+}

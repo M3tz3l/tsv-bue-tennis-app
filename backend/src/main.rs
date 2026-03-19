@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::utils::{
     calculate_total_hours, convert_work_hours_to_entries, extract_user_id_from_headers,
-    get_member_work_hours_info, log_work_entries,
+    get_member_work_hours_info, log_work_entries, normalize_email,
 };
 use axum::{
     extract::{Json, Path, State},
@@ -363,8 +363,8 @@ async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    // Normalize email to lowercase for case-insensitive comparison
-    let normalized_email = payload.email.to_lowercase();
+    // Normalize email for case-insensitive comparison and Gmail/Google Mail equivalence
+    let normalized_email = normalize_email(&payload.email);
     info!(
         "Login attempt for email: {} (normalized: {})",
         payload.email, normalized_email
@@ -481,7 +481,7 @@ async fn select_member(
         })?
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    if teable_member.email.to_lowercase() != email.to_lowercase() {
+    if normalize_email(&teable_member.email) != normalize_email(&email) {
         error!("Member ID does not belong to the email in selection_token");
         return Err(StatusCode::UNAUTHORIZED);
     }
@@ -515,8 +515,8 @@ async fn forgot_password(
     State(state): State<AppState>,
     Json(payload): Json<ForgotPasswordRequest>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    // Normalize email to lowercase for case-insensitive comparison
-    let normalized_email = payload.email.to_lowercase();
+    // Normalize email for case-insensitive comparison and Gmail/Google Mail equivalence
+    let normalized_email = normalize_email(&payload.email);
     info!(
         "Forgot password request for email: {} (normalized: {})",
         payload.email, normalized_email

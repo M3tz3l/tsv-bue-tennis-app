@@ -1,3 +1,4 @@
+use crate::utils::normalize_email;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -59,10 +60,11 @@ impl Database {
     }
 
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<AuthUser>, sqlx::Error> {
+        let normalized_email = normalize_email(email);
         let row = sqlx::query(
             "SELECT id, email, password, created_at FROM details WHERE LOWER(email) = LOWER(?)",
         )
-        .bind(email)
+        .bind(&normalized_email)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -84,7 +86,7 @@ impl Database {
             .map_err(|e| sqlx::Error::Configuration(Box::new(e)))?;
 
         let result = sqlx::query("INSERT INTO details (email, password) VALUES (?, ?)")
-            .bind(request.email.to_lowercase())
+            .bind(normalize_email(&request.email))
             .bind(&password_hash)
             .execute(&self.pool)
             .await?;
