@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import BackendService from '../services/backendService.ts';
-import { PencilIcon, PlusIcon, ArrowRightOnRectangleIcon, ClockIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, PlusIcon, ArrowRightOnRectangleIcon, ClockIcon, InformationCircleIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 import TSV_Logo from '../assets/TSV_Tennis.svg';
 import type { WorkHourEntry, CreateWorkHourRequest, MemberContribution } from '../types';
@@ -16,6 +16,7 @@ const Dashboard = () => {
     const [editingRow, setEditingRow] = useState<WorkHourEntry | null>(null);
     const [showAddForm, setShowAddForm] = useState(false);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    const [showTagesmutterInfo, setShowTagesmutterInfo] = useState(false);
 
     // Fetch family dashboard data from the backend API
     const { data: dashboardData, isLoading, error } = useDashboard(user?.id, selectedYear, !!user?.id && !!token);
@@ -422,6 +423,43 @@ const Dashboard = () => {
                             <option key={year} value={year}>{year}</option>
                         ))}
                     </select>
+                </div>
+
+                {/* Tagesmutter Teegeld Info */}
+                <div className="mb-4 sm:mb-6 bg-amber-50 border border-amber-200 rounded-lg overflow-hidden">
+                    <button
+                        onClick={() => setShowTagesmutterInfo(!showTagesmutterInfo)}
+                        className="w-full flex items-center justify-between px-4 py-3 text-left text-sm font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+                        aria-expanded={showTagesmutterInfo}
+                        aria-label="Teegeld-Regelung für Tagesmütter ein- oder ausblenden"
+                    >
+                        <div className="flex items-center gap-2">
+                            <InformationCircleIcon className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                            <span>Hinweis: Teegeld-Regelung für Tagesmütter</span>
+                        </div>
+                        {showTagesmutterInfo
+                            ? <ChevronUpIcon className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                            : <ChevronDownIcon className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                        }
+                    </button>
+                    {showTagesmutterInfo && (
+                        <div className="px-4 pb-4 text-sm text-amber-900 space-y-2">
+                            <p>
+                                Als <strong>Tagesmutter</strong> können Sie zusätzlich zu Ihrem regulären Betreuungsentgelt
+                                ein <strong>Teegeld von bis zu 5,00 € pro Tag</strong> verlangen.
+                            </p>
+                            <p>
+                                Dieses Teegeld dient zur Deckung der anfallenden Verpflegungskosten (Getränke, Snacks)
+                                während der Betreuungszeit und ist im Betreuungsvertrag gesondert auszuweisen.
+                            </p>
+                            <p className="text-xs text-amber-700">
+                                Bei Fragen wenden Sie sich bitte an die Vereinsleitung:{' '}
+                                <a href="mailto:admin@tsv-bue-tennis.de" className="underline hover:text-amber-900">
+                                    admin@tsv-bue-tennis.de
+                                </a>
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Work Hours Status Card - Shows family info if multiple members, otherwise single member */}
