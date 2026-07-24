@@ -9,8 +9,8 @@ pub struct AuthClaims {
     pub sub: String, // User ID
     #[serde(default)]
     pub roles: Vec<String>,
-    pub exp: usize,  // Expiration time
-    pub iat: usize,  // Issued at
+    pub exp: usize, // Expiration time
+    pub iat: usize, // Issued at
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,7 +20,10 @@ pub struct SelectionTokenClaims {
     pub typ: String, // always "selection"
 }
 
-pub fn create_token(user_id: &str, roles: &[String]) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn create_token(
+    user_id: &str,
+    roles: &[String],
+) -> Result<String, jsonwebtoken::errors::Error> {
     let config = Config::from_env().map_err(|_| {
         jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat)
     })?;

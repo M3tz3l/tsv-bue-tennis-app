@@ -1073,9 +1073,9 @@ async fn send_test_mail(
     let subject = payload
         .subject
         .unwrap_or_else(|| "TSV Tennis Test-Mail".to_string());
-    let message = payload.message.unwrap_or_else(|| {
-        "Dies ist eine Test-Mail aus dem neuen Rundmail-Modul.".to_string()
-    });
+    let message = payload
+        .message
+        .unwrap_or_else(|| "Dies ist eine Test-Mail aus dem neuen Rundmail-Modul.".to_string());
 
     let html_content = format!(
         "<p>Hallo {},</p><p>{}</p><p>Viele Grüße<br/>TSV Tennis App</p>",
@@ -2536,8 +2536,8 @@ mod tests {
             .await;
 
         // Create a valid JWT token for the test user
-        let test_token = auth::create_token("integration_user_123", &[])
-            .expect("Failed to create test token");
+        let test_token =
+            auth::create_token("integration_user_123", &[]).expect("Failed to create test token");
 
         // Test protected endpoint with valid token - now actually using the mock!
         let response = server

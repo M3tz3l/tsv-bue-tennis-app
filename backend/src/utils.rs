@@ -73,7 +73,9 @@ pub fn extract_user_id_from_headers(headers: &HeaderMap) -> Result<String, Statu
 }
 
 /// Extracts and verifies full auth claims from Authorization header
-pub fn extract_auth_claims_from_headers(headers: &HeaderMap) -> Result<auth::AuthClaims, StatusCode> {
+pub fn extract_auth_claims_from_headers(
+    headers: &HeaderMap,
+) -> Result<auth::AuthClaims, StatusCode> {
     let auth_header = headers
         .get("authorization")
         .ok_or(StatusCode::UNAUTHORIZED)?
