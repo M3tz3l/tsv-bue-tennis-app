@@ -84,10 +84,7 @@ pub fn extract_auth_claims_from_headers(
         .strip_prefix("Bearer ")
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    info!(
-        "Auth: Verifying token: {}...",
-        &auth_header[..std::cmp::min(auth_header.len(), 20)]
-    );
+    info!("Auth: Verifying token");
 
     match auth::verify_token(auth_header) {
         Ok(claims) => {

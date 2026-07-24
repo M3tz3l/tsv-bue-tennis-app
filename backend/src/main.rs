@@ -1042,6 +1042,15 @@ async fn send_test_mail(
     headers: HeaderMap,
     Json(payload): Json<SendTestMailRequest>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    fn escape_html(input: &str) -> String {
+        input
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&#39;")
+    }
+
     let claims = extract_auth_claims_from_headers(&headers)?;
 
     let user = teable::get_member_by_id_with_projection(
@@ -1070,6 +1079,14 @@ async fn send_test_mail(
         return Err(StatusCode::FORBIDDEN);
     }
 
+    if user.email.trim().is_empty() {
+        error!(
+            "Send test mail denied for user {}: missing email in member record",
+            user.id
+        );
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
     let subject = payload
         .subject
         .unwrap_or_else(|| "TSV Tennis Test-Mail".to_string());
@@ -1077,9 +1094,12 @@ async fn send_test_mail(
         .message
         .unwrap_or_else(|| "Dies ist eine Test-Mail aus dem neuen Rundmail-Modul.".to_string());
 
+    let safe_first_name = escape_html(&user.first_name);
+    let safe_message = escape_html(&message);
+
     let html_content = format!(
         "<p>Hallo {},</p><p>{}</p><p>Viele Grüße<br/>TSV Tennis App</p>",
-        user.first_name, message
+        safe_first_name, safe_message
     );
     let text_content = format!(
         "Hallo {},\n\n{}\n\nViele Grüße\nTSV Tennis App",
