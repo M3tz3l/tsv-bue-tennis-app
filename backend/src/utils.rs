@@ -61,6 +61,19 @@ pub fn log_work_entries(entries: &[WorkHourEntry], prefix: &str) {
 
 /// Extracts and verifies user ID from Authorization header
 pub fn extract_user_id_from_headers(headers: &HeaderMap) -> Result<String, StatusCode> {
+    let claims = extract_auth_claims_from_headers(headers)?;
+
+    // Check for old numeric user IDs (should be Teable record IDs starting with "rec")
+    if claims.sub == "0" || claims.sub.parse::<u32>().is_ok() {
+        warn!("Auth: Old token format detected (numeric user ID), rejecting");
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    Ok(claims.sub)
+}
+
+/// Extracts and verifies full auth claims from Authorization header
+pub fn extract_auth_claims_from_headers(headers: &HeaderMap) -> Result<auth::AuthClaims, StatusCode> {
     let auth_header = headers
         .get("authorization")
         .ok_or(StatusCode::UNAUTHORIZED)?
@@ -77,14 +90,7 @@ pub fn extract_user_id_from_headers(headers: &HeaderMap) -> Result<String, Statu
     match auth::verify_token(auth_header) {
         Ok(claims) => {
             info!("Auth: Token valid, user ID: {}", claims.sub);
-
-            // Check for old numeric user IDs (should be Teable record IDs starting with "rec")
-            if claims.sub == "0" || claims.sub.parse::<u32>().is_ok() {
-                warn!("Auth: Old token format detected (numeric user ID), rejecting");
-                return Err(StatusCode::UNAUTHORIZED);
-            }
-
-            Ok(claims.sub)
+            Ok(claims)
         }
         Err(e) => {
             warn!("Auth: Token verification failed: {:?}", e);

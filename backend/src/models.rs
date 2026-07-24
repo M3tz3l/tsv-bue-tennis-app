@@ -44,6 +44,12 @@ pub struct UserResponse {
 }
 
 #[derive(Debug, Deserialize, Type)]
+pub struct SendTestMailRequest {
+    pub subject: Option<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Type)]
 pub struct CreateWorkHourRequest {
     #[serde(rename = "Datum")]
     pub date: String,
@@ -134,11 +140,35 @@ pub struct Member {
     pub birth_date: String,
     #[serde(rename = "Eintrittsdatum")]
     pub join_date: Option<String>,
+    #[serde(rename = "Rollen", default, deserialize_with = "string_or_vec_string")]
+    pub roles: Vec<String>,
 }
 
 impl Member {
     pub fn name(&self) -> String {
         format!("{} {}", self.first_name, self.last_name)
+    }
+
+    pub fn has_role(&self, role: &str) -> bool {
+        self.roles
+            .iter()
+            .any(|r| r.trim().eq_ignore_ascii_case(role))
+    }
+}
+
+fn string_or_vec_string<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    match value {
+        serde_json::Value::Null => Ok(vec![]),
+        serde_json::Value::String(s) => Ok(vec![s]),
+        serde_json::Value::Array(arr) => Ok(arr
+            .into_iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect()),
+        _ => Ok(vec![]),
     }
 }
 

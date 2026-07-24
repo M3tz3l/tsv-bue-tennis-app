@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::utils::{
-    calculate_total_hours, convert_work_hours_to_entries, extract_user_id_from_headers,
-    get_member_work_hours_info, log_work_entries,
+    calculate_total_hours, convert_work_hours_to_entries, extract_auth_claims_from_headers,
+    extract_user_id_from_headers, get_member_work_hours_info, log_work_entries,
 };
 use axum::{
     extract::{Json, Path, State},
@@ -37,7 +37,7 @@ use member_selection::{LoginResponseVariant, MemberSelectionResponse, SelectMemb
 use models::{
     CreateWorkHourRequest, DashboardResponse, FamilyData, FamilyMember, ForgotPasswordRequest,
     LoginRequest, LoginResponse, Member, MemberContribution, PersonalData, RegisterRequest,
-    ResetPasswordRequest, UserResponse,
+    ResetPasswordRequest, SendTestMailRequest, UserResponse,
 };
 use token_store::TokenStore;
 
@@ -259,6 +259,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .route("/arbeitsstunden", post(create_work_hour)) // Frontend expects this endpoint
         .route("/arbeitsstunden/:id", put(update_work_hour)) // Frontend expects this endpoint
         .route("/arbeitsstunden/:id", delete(delete_work_hour)) // Frontend expects this endpoint
+        .route("/mail/test-send", post(send_test_mail))
         .layer(GovernorLayer {
             config: write_governor_conf,
         })
@@ -410,7 +411,7 @@ async fn login(
     if teable_members.len() == 1 {
         // Only one member, proceed as before
         let teable_user = &teable_members[0];
-        let token = auth::create_token(&teable_user.id.to_string())
+        let token = auth::create_token(&teable_user.id.to_string(), &teable_user.roles)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         return Ok(Json(LoginResponseVariant::SingleUser(LoginResponse {
             success: true,
@@ -486,7 +487,7 @@ async fn select_member(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    let token = auth::create_token(&teable_member.id.to_string())
+    let token = auth::create_token(&teable_member.id.to_string(), &teable_member.roles)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(LoginResponse {
@@ -1036,6 +1037,72 @@ async fn get_work_hour_by_id(
     }
 }
 
+async fn send_test_mail(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<SendTestMailRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let claims = extract_auth_claims_from_headers(&headers)?;
+
+    let user = teable::get_member_by_id_with_projection(
+        &state.http_client,
+        &claims.sub,
+        Some(&["Vorname", "Nachname", "Email", "Rolle", "Rollen"][..]),
+    )
+    .await
+    .map_err(|e| {
+        error!("Send test mail: failed to load current member: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    let has_orga_claim = claims
+        .roles
+        .iter()
+        .any(|r| r.trim().eq_ignore_ascii_case("orga"));
+    let has_orga_member_role = user.has_role("orga");
+
+    if !has_orga_claim && !has_orga_member_role {
+        warn!(
+            "Send test mail denied for user {} (missing orga role)",
+            user.id
+        );
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let subject = payload
+        .subject
+        .unwrap_or_else(|| "TSV Tennis Test-Mail".to_string());
+    let message = payload.message.unwrap_or_else(|| {
+        "Dies ist eine Test-Mail aus dem neuen Rundmail-Modul.".to_string()
+    });
+
+    let html_content = format!(
+        "<p>Hallo {},</p><p>{}</p><p>Viele Grüße<br/>TSV Tennis App</p>",
+        user.first_name, message
+    );
+    let text_content = format!(
+        "Hallo {},\n\n{}\n\nViele Grüße\nTSV Tennis App",
+        user.first_name, message
+    );
+
+    state
+        .email_service
+        .send_email(&user.email, &subject, &html_content, &text_content)
+        .await
+        .map_err(|e| {
+            error!("Send test mail failed for {}: {}", user.email, e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    info!("Send test mail succeeded for orga user {}", user.id);
+
+    Ok(ResponseJson(serde_json::json!({
+        "success": true,
+        "message": "Test mail sent successfully"
+    })))
+}
+
 async fn create_work_hour(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1452,6 +1519,7 @@ mod tests {
         std::env::set_var("EMAIL_HOST", "smtp.example.com");
         std::env::set_var("EMAIL_PORT", "587");
         std::env::set_var("EMAIL_FROM", "test@example.com");
+        std::env::set_var("EMAIL_DISABLE_SEND", "true");
 
         // Set JWT secret for token creation in tests
         std::env::set_var(
@@ -1515,6 +1583,7 @@ mod tests {
             .route("/verify-token", get(get_user))
             .route("/dashboard/:year", get(dashboard))
             .route("/user", get(get_user))
+            .route("/mail/test-send", post(send_test_mail))
             .route("/arbeitsstunden/:id", get(get_work_hour_by_id))
             .route("/arbeitsstunden", post(create_work_hour))
             .route("/arbeitsstunden/:id", put(update_work_hour))
@@ -1894,6 +1963,109 @@ mod tests {
         assert_eq!(response.status_code(), 401);
     }
 
+    #[tokio::test]
+    async fn test_send_test_mail_with_orga_role_succeeds() {
+        use mockito::Server;
+
+        let mut teable_server = Server::new_async().await;
+
+        let _member_mock = teable_server
+            .mock("GET", "/table/test_members_table/record/orga_user_1")
+            .match_query(mockito::Matcher::Any)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+                "id": "orga_user_1",
+                "fields": {
+                    "Vorname": "Orga",
+                    "Nachname": "User",
+                    "Email": "orga@example.com"
+                }
+            }"#,
+            )
+            .create_async()
+            .await;
+
+        let app = create_test_app_with_teable_url(&teable_server.url()).await;
+        let server = TestServer::new(app).unwrap();
+
+        let orga_roles = vec!["orga".to_string()];
+        let token = auth::create_token("orga_user_1", &orga_roles)
+            .expect("Failed to create orga test token");
+
+        let response = server
+            .post("/api/mail/test-send")
+            .add_header("authorization", &format!("Bearer {token}"))
+            .json(&serde_json::json!({
+                "subject": "Test",
+                "message": "Hallo"
+            }))
+            .await;
+
+        assert_eq!(response.status_code(), 200);
+        let json: serde_json::Value = response.json();
+        assert_eq!(json["success"], true);
+    }
+
+    #[tokio::test]
+    async fn test_send_test_mail_without_orga_role_forbidden() {
+        use mockito::Server;
+
+        let mut teable_server = Server::new_async().await;
+
+        let _member_mock = teable_server
+            .mock("GET", "/table/test_members_table/record/member_user_1")
+            .match_query(mockito::Matcher::Any)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+                "id": "member_user_1",
+                "fields": {
+                    "Vorname": "Member",
+                    "Nachname": "User",
+                    "Email": "member@example.com"
+                }
+            }"#,
+            )
+            .create_async()
+            .await;
+
+        let app = create_test_app_with_teable_url(&teable_server.url()).await;
+        let server = TestServer::new(app).unwrap();
+
+        let token =
+            auth::create_token("member_user_1", &[]).expect("Failed to create member token");
+
+        let response = server
+            .post("/api/mail/test-send")
+            .add_header("authorization", &format!("Bearer {token}"))
+            .json(&serde_json::json!({
+                "subject": "Test",
+                "message": "Hallo"
+            }))
+            .await;
+
+        assert_eq!(response.status_code(), 403);
+    }
+
+    #[tokio::test]
+    async fn test_send_test_mail_with_invalid_token_unauthorized() {
+        let app = create_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        let response = server
+            .post("/api/mail/test-send")
+            .add_header("authorization", "Bearer invalid_token")
+            .json(&serde_json::json!({
+                "subject": "Test"
+            }))
+            .await;
+
+        assert_eq!(response.status_code(), 401);
+    }
+
     // Test with valid token and mocked Teable API
     #[tokio::test]
     async fn test_protected_endpoint_with_valid_token() {
@@ -1914,7 +2086,8 @@ mod tests {
 
         // Create a valid JWT token for testing
         let test_user_id = "test_user_123";
-        let valid_token = auth::create_token(test_user_id).expect("Failed to create test token");
+        let valid_token =
+            auth::create_token(test_user_id, &[]).expect("Failed to create test token");
 
         // Start mock Teable server
         let mut teable_server = Server::new_async().await;
@@ -1976,7 +2149,8 @@ mod tests {
 
         // Create a valid JWT token
         let test_user_id = "test_user_456";
-        let valid_token = auth::create_token(test_user_id).expect("Failed to create test token");
+        let valid_token =
+            auth::create_token(test_user_id, &[]).expect("Failed to create test token");
 
         // Start mock Teable server
         let mut teable_server = Server::new_async().await;
@@ -2048,7 +2222,8 @@ mod tests {
 
         // Create a valid JWT token
         let test_user_id = "test_user_789";
-        let valid_token = auth::create_token(test_user_id).expect("Failed to create test token");
+        let valid_token =
+            auth::create_token(test_user_id, &[]).expect("Failed to create test token");
 
         let work_hour_request = serde_json::json!({
             "date": "2025-01-15",
@@ -2080,7 +2255,8 @@ mod tests {
 
         // Create a valid JWT token
         let test_user_id = "dashboard_user_123";
-        let valid_token = auth::create_token(test_user_id).expect("Failed to create test token");
+        let valid_token =
+            auth::create_token(test_user_id, &[]).expect("Failed to create test token");
 
         // Test dashboard endpoint with valid token
         let response = server
@@ -2360,8 +2536,8 @@ mod tests {
             .await;
 
         // Create a valid JWT token for the test user
-        let test_token =
-            auth::create_token("integration_user_123").expect("Failed to create test token");
+        let test_token = auth::create_token("integration_user_123", &[])
+            .expect("Failed to create test token");
 
         // Test protected endpoint with valid token - now actually using the mock!
         let response = server
@@ -2406,7 +2582,7 @@ mod tests {
         tracing::debug!("JWT_SECRET env var: {:?}", std::env::var("JWT_SECRET"));
 
         // Create a token
-        let token = auth::create_token(test_user_id).expect("Failed to create token");
+        let token = auth::create_token(test_user_id, &[]).expect("Failed to create token");
         assert!(!token.is_empty());
 
         // Validate the token (this would require access to auth module internals)
