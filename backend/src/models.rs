@@ -44,6 +44,12 @@ pub struct UserResponse {
 }
 
 #[derive(Debug, Deserialize, Type)]
+pub struct SendTestMailRequest {
+    pub subject: Option<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Type)]
 pub struct CreateWorkHourRequest {
     #[serde(rename = "Datum")]
     pub date: String,
@@ -134,11 +140,19 @@ pub struct Member {
     pub birth_date: String,
     #[serde(rename = "Eintrittsdatum")]
     pub join_date: Option<String>,
+    #[serde(rename = "Rolle")]
+    pub role: Option<String>,
 }
 
 impl Member {
     pub fn name(&self) -> String {
         format!("{} {}", self.first_name, self.last_name)
+    }
+
+    pub fn has_role(&self, role: &str) -> bool {
+        self.role
+            .as_ref()
+            .is_some_and(|r| r.trim().eq_ignore_ascii_case(role))
     }
 }
 

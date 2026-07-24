@@ -7,8 +7,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthClaims {
     pub sub: String, // User ID
-    pub exp: usize,  // Expiration time
-    pub iat: usize,  // Issued at
+    #[serde(default)]
+    pub role: Option<String>,
+    pub exp: usize, // Expiration time
+    pub iat: usize, // Issued at
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -18,7 +20,10 @@ pub struct SelectionTokenClaims {
     pub typ: String, // always "selection"
 }
 
-pub fn create_token(user_id: &str) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn create_token(
+    user_id: &str,
+    role: Option<&str>,
+) -> Result<String, jsonwebtoken::errors::Error> {
     let config = Config::from_env().map_err(|_| {
         jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat)
     })?;
@@ -29,6 +34,7 @@ pub fn create_token(user_id: &str) -> Result<String, jsonwebtoken::errors::Error
 
     let claims = AuthClaims {
         sub: user_id.to_string(),
+        role: role.map(|r| r.to_string()),
         exp: now + 24 * 60 * 60, // 24 hours
         iat: now,
     };

@@ -9,6 +9,7 @@ use tracing::{error, info};
 pub struct EmailService {
     transport: SmtpTransport,
     from_email: String,
+    disable_send: bool,
 }
 
 impl EmailService {
@@ -33,9 +34,15 @@ impl EmailService {
                 .build()
         };
 
+        let disable_send = std::env::var("EMAIL_DISABLE_SEND")
+            .ok()
+            .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+            .unwrap_or(false);
+
         Ok(EmailService {
             transport,
             from_email: email_config.from_email,
+            disable_send,
         })
     }
 
@@ -46,6 +53,11 @@ impl EmailService {
         html_content: &str,
         text_content: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if self.disable_send {
+            info!("EMAIL_DISABLE_SEND=true - skipping SMTP send to {}", to);
+            return Ok(());
+        }
+
         let from_mailbox: Mailbox = format!("TSV BÜ Tennis App <{}>", self.from_email).parse()?;
         let to_mailbox: Mailbox = to.parse()?;
 
