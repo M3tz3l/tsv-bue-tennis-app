@@ -37,7 +37,7 @@ use member_selection::{LoginResponseVariant, MemberSelectionResponse, SelectMemb
 use models::{
     CreateWorkHourRequest, DashboardResponse, FamilyData, FamilyMember, ForgotPasswordRequest,
     LoginRequest, LoginResponse, Member, MemberContribution, PersonalData, RegisterRequest,
-    ResetPasswordRequest, SendTestMailRequest, UserResponse,
+    ResetPasswordRequest, SendBulkMailRequest, SendTestMailRequest, UserResponse,
 };
 use token_store::TokenStore;
 
@@ -260,6 +260,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .route("/arbeitsstunden/:id", put(update_work_hour)) // Frontend expects this endpoint
         .route("/arbeitsstunden/:id", delete(delete_work_hour)) // Frontend expects this endpoint
         .route("/mail/test-send", post(send_test_mail))
+        .route("/mail/send", post(send_bulk_mail))
         .layer(GovernorLayer {
             config: write_governor_conf,
         })
@@ -420,6 +421,7 @@ async fn login(
                 id: teable_user.id.clone(),
                 name: teable_user.name(),
                 email: teable_user.email.clone(),
+                role: teable_user.role.clone(),
             },
         })));
     }
@@ -435,6 +437,7 @@ async fn login(
             id: m.id.clone(),
             name: m.name(),
             email: m.email.clone(),
+            role: m.role.clone(),
         })
         .collect();
 
@@ -497,6 +500,7 @@ async fn select_member(
             id: teable_member.id.clone(),
             name: teable_member.name(),
             email: teable_member.email.clone(),
+            role: teable_member.role.clone(),
         },
     }))
 }
@@ -773,7 +777,7 @@ async fn dashboard(
         hours: total_hours,
         required: personal_required_hours,
         entries: user_work_hours,
-        exemption_reason: exemption_reason,
+        exemption_reason,
     };
 
     // Check if user has a family and create family data
@@ -846,7 +850,7 @@ async fn dashboard(
                     hours: member_hours,
                     required: member_required,
                     entries: entries_normalized,
-                    exemption_reason: exemption_reason,
+                    exemption_reason,
                 });
             }
 
@@ -916,7 +920,7 @@ async fn get_user(
     let user = teable::get_member_by_id_with_projection(
         &state.http_client,
         &user_id,
-        Some(&["Vorname", "Nachname", "Email"][..]), // Only fields needed for get_user
+        Some(&["Vorname", "Nachname", "Email", "Rolle"][..]),
     )
     .await
     .map_err(|e| {
@@ -937,6 +941,7 @@ async fn get_user(
             "id": user.id,
             "name": user.name(),
             "email": user.email.clone(),
+            "role": user.role.clone(),
             "profile": {
                 "nachname": user.last_name.clone(),
                 "vorname": user.first_name.clone(),
@@ -1095,15 +1100,22 @@ async fn send_test_mail(
         .unwrap_or_else(|| "Dies ist eine Test-Mail aus dem neuen Rundmail-Modul.".to_string());
 
     let safe_first_name = escape_html(&user.first_name);
+    let safe_sender_first_name = escape_html(&user.first_name);
     let safe_message = escape_html(&message);
 
-    let html_content = format!(
-        "<p>Hallo {},</p><p>{}</p><p>Viele Grüße<br/>TSV Tennis App</p>",
-        safe_first_name, safe_message
+    let signature_html = format!(
+        r#"<p style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">mit sportlichen Grüßen,<br/>{safe_sender_first_name} / die Abteilungsleitung</p><p style="margin-top: 12px;"><strong>Tennisabteilung des TSV Bad Überkingen</strong><br/><a href="mailto:tennisabteilung@tsv-bad-ueberkingen.de">tennisabteilung@tsv-bad-ueberkingen.de</a></p>"#
     );
+    let signature_text = format!(
+        "mit sportlichen Grüßen,\n{sender_first_name} / die Abteilungsleitung\n\nTennisabteilung des TSV Bad Überkingen\nE-Mail: tennisabteilung@tsv-bad-ueberkingen.de",
+        sender_first_name = user.first_name
+    );
+
+    let html_content =
+        format!("<p>Hallo {safe_first_name},</p><p>{safe_message}</p>{signature_html}");
     let text_content = format!(
-        "Hallo {},\n\n{}\n\nViele Grüße\nTSV Tennis App",
-        user.first_name, message
+        "Hallo {},\n\n{}\n\n{}",
+        user.first_name, message, signature_text
     );
 
     state
@@ -1120,6 +1132,180 @@ async fn send_test_mail(
     Ok(ResponseJson(serde_json::json!({
         "success": true,
         "message": "Test mail sent successfully"
+    })))
+}
+
+async fn send_bulk_mail(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<SendBulkMailRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    fn escape_html(input: &str) -> String {
+        input
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&#39;")
+    }
+
+    let claims = extract_auth_claims_from_headers(&headers)?;
+
+    // Check orga role from token claim
+    let has_orga_claim = claims
+        .role
+        .as_ref()
+        .is_some_and(|r| r.trim().eq_ignore_ascii_case("orga"));
+
+    // Also fetch member record to double-check role
+    let user = teable::get_member_by_id_with_projection(
+        &state.http_client,
+        &claims.sub,
+        Some(&["Vorname", "Nachname", "Email", "Rolle"][..]),
+    )
+    .await
+    .map_err(|e| {
+        error!("Send bulk mail: failed to load current member: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    let has_orga_member_role = user.has_role("orga");
+
+    if !has_orga_claim && !has_orga_member_role {
+        warn!(
+            "Send bulk mail denied for user {} (missing orga role)",
+            user.id
+        );
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let safe_sender_first_name = escape_html(&user.first_name);
+    let signature_html = format!(
+        r#"<p style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">mit sportlichen Grüßen,<br/>{safe_sender_first_name} / die Abteilungsleitung</p><p style="margin-top: 12px;"><strong>Tennisabteilung des TSV Bad Überkingen</strong><br/><a href="mailto:tennisabteilung@tsv-bad-ueberkingen.de">tennisabteilung@tsv-bad-ueberkingen.de</a></p>"#
+    );
+    let signature_text = format!(
+        "mit sportlichen Grüßen,\n{sender_first_name} / die Abteilungsleitung\n\nTennisabteilung des TSV Bad Überkingen\nE-Mail: tennisabteilung@tsv-bad-ueberkingen.de",
+        sender_first_name = user.first_name
+    );
+
+    // Fetch recipients based on filter
+    let recipients = match payload.recipient_filter.as_str() {
+        "orga" => teable::get_all_active_members(&state.http_client, Some("orga"))
+            .await
+            .map_err(|e| {
+                error!("Send bulk mail: failed to fetch orga members: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?,
+        _ => teable::get_all_active_members(&state.http_client, None)
+            .await
+            .map_err(|e| {
+                error!("Send bulk mail: failed to fetch all members: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?,
+    };
+
+    let recipients_len = recipients.len();
+
+    if recipients.is_empty() {
+        warn!(
+            "Send bulk mail: no recipients found for filter '{}'",
+            payload.recipient_filter
+        );
+        return Ok(ResponseJson(serde_json::json!({
+            "success": false,
+            "message": "No valid recipients found"
+        })));
+    }
+
+    let safe_subject = escape_html(&payload.subject);
+    let safe_message = escape_html(&payload.message);
+
+    // Deduplicate recipients by email address to avoid sending the same mail multiple times
+    let mut seen_emails = std::collections::HashSet::new();
+    let unique_recipients: Vec<_> = recipients
+        .into_iter()
+        .filter(|r| {
+            let normalized = r.email.trim().to_lowercase();
+            if normalized.is_empty() {
+                return false;
+            }
+            seen_emails.insert(normalized)
+        })
+        .collect();
+
+    if unique_recipients.is_empty() {
+        warn!(
+            "Send bulk mail: no valid recipients after deduplication for filter '{}'",
+            payload.recipient_filter
+        );
+        return Ok(ResponseJson(serde_json::json!({
+            "success": false,
+            "message": "No valid recipients found"
+        })));
+    }
+
+    info!(
+        "Send bulk mail: deduplicated {} recipients to {} unique recipients for filter '{}'",
+        recipients_len,
+        unique_recipients.len(),
+        payload.recipient_filter
+    );
+
+    let mut sent_count = 0;
+    let mut failed_count = 0;
+    let mut failed_recipients = Vec::new();
+
+    for recipient in unique_recipients {
+        let html_content = format!(
+            "<p>Hallo {safe_first_name},</p>\
+             <p>{safe_message}</p>\n            {signature_html}",
+            safe_first_name = escape_html(&recipient.first_name),
+            safe_message = safe_message,
+        );
+        let text_content = format!(
+            "Hallo {first_name},\n\n{message}\n\n{signature_text}",
+            first_name = recipient.first_name,
+            message = payload.message,
+        );
+
+        match state
+            .email_service
+            .send_email(
+                &recipient.email,
+                &safe_subject,
+                &html_content,
+                &text_content,
+            )
+            .await
+        {
+            Ok(_) => {
+                debug!("Bulk mail sent to {}", recipient.email);
+                sent_count += 1;
+            }
+            Err(e) => {
+                error!("Bulk mail failed for {}: {}", recipient.email, e);
+                failed_count += 1;
+                failed_recipients.push(recipient.email);
+            }
+        }
+    }
+
+    info!(
+        "Bulk mail completed by user {}: sent={}, failed={}",
+        user.id, sent_count, failed_count
+    );
+
+    Ok(ResponseJson(serde_json::json!({
+        "success": failed_count == 0,
+        "message": if failed_count == 0 {
+            format!("Bulk mail sent successfully to {sent_count} recipients")
+        } else {
+            format!("Bulk mail sent to {sent_count} recipients, {failed_count} failed")
+        },
+        "sent": sent_count,
+        "failed": failed_count,
+        "failed_recipients": failed_recipients,
     })))
 }
 
@@ -1604,6 +1790,7 @@ mod tests {
             .route("/dashboard/:year", get(dashboard))
             .route("/user", get(get_user))
             .route("/mail/test-send", post(send_test_mail))
+            .route("/mail/send", post(send_bulk_mail))
             .route("/arbeitsstunden/:id", get(get_work_hour_by_id))
             .route("/arbeitsstunden", post(create_work_hour))
             .route("/arbeitsstunden/:id", put(update_work_hour))
@@ -1983,6 +2170,7 @@ mod tests {
         assert_eq!(response.status_code(), 401);
     }
 
+    #[serial_test::serial]
     #[tokio::test]
     async fn test_send_test_mail_with_orga_role_succeeds() {
         use mockito::Server;
@@ -2027,6 +2215,7 @@ mod tests {
         assert_eq!(json["success"], true);
     }
 
+    #[serial_test::serial]
     #[tokio::test]
     async fn test_send_test_mail_without_orga_role_forbidden() {
         use mockito::Server;
@@ -2086,6 +2275,7 @@ mod tests {
     }
 
     // Test with valid token and mocked Teable API
+    #[serial_test::serial]
     #[tokio::test]
     async fn test_protected_endpoint_with_valid_token() {
         use mockito::Server;
@@ -2149,6 +2339,7 @@ mod tests {
         assert_eq!(json["user"]["email"], "test@example.com");
     }
 
+    #[serial_test::serial]
     #[tokio::test]
     async fn test_work_hour_by_id_with_valid_token_and_mock() {
         use mockito::Server;
@@ -2460,6 +2651,7 @@ mod tests {
     }
 
     // Advanced test: Full integration with mocked Teable API
+    #[serial_test::serial]
     #[tokio::test]
     async fn test_full_integration_with_mocked_teable() {
         use mockito::Server;

@@ -41,12 +41,20 @@ pub struct UserResponse {
     pub id: String, // Changed from u32 to String to match Teable record IDs
     pub name: String,
     pub email: String,
+    pub role: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Type)]
 pub struct SendTestMailRequest {
     pub subject: Option<String>,
     pub message: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Type)]
+pub struct SendBulkMailRequest {
+    pub subject: String,
+    pub message: String,
+    pub recipient_filter: String, // "all", "orga", "active" etc
 }
 
 #[derive(Debug, Deserialize, Type)]

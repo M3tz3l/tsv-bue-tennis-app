@@ -39,3 +39,4 @@ axum-test = "15.0"
 tower = { version = "0.4", features = ["util"] }
 http-body-util = "0.1"
 mockito = "1.5"
+serial_test = "3.0"

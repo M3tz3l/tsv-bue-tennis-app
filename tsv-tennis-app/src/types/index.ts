@@ -19,4 +19,5 @@ export type {
     PersonalData,
     FamilyMember,
     MemberContribution,
+    SendBulkMailRequest,
 } from './types';

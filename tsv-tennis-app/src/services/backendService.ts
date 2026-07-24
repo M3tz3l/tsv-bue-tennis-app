@@ -4,7 +4,8 @@ import type {
   LoginResponseVariant,
   CreateWorkHourRequest,
   DashboardResponse,
-  WorkHourEntry
+  WorkHourEntry,
+  SendBulkMailRequest,
 } from '@/types';
 
 // Generic API result type with optional data payload
@@ -15,6 +16,7 @@ interface ApiResult<T = undefined> {
 }
 
 type ApiError = { success: false; message: string };
+type SendTestMailPayload = { subject?: string; message?: string };
 
 class BackendService {
   private api: AxiosInstance;
@@ -187,6 +189,71 @@ class BackendService {
       return {
         success: false,
         message: error.response?.data?.message || 'Arbeitsstunde konnte nicht geladen werden'
+      };
+    }
+  }
+
+  async sendTestMail(payload: SendTestMailPayload = {}): Promise<ApiResult | ApiError> {
+    try {
+      const response = await this.api.post<ApiResult>('/mail/test-send', payload);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error sending test mail:', error);
+
+      const status = error.response?.status;
+      if (status === 403) {
+        return {
+          success: false,
+          message: 'Nur Mitglieder mit Rolle "orga" dürfen Testmails senden.'
+        };
+      }
+
+      if (status === 400) {
+        return {
+          success: false,
+          message: 'Für Ihr Mitglied ist keine E-Mail-Adresse hinterlegt.'
+        };
+      }
+
+      if (status === 401) {
+        return {
+          success: false,
+          message: 'Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.'
+        };
+      }
+
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Testmail konnte nicht gesendet werden'
+      };
+    }
+  }
+
+  async sendBulkMail(payload: SendBulkMailRequest): Promise<ApiResult | ApiError> {
+    try {
+      const response = await this.api.post<ApiResult>('/mail/send', payload);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error sending bulk mail:', error);
+
+      const status = error.response?.status;
+      if (status === 403) {
+        return {
+          success: false,
+          message: 'Nur Mitglieder mit Rolle "orga" dürfen Mails versenden.'
+        };
+      }
+
+      if (status === 401) {
+        return {
+          success: false,
+          message: 'Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.'
+        };
+      }
+
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Mail konnte nicht versendet werden'
       };
     }
   }
