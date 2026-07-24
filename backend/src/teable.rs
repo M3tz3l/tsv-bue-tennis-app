@@ -22,29 +22,8 @@ fn get_teable_config() -> Result<TeableConfig, Box<dyn std::error::Error + Send 
     })
 }
 
-fn extract_roles(fields: &Value) -> Vec<String> {
-    let value = if fields.get("Rollen").is_some() {
-        &fields["Rollen"]
-    } else {
-        &fields["Rolle"]
-    };
-
-    if value.is_null() {
-        return vec![];
-    }
-
-    if let Some(role) = value.as_str() {
-        return vec![role.to_string()];
-    }
-
-    if let Some(arr) = value.as_array() {
-        return arr
-            .iter()
-            .filter_map(|v| v.as_str().map(|s| s.to_string()))
-            .collect();
-    }
-
-    vec![]
+fn extract_role(fields: &Value) -> Option<String> {
+    fields["Rolle"].as_str().map(|s| s.to_string())
 }
 
 /// Fetches all work hour records for a member at a specific date (exact date, Europe/Berlin timezone)
@@ -135,7 +114,6 @@ pub async fn get_member_by_id(client: &Client, id: &str) -> Result<Option<Member
                 "Geburtsdatum",
                 "Eintrittsdatum",
                 "Rolle",
-                "Rollen",
             ][..],
         ),
     )
@@ -192,7 +170,7 @@ pub async fn get_member_by_id_with_projection(
             .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
         birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
         join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
-        roles: extract_roles(fields),
+        role: extract_role(fields),
     };
     info!(
         "Found member: {} {} ({}) - ID: {}, Birth Date: {}, Join Date: {:?}",
@@ -220,7 +198,6 @@ pub async fn get_member_by_email(client: &Client, email: &str) -> Result<Option<
                 "Geburtsdatum",
                 "Eintrittsdatum",
                 "Rolle",
-                "Rollen",
             ][..],
         ),
     )
@@ -292,7 +269,7 @@ pub async fn get_member_by_email_with_projection(
                 .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
             birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
             join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
-            roles: extract_roles(fields),
+            role: extract_role(fields),
         };
         info!(
             "Found member: {} {} ({}) - Birth Date: {}, Join Date: {:?}",
@@ -322,7 +299,6 @@ pub async fn get_family_members(
                 "Geburtsdatum",
                 "Eintrittsdatum",
                 "Rolle",
-                "Rollen",
             ][..],
         ),
     )
@@ -380,7 +356,7 @@ pub async fn get_family_members_with_projection(
                 .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
             birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
             join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
-            roles: extract_roles(fields),
+            role: extract_role(fields),
         };
         members.push(member);
     }
@@ -771,7 +747,6 @@ pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Me
         "Geburtsdatum",
         "Eintrittsdatum",
         "Rolle",
-        "Rollen",
     ]
     .iter()
     {
@@ -799,7 +774,7 @@ pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Me
                         .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
                     birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
                     join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
-                    roles: extract_roles(fields),
+                    role: extract_role(fields),
                 };
                 members.push(member);
             }

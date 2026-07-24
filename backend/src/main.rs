@@ -411,7 +411,7 @@ async fn login(
     if teable_members.len() == 1 {
         // Only one member, proceed as before
         let teable_user = &teable_members[0];
-        let token = auth::create_token(&teable_user.id.to_string(), &teable_user.roles)
+        let token = auth::create_token(&teable_user.id.to_string(), teable_user.role.as_deref())
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         return Ok(Json(LoginResponseVariant::SingleUser(LoginResponse {
             success: true,
@@ -487,7 +487,7 @@ async fn select_member(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    let token = auth::create_token(&teable_member.id.to_string(), &teable_member.roles)
+    let token = auth::create_token(&teable_member.id.to_string(), teable_member.role.as_deref())
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(LoginResponse {
@@ -1047,7 +1047,7 @@ async fn send_test_mail(
     let user = teable::get_member_by_id_with_projection(
         &state.http_client,
         &claims.sub,
-        Some(&["Vorname", "Nachname", "Email", "Rolle", "Rollen"][..]),
+        Some(&["Vorname", "Nachname", "Email", "Rolle"][..]),
     )
     .await
     .map_err(|e| {
@@ -1057,9 +1057,9 @@ async fn send_test_mail(
     .ok_or(StatusCode::NOT_FOUND)?;
 
     let has_orga_claim = claims
-        .roles
-        .iter()
-        .any(|r| r.trim().eq_ignore_ascii_case("orga"));
+        .role
+        .as_ref()
+        .is_some_and(|r| r.trim().eq_ignore_ascii_case("orga"));
     let has_orga_member_role = user.has_role("orga");
 
     if !has_orga_claim && !has_orga_member_role {
@@ -1990,8 +1990,7 @@ mod tests {
         let app = create_test_app_with_teable_url(&teable_server.url()).await;
         let server = TestServer::new(app).unwrap();
 
-        let orga_roles = vec!["orga".to_string()];
-        let token = auth::create_token("orga_user_1", &orga_roles)
+        let token = auth::create_token("orga_user_1", Some("orga"))
             .expect("Failed to create orga test token");
 
         let response = server
@@ -2036,7 +2035,7 @@ mod tests {
         let server = TestServer::new(app).unwrap();
 
         let token =
-            auth::create_token("member_user_1", &[]).expect("Failed to create member token");
+            auth::create_token("member_user_1", None).expect("Failed to create member token");
 
         let response = server
             .post("/api/mail/test-send")
@@ -2087,7 +2086,7 @@ mod tests {
         // Create a valid JWT token for testing
         let test_user_id = "test_user_123";
         let valid_token =
-            auth::create_token(test_user_id, &[]).expect("Failed to create test token");
+            auth::create_token(test_user_id, None).expect("Failed to create test token");
 
         // Start mock Teable server
         let mut teable_server = Server::new_async().await;
@@ -2150,7 +2149,7 @@ mod tests {
         // Create a valid JWT token
         let test_user_id = "test_user_456";
         let valid_token =
-            auth::create_token(test_user_id, &[]).expect("Failed to create test token");
+            auth::create_token(test_user_id, None).expect("Failed to create test token");
 
         // Start mock Teable server
         let mut teable_server = Server::new_async().await;
@@ -2223,7 +2222,7 @@ mod tests {
         // Create a valid JWT token
         let test_user_id = "test_user_789";
         let valid_token =
-            auth::create_token(test_user_id, &[]).expect("Failed to create test token");
+            auth::create_token(test_user_id, None).expect("Failed to create test token");
 
         let work_hour_request = serde_json::json!({
             "date": "2025-01-15",
@@ -2256,7 +2255,7 @@ mod tests {
         // Create a valid JWT token
         let test_user_id = "dashboard_user_123";
         let valid_token =
-            auth::create_token(test_user_id, &[]).expect("Failed to create test token");
+            auth::create_token(test_user_id, None).expect("Failed to create test token");
 
         // Test dashboard endpoint with valid token
         let response = server
@@ -2537,7 +2536,7 @@ mod tests {
 
         // Create a valid JWT token for the test user
         let test_token =
-            auth::create_token("integration_user_123", &[]).expect("Failed to create test token");
+            auth::create_token("integration_user_123", None).expect("Failed to create test token");
 
         // Test protected endpoint with valid token - now actually using the mock!
         let response = server
@@ -2582,7 +2581,7 @@ mod tests {
         tracing::debug!("JWT_SECRET env var: {:?}", std::env::var("JWT_SECRET"));
 
         // Create a token
-        let token = auth::create_token(test_user_id, &[]).expect("Failed to create token");
+        let token = auth::create_token(test_user_id, None).expect("Failed to create token");
         assert!(!token.is_empty());
 
         // Validate the token (this would require access to auth module internals)
