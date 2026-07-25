@@ -1190,7 +1190,7 @@ async fn send_bulk_mail(
     );
 
     // Fetch recipients based on filter
-    let recipients = match payload.recipient_filter {
+    let recipients = match &payload.recipient_filter {
         RecipientFilter::Orga => teable::get_all_active_members(&state.http_client, Some("orga"))
             .await
             .map_err(|e| {
