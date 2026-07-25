@@ -36,8 +36,8 @@ use email::EmailService;
 use member_selection::{LoginResponseVariant, MemberSelectionResponse, SelectMemberRequest};
 use models::{
     CreateWorkHourRequest, DashboardResponse, FamilyData, FamilyMember, ForgotPasswordRequest,
-    LoginRequest, LoginResponse, Member, MemberContribution, PersonalData, RegisterRequest,
-    ResetPasswordRequest, SendBulkMailRequest, SendTestMailRequest, UserResponse,
+    LoginRequest, LoginResponse, Member, MemberContribution, PersonalData, RecipientFilter,
+    RegisterRequest, ResetPasswordRequest, SendBulkMailRequest, SendTestMailRequest, UserResponse,
 };
 use token_store::TokenStore;
 
@@ -1190,26 +1190,28 @@ async fn send_bulk_mail(
     );
 
     // Fetch recipients based on filter
-    let recipients = match payload.recipient_filter.as_str() {
-        "orga" => teable::get_all_active_members(&state.http_client, Some("orga"))
+    let recipients = match payload.recipient_filter {
+        RecipientFilter::Orga => teable::get_all_active_members(&state.http_client, Some("orga"))
             .await
             .map_err(|e| {
                 error!("Send bulk mail: failed to fetch orga members: {}", e);
                 StatusCode::INTERNAL_SERVER_ERROR
             })?,
-        _ => teable::get_all_active_members(&state.http_client, None)
-            .await
-            .map_err(|e| {
-                error!("Send bulk mail: failed to fetch all members: {}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?,
+        RecipientFilter::All | RecipientFilter::Active => {
+            teable::get_all_active_members(&state.http_client, None)
+                .await
+                .map_err(|e| {
+                    error!("Send bulk mail: failed to fetch all members: {}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?
+        }
     };
 
     let recipients_len = recipients.len();
 
     if recipients.is_empty() {
         warn!(
-            "Send bulk mail: no recipients found for filter '{}'",
+            "Send bulk mail: no recipients found for filter '{:?}'",
             payload.recipient_filter
         );
         return Ok(ResponseJson(serde_json::json!({
@@ -1218,7 +1220,6 @@ async fn send_bulk_mail(
         })));
     }
 
-    let safe_subject = escape_html(&payload.subject);
     let safe_message = escape_html(&payload.message);
 
     // Deduplicate recipients by email address to avoid sending the same mail multiple times
@@ -1236,7 +1237,7 @@ async fn send_bulk_mail(
 
     if unique_recipients.is_empty() {
         warn!(
-            "Send bulk mail: no valid recipients after deduplication for filter '{}'",
+            "Send bulk mail: no valid recipients after deduplication for filter '{:?}'",
             payload.recipient_filter
         );
         return Ok(ResponseJson(serde_json::json!({
@@ -1246,7 +1247,7 @@ async fn send_bulk_mail(
     }
 
     info!(
-        "Send bulk mail: deduplicated {} recipients to {} unique recipients for filter '{}'",
+        "Send bulk mail: deduplicated {} recipients to {} unique recipients for filter '{:?}'",
         recipients_len,
         unique_recipients.len(),
         payload.recipient_filter
@@ -1273,7 +1274,7 @@ async fn send_bulk_mail(
             .email_service
             .send_email(
                 &recipient.email,
-                &safe_subject,
+                &payload.subject,
                 &html_content,
                 &text_content,
             )

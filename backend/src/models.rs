@@ -51,10 +51,18 @@ pub struct SendTestMailRequest {
 }
 
 #[derive(Debug, Deserialize, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum RecipientFilter {
+    All,
+    Active,
+    Orga,
+}
+
+#[derive(Debug, Deserialize, Type)]
 pub struct SendBulkMailRequest {
     pub subject: String,
     pub message: String,
-    pub recipient_filter: String, // "all", "orga", "active" etc
+    pub recipient_filter: RecipientFilter,
 }
 
 #[derive(Debug, Deserialize, Type)]
