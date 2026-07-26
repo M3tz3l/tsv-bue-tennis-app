@@ -2345,7 +2345,7 @@ mod tests {
             .post("/api/mail/test-send")
             .add_header("authorization", &format!("Bearer {token}"))
             .multipart(
-                axum_test::TestRequest::new()
+                axum_test::multipart::MultipartForm::new()
                     .add_text("subject", "Test")
                     .add_text("message", "Hallo"),
             )
@@ -2392,7 +2392,7 @@ mod tests {
             .post("/api/mail/test-send")
             .add_header("authorization", &format!("Bearer {token}"))
             .multipart(
-                axum_test::TestRequest::new()
+                axum_test::multipart::MultipartForm::new()
                     .add_text("subject", "Test")
                     .add_text("message", "Hallo"),
             )
@@ -2409,7 +2409,7 @@ mod tests {
         let response = server
             .post("/api/mail/test-send")
             .add_header("authorization", "Bearer invalid_token")
-            .multipart(axum_test::TestRequest::new().add_text("subject", "Test"))
+            .multipart(axum_test::multipart::MultipartForm::new().add_text("subject", "Test"))
             .await;
 
         assert_eq!(response.status_code(), 401);
