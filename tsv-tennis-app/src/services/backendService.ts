@@ -15,6 +15,11 @@ interface ApiResult<T = undefined> {
   message?: string;
 }
 
+type MemberCountResponse = {
+  all: number;
+  orga: number;
+};
+
 type ApiError = { success: false; message: string };
 type SendTestMailPayload = { subject?: string; message?: string };
 
@@ -35,12 +40,16 @@ class BackendService {
       }
     });
 
-    // Add request interceptor to include auth token
+    // Add request interceptor to include auth token and handle FormData
     this.api.interceptors.request.use(
       (config) => {
         const token = localStorage.getItem('authToken');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+        }
+        // Remove Content-Type for FormData so axios sets multipart/form-data with boundary
+        if (config.data instanceof FormData) {
+          delete config.headers['Content-Type'];
         }
         return config;
       },
@@ -193,9 +202,17 @@ class BackendService {
     }
   }
 
-  async sendTestMail(payload: SendTestMailPayload = {}): Promise<ApiResult | ApiError> {
+  async sendTestMail(payload: SendTestMailPayload = {}, attachments?: File[]): Promise<ApiResult | ApiError> {
     try {
-      const response = await this.api.post<ApiResult>('/mail/test-send', payload);
+      const formData = new FormData();
+      if (payload.subject) formData.append('subject', payload.subject);
+      if (payload.message) formData.append('message', payload.message);
+      if (attachments) {
+        for (const file of attachments) {
+          formData.append('attachments', file, file.name);
+        }
+      }
+      const response = await this.api.post<ApiResult>('/mail/test-send', formData);
       return response.data;
     } catch (error: any) {
       console.error('Error sending test mail:', error);
@@ -229,9 +246,18 @@ class BackendService {
     }
   }
 
-  async sendBulkMail(payload: SendBulkMailRequest): Promise<ApiResult | ApiError> {
+  async sendBulkMail(payload: SendBulkMailRequest, attachments?: File[]): Promise<ApiResult | ApiError> {
     try {
-      const response = await this.api.post<ApiResult>('/mail/send', payload);
+      const formData = new FormData();
+      formData.append('subject', payload.subject);
+      formData.append('message', payload.message);
+      formData.append('recipient_filter', payload.recipient_filter);
+      if (attachments) {
+        for (const file of attachments) {
+          formData.append('attachments', file, file.name);
+        }
+      }
+      const response = await this.api.post<ApiResult>('/mail/send', formData);
       return response.data;
     } catch (error: any) {
       console.error('Error sending bulk mail:', error);
@@ -254,6 +280,19 @@ class BackendService {
       return {
         success: false,
         message: error.response?.data?.message || 'Mail konnte nicht versendet werden'
+      };
+    }
+  }
+
+  async getMemberCounts(): Promise<ApiResult<MemberCountResponse> | ApiError> {
+    try {
+      const response = await this.api.get<ApiResult<MemberCountResponse>>('/mail/recipient-counts');
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching member counts:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Empfängerzahlen konnten nicht abgerufen werden'
       };
     }
   }

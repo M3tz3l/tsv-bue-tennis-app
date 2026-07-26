@@ -791,39 +791,26 @@ pub async fn get_all_active_members(
 ) -> Result<Vec<Member>> {
     let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
 
-    // Filter for non-empty emails to avoid invalid recipients
-    // AND exclude members with an Austrittsdatum (exit date) to ensure only active members receive mail
-    let mut filter_set = vec![
-        serde_json::json!({
-            "fieldId": "Email",
-            "operator": "isNotEmpty",
-        }),
-        serde_json::json!({
-            "fieldId": "Austrittsdatum",
-            "operator": "isEmpty",
-        }),
-    ];
-
-    // Add role filter if specified
-    if let Some(role) = role_filter {
-        filter_set.push(serde_json::json!({
-            "fieldId": "Rolle",
-            "operator": "contains",
-            "value": role
-        }));
-    }
-
-    let filter = serde_json::json!({
-        "conjunction": "and",
-        "filterSet": filter_set
-    });
-
-    let url = format!(
-        "{}/table/{}/record?filter={}",
-        cfg.api_url,
-        cfg.members_table_id,
-        urlencoding::encode(&filter.to_string())
-    );
+    // Build filter: only role filter at API level (isEmpty/isNotEmpty not supported by Teable)
+    // Empty email and Austrittsdatum filtering is done client-side below
+    let url = if let Some(role) = role_filter {
+        let filter = serde_json::json!({
+            "conjunction": "and",
+            "filterSet": [{
+                "fieldId": "Rolle",
+                "operator": "contains",
+                "value": role
+            }]
+        });
+        format!(
+            "{}/table/{}/record?filter={}",
+            cfg.api_url,
+            cfg.members_table_id,
+            urlencoding::encode(&filter.to_string())
+        )
+    } else {
+        format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id)
+    };
 
     let mut req = client
         .get(&url)
@@ -837,6 +824,7 @@ pub async fn get_all_active_members(
         "Familie",
         "Geburtsdatum",
         "Eintrittsdatum",
+        "Austrittsdatum",
         "Rolle",
     ]
     .iter()
@@ -855,6 +843,13 @@ pub async fn get_all_active_members(
     let mut members = Vec::new();
     for record in records {
         let fields = &record["fields"];
+        // Skip members with an Austrittsdatum (exit date) — they are no longer active
+        let has_exit_date = fields["Austrittsdatum"]
+            .as_str()
+            .is_some_and(|s| !s.trim().is_empty());
+        if has_exit_date {
+            continue;
+        }
         if let Some(email) = fields["Email"].as_str() {
             if !email.trim().is_empty() {
                 let member = Member {

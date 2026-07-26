@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { XMarkIcon, PaperAirplaneIcon, EnvelopeIcon, UserGroupIcon, UsersIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect, useRef } from 'react';
+import { XMarkIcon, PaperAirplaneIcon, EnvelopeIcon, UserGroupIcon, UsersIcon, PaperClipIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 import BackendService from '../services/backendService';
 import { useAuth } from '../context/AuthContext';
@@ -19,8 +19,49 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const [recipientFilter, setRecipientFilter] = useState<'all' | 'orga'>('all');
   const [isLoading, setIsLoading] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showBulkConfirmation, setShowBulkConfirmation] = useState(false);
+  const [memberCounts, setMemberCounts] = useState({ all: 0, orga: 0 });
+  const [countsLoaded, setCountsLoaded] = useState(false);
+
+  useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        const response = await BackendService.getMemberCounts();
+        if (response.success && response.data) {
+          setMemberCounts(response.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch member counts:', error);
+      } finally {
+        setCountsLoaded(true);
+      }
+    };
+
+    fetchCounts();
+  }, []);
 
   if (!isOpen) return null;
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const newFiles = Array.from(e.target.files);
+      setAttachments((prev) => [...prev, ...newFiles]);
+      // Reset input so the same file can be selected again
+      e.target.value = '';
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
 
   const handleSendTest = async () => {
     if (!subject.trim() || !message.trim()) {
@@ -30,10 +71,13 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
     setIsSendingTest(true);
     try {
-      const response = await BackendService.sendTestMail({
-        subject: subject.trim(),
-        message: message.trim(),
-      });
+      const response = await BackendService.sendTestMail(
+        {
+          subject: subject.trim(),
+          message: message.trim(),
+        },
+        attachments.length > 0 ? attachments : undefined,
+      );
 
       if (response.success) {
         toast.success('Test-Mail gesendet!');
@@ -53,15 +97,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       return;
     }
 
-    const recipientLabel = recipientFilter === 'all' ? 'alle Mitglieder' : 'alle orga-Mitglieder';
-    const confirmed = window.confirm(
-      `Möchten Sie diese Mail wirklich an ${recipientLabel} versenden?`
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
+    setShowBulkConfirmation(false);
     setIsLoading(true);
     try {
       const payload: SendBulkMailRequest = {
@@ -70,13 +106,17 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
         recipient_filter: recipientFilter,
       };
 
-      const response = await BackendService.sendBulkMail(payload);
+      const response = await BackendService.sendBulkMail(
+        payload,
+        attachments.length > 0 ? attachments : undefined,
+      );
 
       if (response.success) {
         toast.success(`Mail versandt! ${(response as any).sent} Empfänger.`);
         setSubject('');
         setMessage('');
         setRecipientFilter('all');
+        setAttachments([]);
         onClose();
       } else {
         const failedCount = (response as any).failed;
@@ -133,8 +173,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                   onClick={() => setRecipientFilter('all')}
                   disabled={isLoading || isSendingTest}
                   className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${recipientFilter === 'all'
-                      ? 'border-purple-600 bg-purple-50 text-purple-800'
-                      : 'border-gray-200 hover:border-purple-300 text-gray-700'
+                    ? 'border-purple-600 bg-purple-50 text-purple-800'
+                    : 'border-gray-200 hover:border-purple-300 text-gray-700'
                     } disabled:opacity-60 disabled:cursor-not-allowed`}
                 >
                   <UsersIcon className="h-4 w-4" />
@@ -145,8 +185,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                   onClick={() => setRecipientFilter('orga')}
                   disabled={isLoading || isSendingTest}
                   className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${recipientFilter === 'orga'
-                      ? 'border-purple-600 bg-purple-50 text-purple-800'
-                      : 'border-gray-200 hover:border-purple-300 text-gray-700'
+                    ? 'border-purple-600 bg-purple-50 text-purple-800'
+                    : 'border-gray-200 hover:border-purple-300 text-gray-700'
                     } disabled:opacity-60 disabled:cursor-not-allowed`}
                 >
                   <UserGroupIcon className="h-4 w-4" />
@@ -185,6 +225,51 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                 disabled={isLoading || isSendingTest}
               />
+            </div>
+
+            {/* Attachments */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Anhänge
+              </label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || isSendingTest}
+                className="inline-flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-purple-400 hover:text-purple-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <PaperClipIcon className="h-4 w-4" />
+                Dateien anhängen
+              </button>
+              {attachments.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {attachments.map((file, index) => (
+                    <li
+                      key={`${file.name}-${index}`}
+                      className="flex items-center justify-between gap-2 px-3 py-1.5 bg-gray-50 rounded-lg text-sm"
+                    >
+                      <span className="truncate text-gray-700">
+                        {file.name} <span className="text-gray-400">({formatFileSize(file.size)})</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(index)}
+                        className="text-gray-400 hover:text-red-600 shrink-0"
+                        aria-label={`Datei ${file.name} entfernen`}
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 
@@ -234,14 +319,41 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           >
             {isSendingTest ? 'Test wird versendet...' : 'Test-Mail senden'}
           </button>
-          <button
-            onClick={handleSendBulk}
-            disabled={isLoading || isSendingTest || !subject.trim() || !message.trim()}
-            className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <PaperAirplaneIcon className="-ml-1 mr-2 h-5 w-5" />
-            {isLoading ? 'Wird versendet...' : 'Versenden'}
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowBulkConfirmation(true)}
+              disabled={isLoading || isSendingTest || !subject.trim() || !message.trim()}
+              className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <PaperAirplaneIcon className="-ml-1 mr-2 h-5 w-5" />
+              {isLoading ? 'Wird versendet...' : 'Versenden'}
+            </button>
+            {showBulkConfirmation && (
+              <div className="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 p-4 z-10">
+                <p className="text-sm text-gray-700 mb-2">
+                  Diese Mail wird an {recipientFilter === 'all' ? 'alle Mitglieder' : 'alle orga-Mitglieder'} versendet.
+                  <span className="block mt-1 text-xs text-gray-500">
+                    {countsLoaded
+                      ? `(${recipientFilter === 'all' ? memberCounts.all : memberCounts.orga} Empfänger)`
+                      : '(Empfänger werden geladen...)'}</span>
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setShowBulkConfirmation(false)}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    onClick={handleSendBulk}
+                    className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
+                  >
+                    Bestätigen
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

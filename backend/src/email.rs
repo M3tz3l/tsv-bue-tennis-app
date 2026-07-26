@@ -1,10 +1,18 @@
 use crate::config::{Config, EmailConfig};
 use lettre::{
-    message::{header::ContentType, Mailbox},
+    message::{header::ContentType, Attachment, Mailbox, Message, MultiPart, SinglePart},
     transport::smtp::{authentication::Credentials, PoolConfig},
-    Message, SmtpTransport, Transport,
+    SmtpTransport, Transport,
 };
 use tracing::{error, info};
+
+/// Represents a file attachment for an email
+pub struct EmailAttachment {
+    pub filename: String,
+    pub content_type: String,
+    pub data: Vec<u8>,
+    pub content_id: Option<String>, // For inline images
+}
 
 pub struct EmailService {
     transport: SmtpTransport,
@@ -87,6 +95,109 @@ impl EmailService {
             Err(e) => {
                 error!("Failed to send email: {}", e);
                 Err(Box::new(e))
+            }
+        }
+    }
+
+    /// Send an email with attachments and/or inline images
+    pub async fn send_email_with_attachments(
+        &self,
+        to: &str,
+        subject: &str,
+        html_content: &str,
+        text_content: &str,
+        attachments: &[EmailAttachment],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if self.disable_send {
+            info!("EMAIL_DISABLE_SEND=true - skipping SMTP send to {}", to);
+            return Ok(());
+        }
+
+        let from_mailbox: Mailbox = format!("TSV BÜ Tennis App <{}>", self.from_email).parse()?;
+        let to_mailbox: Mailbox = to.parse()?;
+
+        // Build the text+HTML alternative body
+        let body = MultiPart::alternative()
+            .singlepart(
+                SinglePart::builder()
+                    .header(ContentType::TEXT_PLAIN)
+                    .body(text_content.to_string()),
+            )
+            .singlepart(
+                SinglePart::builder()
+                    .header(ContentType::TEXT_HTML)
+                    .body(html_content.to_string()),
+            );
+
+        if attachments.is_empty() {
+            // No attachments — send as multipart/alternative only
+            let email = Message::builder()
+                .from(from_mailbox)
+                .to(to_mailbox)
+                .subject(subject)
+                .multipart(body)?;
+
+            match self.transport.send(&email) {
+                Ok(response) => {
+                    info!("Email sent successfully: {:?}", response);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to send email: {}", e);
+                    Err(Box::new(e))
+                }
+            }
+        } else {
+            // Wrap body + attachments in multipart/mixed
+            let mut mixed = MultiPart::mixed().multipart(body);
+
+            for att in attachments {
+                let content_type: ContentType = att
+                    .content_type
+                    .parse()
+                    .unwrap_or(ContentType::parse("application/octet-stream").unwrap());
+
+                if let Some(ref cid) = att.content_id {
+                    // Inline image with Content-ID
+                    let part = SinglePart::builder()
+                        .header(content_type)
+                        .header(lettre::message::header::ContentId::from(
+                            format!("<{cid}>",),
+                        ))
+                        .header(
+                            lettre::message::header::ContentDisposition::inline_with_name(
+                                &att.filename,
+                            ),
+                        )
+                        .body(att.data.clone());
+                    mixed = mixed.singlepart(part);
+                } else {
+                    // Regular attachment
+                    let attachment =
+                        Attachment::new(att.filename.clone()).body(att.data.clone(), content_type);
+                    mixed = mixed.singlepart(attachment);
+                }
+            }
+
+            let email = Message::builder()
+                .from(from_mailbox)
+                .to(to_mailbox)
+                .subject(subject)
+                .multipart(mixed)?;
+
+            match self.transport.send(&email) {
+                Ok(response) => {
+                    info!(
+                        "Email with {} attachment(s) sent successfully: {:?}",
+                        attachments.len(),
+                        response
+                    );
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to send email with attachments: {}", e);
+                    Err(Box::new(e))
+                }
             }
         }
     }

@@ -4,7 +4,7 @@ use crate::utils::{
     extract_user_id_from_headers, get_member_work_hours_info, log_work_entries,
 };
 use axum::{
-    extract::{Json, Path, State},
+    extract::{Json, Multipart, Path, State},
     http::{HeaderMap, Method, Request, StatusCode, Uri},
     middleware::{self, Next},
     response::{Html, IntoResponse, Json as ResponseJson, Response},
@@ -37,7 +37,7 @@ use member_selection::{LoginResponseVariant, MemberSelectionResponse, SelectMemb
 use models::{
     CreateWorkHourRequest, DashboardResponse, FamilyData, FamilyMember, ForgotPasswordRequest,
     LoginRequest, LoginResponse, Member, MemberContribution, PersonalData, RecipientFilter,
-    RegisterRequest, ResetPasswordRequest, SendBulkMailRequest, SendTestMailRequest, UserResponse,
+    RegisterRequest, ResetPasswordRequest, UserResponse,
 };
 use token_store::TokenStore;
 
@@ -261,6 +261,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .route("/arbeitsstunden/:id", delete(delete_work_hour)) // Frontend expects this endpoint
         .route("/mail/test-send", post(send_test_mail))
         .route("/mail/send", post(send_bulk_mail))
+        .route("/mail/recipient-counts", get(get_member_counts))
         .layer(GovernorLayer {
             config: write_governor_conf,
         })
@@ -1045,15 +1046,15 @@ async fn get_work_hour_by_id(
 async fn send_test_mail(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<SendTestMailRequest>,
+    mut multipart: Multipart,
 ) -> Result<impl IntoResponse, StatusCode> {
     fn escape_html(input: &str) -> String {
         input
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-            .replace('\'', "&#39;")
+            .replace('\x26', "\x26amp;")
+            .replace('\x3C', "\x26lt;")
+            .replace('\x3E', "\x26gt;")
+            .replace('\x22', "\x26quot;")
+            .replace('\'', "\x26#39;")
     }
 
     let claims = extract_auth_claims_from_headers(&headers)?;
@@ -1092,12 +1093,55 @@ async fn send_test_mail(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let subject = payload
-        .subject
-        .unwrap_or_else(|| "TSV Tennis Test-Mail".to_string());
-    let message = payload
-        .message
-        .unwrap_or_else(|| "Dies ist eine Test-Mail aus dem neuen Rundmail-Modul.".to_string());
+    // Parse multipart form data
+    let mut subject = String::new();
+    let mut message = String::new();
+    let mut attachments: Vec<email::EmailAttachment> = Vec::new();
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|_| StatusCode::BAD_REQUEST)?
+    {
+        let name = field.name().unwrap_or("").to_string();
+        match name.as_str() {
+            "subject" => {
+                subject = field.text().await.unwrap_or_default();
+            }
+            "message" => {
+                message = field.text().await.unwrap_or_default();
+            }
+            _ => {
+                // Treat any other field as a file attachment
+                let file_name = field.file_name().unwrap_or("attachment").to_string();
+                let content_type = field
+                    .content_type()
+                    .unwrap_or("application/octet-stream")
+                    .to_string();
+                let data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?;
+                const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024; // 25MB
+                if data.len() > MAX_ATTACHMENT_SIZE {
+                    return Ok(ResponseJson(serde_json::json!({
+                        "success": false,
+                        "message": format!("Datei '{}' überschreitet die maximale Größe von 25MB", file_name)
+                    })));
+                }
+                attachments.push(email::EmailAttachment {
+                    filename: file_name,
+                    content_type,
+                    data: data.to_vec(),
+                    content_id: None,
+                });
+            }
+        }
+    }
+
+    if subject.is_empty() {
+        subject = "TSV Tennis Test-Mail".to_string();
+    }
+    if message.is_empty() {
+        message = "Dies ist eine Test-Mail aus dem neuen Rundmail-Modul.".to_string();
+    }
 
     let safe_first_name = escape_html(&user.first_name);
     let safe_sender_first_name = escape_html(&user.first_name);
@@ -1120,14 +1164,24 @@ async fn send_test_mail(
 
     state
         .email_service
-        .send_email(&user.email, &subject, &html_content, &text_content)
+        .send_email_with_attachments(
+            &user.email,
+            &subject,
+            &html_content,
+            &text_content,
+            &attachments,
+        )
         .await
         .map_err(|e| {
             error!("Send test mail failed for {}: {}", user.email, e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    info!("Send test mail succeeded for orga user {}", user.id);
+    info!(
+        "Send test mail with {} attachment(s) succeeded for orga user {}",
+        attachments.len(),
+        user.id
+    );
 
     Ok(ResponseJson(serde_json::json!({
         "success": true,
@@ -1138,15 +1192,15 @@ async fn send_test_mail(
 async fn send_bulk_mail(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<SendBulkMailRequest>,
+    mut multipart: Multipart,
 ) -> Result<impl IntoResponse, StatusCode> {
     fn escape_html(input: &str) -> String {
         input
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-            .replace('\'', "&#39;")
+            .replace('\x26', "\x26amp;")
+            .replace('\x3C', "\x26lt;")
+            .replace('\x3E', "\x26gt;")
+            .replace('\x22', "\x26quot;")
+            .replace('\'', "\x26#39;")
     }
 
     let claims = extract_auth_claims_from_headers(&headers)?;
@@ -1180,6 +1234,64 @@ async fn send_bulk_mail(
         return Err(StatusCode::FORBIDDEN);
     }
 
+    // Parse multipart form data
+    let mut subject = String::new();
+    let mut message = String::new();
+    let mut recipient_filter_str = String::from("all");
+    let mut attachments: Vec<email::EmailAttachment> = Vec::new();
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|_| StatusCode::BAD_REQUEST)?
+    {
+        let name = field.name().unwrap_or("").to_string();
+        match name.as_str() {
+            "subject" => {
+                subject = field.text().await.unwrap_or_default();
+            }
+            "message" => {
+                message = field.text().await.unwrap_or_default();
+            }
+            "recipient_filter" => {
+                recipient_filter_str = field.text().await.unwrap_or_default();
+            }
+            _ => {
+                let file_name = field.file_name().unwrap_or("attachment").to_string();
+                let content_type = field
+                    .content_type()
+                    .unwrap_or("application/octet-stream")
+                    .to_string();
+                let data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?;
+                const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024;
+                if data.len() > MAX_ATTACHMENT_SIZE {
+                    return Ok(ResponseJson(serde_json::json!({
+                        "success": false,
+                        "message": format!("Datei '{}' überschreitet die maximale Größe von 25MB", file_name)
+                    })));
+                }
+                attachments.push(email::EmailAttachment {
+                    filename: file_name,
+                    content_type,
+                    data: data.to_vec(),
+                    content_id: None,
+                });
+            }
+        }
+    }
+
+    if subject.is_empty() || message.is_empty() {
+        return Ok(ResponseJson(serde_json::json!({
+            "success": false,
+            "message": "Betreff und Nachricht sind erforderlich"
+        })));
+    }
+
+    let recipient_filter: RecipientFilter = match recipient_filter_str.as_str() {
+        "orga" => RecipientFilter::Orga,
+        _ => RecipientFilter::All,
+    };
+
     let safe_sender_first_name = escape_html(&user.first_name);
     let signature_html = format!(
         r#"<p style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">mit sportlichen Grüßen,<br/>{safe_sender_first_name} / die Abteilungsleitung</p><p style="margin-top: 12px;"><strong>Tennisabteilung des TSV Bad Überkingen</strong><br/><a href="mailto:tennisabteilung@tsv-bad-ueberkingen.de">tennisabteilung@tsv-bad-ueberkingen.de</a></p>"#
@@ -1189,8 +1301,7 @@ async fn send_bulk_mail(
         sender_first_name = user.first_name
     );
 
-    // Fetch recipients based on filter
-    let recipients = match &payload.recipient_filter {
+    let recipients = match recipient_filter {
         RecipientFilter::Orga => teable::get_all_active_members(&state.http_client, Some("orga"))
             .await
             .map_err(|e| {
@@ -1212,7 +1323,7 @@ async fn send_bulk_mail(
     if recipients.is_empty() {
         warn!(
             "Send bulk mail: no recipients found for filter '{:?}'",
-            payload.recipient_filter
+            recipient_filter
         );
         return Ok(ResponseJson(serde_json::json!({
             "success": false,
@@ -1220,7 +1331,7 @@ async fn send_bulk_mail(
         })));
     }
 
-    let safe_message = escape_html(&payload.message);
+    let safe_message = escape_html(&message);
 
     // Deduplicate recipients by email address to avoid sending the same mail multiple times
     let mut seen_emails = std::collections::HashSet::new();
@@ -1238,7 +1349,7 @@ async fn send_bulk_mail(
     if unique_recipients.is_empty() {
         warn!(
             "Send bulk mail: no valid recipients after deduplication for filter '{:?}'",
-            payload.recipient_filter
+            recipient_filter
         );
         return Ok(ResponseJson(serde_json::json!({
             "success": false,
@@ -1250,7 +1361,7 @@ async fn send_bulk_mail(
         "Send bulk mail: deduplicated {} recipients to {} unique recipients for filter '{:?}'",
         recipients_len,
         unique_recipients.len(),
-        payload.recipient_filter
+        recipient_filter
     );
 
     let mut sent_count = 0;
@@ -1267,16 +1378,17 @@ async fn send_bulk_mail(
         let text_content = format!(
             "Hallo {first_name},\n\n{message}\n\n{signature_text}",
             first_name = recipient.first_name,
-            message = payload.message,
+            message = message,
         );
 
         match state
             .email_service
-            .send_email(
+            .send_email_with_attachments(
                 &recipient.email,
-                &payload.subject,
+                &subject,
                 &html_content,
                 &text_content,
+                &attachments,
             )
             .await
         {
@@ -1307,6 +1419,32 @@ async fn send_bulk_mail(
         "sent": sent_count,
         "failed": failed_count,
         "failed_recipients": failed_recipients,
+    })))
+}
+
+async fn get_member_counts(State(state): State<AppState>) -> Result<impl IntoResponse, StatusCode> {
+    // Fetch all active members count using Teable filtering
+    let all_members = teable::get_all_active_members(&state.http_client, None)
+        .await
+        .map_err(|e| {
+            error!("Failed to fetch all member counts: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    // Fetch orga members count using Teable role filtering
+    let orga_members = teable::get_all_active_members(&state.http_client, Some("orga"))
+        .await
+        .map_err(|e| {
+            error!("Failed to fetch orga member counts: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(ResponseJson(serde_json::json!({
+        "success": true,
+        "data": {
+            "all": all_members.len(),
+            "orga": orga_members.len()
+        }
     })))
 }
 
@@ -2202,13 +2340,15 @@ mod tests {
         let token = auth::create_token("orga_user_1", Some("orga"))
             .expect("Failed to create orga test token");
 
+        // Mail endpoints now expect multipart/form-data
         let response = server
             .post("/api/mail/test-send")
             .add_header("authorization", &format!("Bearer {token}"))
-            .json(&serde_json::json!({
-                "subject": "Test",
-                "message": "Hallo"
-            }))
+            .multipart(
+                axum_test::TestRequest::new()
+                    .add_text("subject", "Test")
+                    .add_text("message", "Hallo"),
+            )
             .await;
 
         assert_eq!(response.status_code(), 200);
@@ -2247,13 +2387,15 @@ mod tests {
         let token =
             auth::create_token("member_user_1", None).expect("Failed to create member token");
 
+        // Mail endpoints now expect multipart/form-data
         let response = server
             .post("/api/mail/test-send")
             .add_header("authorization", &format!("Bearer {token}"))
-            .json(&serde_json::json!({
-                "subject": "Test",
-                "message": "Hallo"
-            }))
+            .multipart(
+                axum_test::TestRequest::new()
+                    .add_text("subject", "Test")
+                    .add_text("message", "Hallo"),
+            )
             .await;
 
         assert_eq!(response.status_code(), 403);
@@ -2267,9 +2409,7 @@ mod tests {
         let response = server
             .post("/api/mail/test-send")
             .add_header("authorization", "Bearer invalid_token")
-            .json(&serde_json::json!({
-                "subject": "Test"
-            }))
+            .multipart(axum_test::TestRequest::new().add_text("subject", "Test"))
             .await;
 
         assert_eq!(response.status_code(), 401);

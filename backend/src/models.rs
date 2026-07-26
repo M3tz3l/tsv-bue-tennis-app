@@ -44,6 +44,7 @@ pub struct UserResponse {
     pub role: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Type)]
 pub struct SendTestMailRequest {
     pub subject: Option<String>,
@@ -58,6 +59,7 @@ pub enum RecipientFilter {
     Orga,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Type)]
 pub struct SendBulkMailRequest {
     pub subject: String,
