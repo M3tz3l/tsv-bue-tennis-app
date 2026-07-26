@@ -170,6 +170,7 @@ pub async fn get_member_by_id_with_projection(
             .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
         birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
         join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
+
         role: extract_role(fields),
     };
     info!(
@@ -780,5 +781,95 @@ pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Me
             }
         }
     }
+    Ok(members)
+}
+
+/// Fetches all active members from Teable with optional role filter
+pub async fn get_all_active_members(
+    client: &Client,
+    role_filter: Option<&str>,
+) -> Result<Vec<Member>> {
+    let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
+
+    // Build filter: only role filter at API level (isEmpty/isNotEmpty not supported by Teable)
+    // Empty email and Austrittsdatum filtering is done client-side below
+    let url = if let Some(role) = role_filter {
+        let filter = serde_json::json!({
+            "conjunction": "and",
+            "filterSet": [{
+                "fieldId": "Rolle",
+                "operator": "contains",
+                "value": role
+            }]
+        });
+        format!(
+            "{}/table/{}/record?filter={}",
+            cfg.api_url,
+            cfg.members_table_id,
+            urlencoding::encode(&filter.to_string())
+        )
+    } else {
+        format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id)
+    };
+
+    let mut req = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", cfg.token))
+        .header("Accept", "application/json");
+
+    for field in [
+        "Vorname",
+        "Nachname",
+        "Email",
+        "Familie",
+        "Geburtsdatum",
+        "Eintrittsdatum",
+        "Austrittsdatum",
+        "Rolle",
+    ]
+    .iter()
+    {
+        req = req.query(&[("projection[]", *field)]);
+    }
+
+    let response = req.send().await?;
+    let response_text = handle_teable_response(response, "all_active_members").await?;
+    let teable_response: Value = serde_json::from_str(&response_text)?;
+    let records = teable_response["records"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?
+        .clone();
+
+    let mut members = Vec::new();
+    for record in records {
+        let fields = &record["fields"];
+        // Skip members with an Austrittsdatum (exit date) — they are no longer active
+        let has_exit_date = fields["Austrittsdatum"]
+            .as_str()
+            .is_some_and(|s| !s.trim().is_empty());
+        if has_exit_date {
+            continue;
+        }
+        if let Some(email) = fields["Email"].as_str() {
+            if !email.trim().is_empty() {
+                let member = Member {
+                    id: record["id"].as_str().unwrap_or("").to_string(),
+                    first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
+                    last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
+                    email: email.to_string(),
+                    family_id: fields["Familie"]
+                        .as_str()
+                        .map(|s| s.to_string())
+                        .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
+                    birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
+                    join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
+                    role: extract_role(fields),
+                };
+                members.push(member);
+            }
+        }
+    }
+
+    info!("Fetched {} active members", members.len());
     Ok(members)
 }

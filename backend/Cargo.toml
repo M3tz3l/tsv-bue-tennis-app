@@ -8,7 +8,7 @@ name = "generate-types"
 path = "src/bin/generate_types.rs"
 
 [dependencies]
-axum = "0.7"
+axum = { version = "0.7", features = ["multipart"] }
 tokio = { version = "1.0", features = ["full"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "fs"] }
@@ -39,3 +39,4 @@ axum-test = "15.0"
 tower = { version = "0.4", features = ["util"] }
 http-body-util = "0.1"
 mockito = "1.5"
+serial_test = "3.0"

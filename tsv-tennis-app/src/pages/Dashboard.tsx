@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import BackendService from '../services/backendService.ts';
-import { PencilIcon, PlusIcon, ArrowRightOnRectangleIcon, ClockIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, PlusIcon, ArrowRightOnRectangleIcon, ClockIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 import TSV_Logo from '../assets/TSV_Tennis.svg';
 import type { WorkHourEntry, CreateWorkHourRequest, MemberContribution } from '../types';
 import useDashboard, { DASHBOARD_QUERY_KEY } from '../hooks/useDashboard';
 import ArbeitsstundenFormModal from '../components/ArbeitsstundenFormModal';
+import MailComposer from '../components/MailComposer';
 import { hasDuplicateEntry, formatHours } from '../utils/utils';
 
 const Dashboard = () => {
@@ -16,6 +17,8 @@ const Dashboard = () => {
     const [editingRow, setEditingRow] = useState<WorkHourEntry | null>(null);
     const [showAddForm, setShowAddForm] = useState(false);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    const [showMailComposer, setShowMailComposer] = useState(false);
+    const isOrga = user?.role?.trim().toLowerCase() === 'orga';
 
     // Fetch family dashboard data from the backend API
     const { data: dashboardData, isLoading, error } = useDashboard(user?.id, selectedYear, !!user?.id && !!token);
@@ -396,6 +399,16 @@ const Dashboard = () => {
                             <span className="text-xs sm:text-sm text-gray-600 text-center">
                                 Willkommen, {user?.email || 'Benutzer'}
                             </span>
+                            {isOrga && (
+                                <button
+                                    onClick={() => setShowMailComposer(true)}
+                                    className="inline-flex items-center px-3 sm:px-4 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700"
+                                    title="Versende Rundmails an Mitglieder (nur Rolle orga)."
+                                >
+                                    <EnvelopeIcon className="-ml-1 mr-2 h-4 sm:h-5 w-4 sm:w-5" />
+                                    Rundmail
+                                </button>
+                            )}
                             <button
                                 onClick={handleLogout}
                                 className="inline-flex items-center px-3 sm:px-4 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
@@ -572,6 +585,12 @@ const Dashboard = () => {
                     selectedYear={selectedYear}
                 />
             )}
+
+            {/* Mail Composer Modal */}
+            <MailComposer
+                isOpen={showMailComposer}
+                onClose={() => setShowMailComposer(false)}
+            />
         </div>
     );
 };

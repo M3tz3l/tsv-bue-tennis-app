@@ -4,7 +4,8 @@ import type {
   LoginResponseVariant,
   CreateWorkHourRequest,
   DashboardResponse,
-  WorkHourEntry
+  WorkHourEntry,
+  SendBulkMailRequest,
 } from '@/types';
 
 // Generic API result type with optional data payload
@@ -14,7 +15,13 @@ interface ApiResult<T = undefined> {
   message?: string;
 }
 
+type MemberCountResponse = {
+  all: number;
+  orga: number;
+};
+
 type ApiError = { success: false; message: string };
+type SendTestMailPayload = { subject?: string; message?: string };
 
 class BackendService {
   private api: AxiosInstance;
@@ -33,12 +40,16 @@ class BackendService {
       }
     });
 
-    // Add request interceptor to include auth token
+    // Add request interceptor to include auth token and handle FormData
     this.api.interceptors.request.use(
       (config) => {
         const token = localStorage.getItem('authToken');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+        }
+        // Remove Content-Type for FormData so axios sets multipart/form-data with boundary
+        if (config.data instanceof FormData) {
+          delete config.headers['Content-Type'];
         }
         return config;
       },
@@ -187,6 +198,101 @@ class BackendService {
       return {
         success: false,
         message: error.response?.data?.message || 'Arbeitsstunde konnte nicht geladen werden'
+      };
+    }
+  }
+
+  async sendTestMail(payload: SendTestMailPayload = {}, attachments?: File[]): Promise<ApiResult | ApiError> {
+    try {
+      const formData = new FormData();
+      if (payload.subject) formData.append('subject', payload.subject);
+      if (payload.message) formData.append('message', payload.message);
+      if (attachments) {
+        for (const file of attachments) {
+          formData.append('attachments', file, file.name);
+        }
+      }
+      const response = await this.api.post<ApiResult>('/mail/test-send', formData);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error sending test mail:', error);
+
+      const status = error.response?.status;
+      if (status === 403) {
+        return {
+          success: false,
+          message: 'Nur Mitglieder mit Rolle "orga" dürfen Testmails senden.'
+        };
+      }
+
+      if (status === 400) {
+        return {
+          success: false,
+          message: 'Für Ihr Mitglied ist keine E-Mail-Adresse hinterlegt.'
+        };
+      }
+
+      if (status === 401) {
+        return {
+          success: false,
+          message: 'Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.'
+        };
+      }
+
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Testmail konnte nicht gesendet werden'
+      };
+    }
+  }
+
+  async sendBulkMail(payload: SendBulkMailRequest, attachments?: File[]): Promise<ApiResult | ApiError> {
+    try {
+      const formData = new FormData();
+      formData.append('subject', payload.subject);
+      formData.append('message', payload.message);
+      formData.append('recipient_filter', payload.recipient_filter);
+      if (attachments) {
+        for (const file of attachments) {
+          formData.append('attachments', file, file.name);
+        }
+      }
+      const response = await this.api.post<ApiResult>('/mail/send', formData);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error sending bulk mail:', error);
+
+      const status = error.response?.status;
+      if (status === 403) {
+        return {
+          success: false,
+          message: 'Nur Mitglieder mit Rolle "orga" dürfen Mails versenden.'
+        };
+      }
+
+      if (status === 401) {
+        return {
+          success: false,
+          message: 'Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.'
+        };
+      }
+
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Mail konnte nicht versendet werden'
+      };
+    }
+  }
+
+  async getMemberCounts(): Promise<ApiResult<MemberCountResponse> | ApiError> {
+    try {
+      const response = await this.api.get<ApiResult<MemberCountResponse>>('/mail/recipient-counts');
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching member counts:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Empfängerzahlen konnten nicht abgerufen werden'
       };
     }
   }

@@ -19,4 +19,6 @@ export type {
     PersonalData,
     FamilyMember,
     MemberContribution,
+    RecipientFilter,
+    SendBulkMailRequest,
 } from './types';
