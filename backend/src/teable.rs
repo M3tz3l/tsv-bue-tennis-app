@@ -5,6 +5,78 @@ use reqwest::Client;
 use serde_json::Value;
 use tracing::{debug, error, info, warn};
 
+/// Verifies connectivity to the Teable API by fetching the base metadata.
+/// Returns Ok(base_name) on success or Err with details on failure.
+pub async fn health_check(client: &Client) -> Result<String, String> {
+    let config = get_teable_config().map_err(|e| format!("Config error: {}", e))?;
+    let url = format!(
+        "{}/base/{}",
+        config.api_url,
+        config.api_url.split('/').next_back().unwrap_or("unknown")
+    );
+
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", config.token))
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    let status = response.status();
+    let text = response.text().await.unwrap_or_default();
+
+    if !status.is_success() {
+        return Err(format!("Teable returned status {}: {}", status, text));
+    }
+
+    // Try to extract base name from response
+    let base_name = serde_json::from_str::<Value>(&text)
+        .ok()
+        .and_then(|v| v["name"].as_str().map(String::from))
+        .unwrap_or_else(|| "Unknown".to_string());
+
+    Ok(base_name)
+}
+
+/// Verifies read access to a specific table by fetching 1 record.
+/// Returns Ok(record_count_hint) or Err with details.
+pub async fn check_table_access(
+    client: &Client,
+    table_id: &str,
+    table_name: &str,
+) -> Result<u64, String> {
+    let config = get_teable_config().map_err(|e| format!("Config error: {}", e))?;
+    let url = format!("{}/table/{}/record?pageSize=1", config.api_url, table_id);
+
+    let response = make_teable_request(
+        client,
+        &url,
+        &config.token,
+        &format!("check_{}", table_name),
+    )
+    .await
+    .map_err(|e| format!("Request failed for table '{}': {}", table_name, e))?;
+
+    let status = response.status();
+    let text = response.text().await.unwrap_or_default();
+
+    if !status.is_success() {
+        return Err(format!(
+            "Table '{}' ({}): HTTP {} — {}",
+            table_name, table_id, status, text
+        ));
+    }
+
+    // Extract total record count if available
+    let total = serde_json::from_str::<Value>(&text)
+        .ok()
+        .and_then(|v| v["total"].as_u64())
+        .unwrap_or(0);
+
+    Ok(total)
+}
+
 struct TeableConfig {
     api_url: String,
     token: String,

@@ -50,6 +50,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let email_service = Arc::new(EmailService::new().expect("Failed to initialize email service"));
     let token_store = TokenStore::new();
 
+    // ── Startup diagnostics ──────────────────────────────────────────────────
+    info!("Running startup diagnostics...");
+    info!("  Teable API URL: {}", config.teable_api_url);
+    info!("  Members table:  {}", config.members_table_id);
+    info!("  Work hours tbl: {}", config.work_hours_table_id);
+
+    let check_client = Client::new();
+
+    // 1. Verify Teable API connectivity
+    match teable::health_check(&check_client).await {
+        Ok(base_name) => info!("✅ Teable API reachable — base: \"{}\"", base_name),
+        Err(e) => error!("❌ Teable API unreachable: {}", e),
+    }
+
+    // 2. Verify members table is accessible
+    match teable::check_table_access(&check_client, &config.members_table_id, "members").await {
+        Ok(count) => info!("✅ Members table accessible — {} records", count),
+        Err(e) => error!("❌ Members table error: {}", e),
+    }
+
+    // 3. Verify work_hours table is accessible
+    match teable::check_table_access(&check_client, &config.work_hours_table_id, "work_hours").await
+    {
+        Ok(count) => info!("✅ Work hours table accessible — {} records", count),
+        Err(e) => error!("❌ Work hours table error: {}", e),
+    }
+
+    // 4. Verify SQLite database
+    match database.health_check().await {
+        Ok(_) => info!("✅ SQLite database connection OK"),
+        Err(e) => error!("❌ SQLite database error: {}", e),
+    }
+
+    info!("Startup diagnostics complete");
+    // ──────────────────────────────────────────────────────────────────────────
+
     let state = state::AppState {
         http_client: Client::new(),
         email_service,
