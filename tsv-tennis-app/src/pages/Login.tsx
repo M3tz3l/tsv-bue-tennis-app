@@ -1,7 +1,7 @@
 //Login.tsx
 
 import { useState, FormEvent, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { MemberSelection } from "../components/MemberSelection";
 import { toast } from "react-toastify";
@@ -217,13 +217,13 @@ const Login = () => {
                                 </div>
 
                                 <div className="text-center">
-                                    <a
-                                        href="/forgotPassword"
+                                    <Link
+                                        to="/forgotPassword"
                                         className="inline-flex items-center text-base font-semibold text-green-600 hover:text-green-700 transition-colors duration-200 hover:underline"
                                     >
                                         <KeyIcon className="h-5 w-5 mr-2" />
                                         Passwort zurücksetzen
-                                    </a>
+                                    </Link>
                                 </div>
                             </form>
                         </div>
