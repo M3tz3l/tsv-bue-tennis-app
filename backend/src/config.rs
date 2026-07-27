@@ -2,6 +2,7 @@ use std::env;
 
 /// Configuration structure for environment variables
 pub struct Config {
+    pub port: u16,
     pub database_url: String,
     pub jwt_secret: String,
     pub frontend_url: String,
@@ -13,7 +14,13 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let port = env::var("PORT")
+            .unwrap_or_else(|_| "5000".to_string())
+            .parse::<u16>()
+            .map_err(|_| "PORT must be a valid port number")?;
+
         Ok(Config {
+            port,
             database_url: env::var("DATABASE_URL").map_err(|_| "DATABASE_URL must be set")?,
             jwt_secret: env::var("JWT_SECRET").unwrap_or_else(|_| "your-secret-key".to_string()),
             frontend_url: env::var("FRONTEND_URL")

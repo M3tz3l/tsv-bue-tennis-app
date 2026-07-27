@@ -190,9 +190,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .layer(cors)
         .with_state(state);
 
-    let listener = TcpListener::bind("0.0.0.0:5000").await.unwrap();
-    info!("Server starting on port 5000");
-    axum::serve(listener, app).await?;
+    let port = config.port;
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
+        .await
+        .unwrap();
+    info!("Server starting on port {}", port);
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 
