@@ -58,26 +58,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let check_client = Client::new();
 
-    // 1. Verify Teable API connectivity
-    match teable::health_check(&check_client).await {
-        Ok(base_name) => info!("✅ Teable API reachable — base: \"{}\"", base_name),
-        Err(e) => error!("❌ Teable API unreachable: {}", e),
-    }
-
-    // 2. Verify members table is accessible
+    // 1. Verify members table is accessible (also confirms API connectivity + auth)
     match teable::check_table_access(&check_client, &config.members_table_id, "members").await {
         Ok(count) => info!("✅ Members table accessible — {} records", count),
         Err(e) => error!("❌ Members table error: {}", e),
     }
 
-    // 3. Verify work_hours table is accessible
+    // 2. Verify work_hours table is accessible
     match teable::check_table_access(&check_client, &config.work_hours_table_id, "work_hours").await
     {
         Ok(count) => info!("✅ Work hours table accessible — {} records", count),
         Err(e) => error!("❌ Work hours table error: {}", e),
     }
 
-    // 4. Verify SQLite database
+    // 3. Verify SQLite database
     match database.health_check().await {
         Ok(_) => info!("✅ SQLite database connection OK"),
         Err(e) => error!("❌ SQLite database error: {}", e),

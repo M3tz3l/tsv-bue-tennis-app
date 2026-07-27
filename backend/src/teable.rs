@@ -5,38 +5,21 @@ use reqwest::Client;
 use serde_json::Value;
 use tracing::{debug, error, info, warn};
 
-/// Verifies connectivity to the Teable API by fetching the base metadata.
-/// Returns Ok(base_name) on success or Err with details on failure.
-pub async fn health_check(client: &Client) -> Result<String, String> {
-    let config = get_teable_config().map_err(|e| format!("Config error: {}", e))?;
-    let url = format!(
-        "{}/base/{}",
-        config.api_url,
-        config.api_url.split('/').next_back().unwrap_or("unknown")
-    );
+struct TeableConfig {
+    api_url: String,
+    token: String,
+    members_table_id: String,
+    work_hours_table_id: String,
+}
 
-    let response = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", config.token))
-        .header("Accept", "application/json")
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {}", e))?;
-
-    let status = response.status();
-    let text = response.text().await.unwrap_or_default();
-
-    if !status.is_success() {
-        return Err(format!("Teable returned status {}: {}", status, text));
-    }
-
-    // Try to extract base name from response
-    let base_name = serde_json::from_str::<Value>(&text)
-        .ok()
-        .and_then(|v| v["name"].as_str().map(String::from))
-        .unwrap_or_else(|| "Unknown".to_string());
-
-    Ok(base_name)
+fn get_teable_config() -> Result<TeableConfig, Box<dyn std::error::Error + Send + Sync>> {
+    let config = Config::from_env()?;
+    Ok(TeableConfig {
+        api_url: config.teable_api_url,
+        token: config.teable_token,
+        members_table_id: config.members_table_id,
+        work_hours_table_id: config.work_hours_table_id,
+    })
 }
 
 /// Verifies read access to a specific table by fetching 1 record.
@@ -75,23 +58,6 @@ pub async fn check_table_access(
         .unwrap_or(0);
 
     Ok(total)
-}
-
-struct TeableConfig {
-    api_url: String,
-    token: String,
-    members_table_id: String,
-    work_hours_table_id: String,
-}
-
-fn get_teable_config() -> Result<TeableConfig, Box<dyn std::error::Error + Send + Sync>> {
-    let config = Config::from_env()?;
-    Ok(TeableConfig {
-        api_url: config.teable_api_url,
-        token: config.teable_token,
-        members_table_id: config.members_table_id,
-        work_hours_table_id: config.work_hours_table_id,
-    })
 }
 
 fn extract_role(fields: &Value) -> Option<String> {
