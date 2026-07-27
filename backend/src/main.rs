@@ -128,8 +128,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // Write operations with stricter rate limiting
     let write_routes = Router::new()
-        .route("/mail/test-send", axum::routing::post(routes::mail::send_test_mail))
-        .route("/mail/send", axum::routing::post(routes::mail::send_bulk_mail))
+        .route(
+            "/mail/test-send",
+            axum::routing::post(routes::mail::send_test_mail),
+        )
+        .route(
+            "/mail/send",
+            axum::routing::post(routes::mail::send_bulk_mail),
+        )
         .merge(routes::mail::member_count_routes())
         .layer(GovernorLayer {
             config: write_governor_conf,
@@ -289,8 +295,14 @@ mod tests {
             .route("/verify-token", get(get_user))
             .route("/dashboard/:year", get(routes::dashboard::dashboard))
             .route("/user", get(get_user))
-            .route("/mail/test-send", axum::routing::post(routes::mail::send_test_mail))
-            .route("/mail/send", axum::routing::post(routes::mail::send_bulk_mail))
+            .route(
+                "/mail/test-send",
+                axum::routing::post(routes::mail::send_test_mail),
+            )
+            .route(
+                "/mail/send",
+                axum::routing::post(routes::mail::send_bulk_mail),
+            )
             .nest("/arbeitsstunden", routes::work_hours::routes())
             .route_layer(middleware::from_fn(state::auth_middleware));
 
