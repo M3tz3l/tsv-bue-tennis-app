@@ -16,7 +16,7 @@ teable.tsv-bue-tennis.de {
 }
 
 dockge.tsv-bue-tennis.de {
-    reverse_proxy dockge:5001
+    reverse_proxy dockge:5000
     # Security headers
     header {
         -Server
