@@ -2,11 +2,22 @@ use crate::config::{Config, EmailConfig};
 use lettre::{
     message::{header::ContentType, Attachment, Mailbox, Message, MultiPart, SinglePart},
     transport::smtp::authentication::Credentials,
-    SmtpTransport, Transport,
+    AsyncSmtpTransport, AsyncTransport, SmtpTransport, Tokio1Executor, Transport,
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
+
+/// Escape HTML special characters to prevent XSS in email content
+pub fn escape_html(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
 
 /// Represents a file attachment for an email
+#[derive(Clone)]
 pub struct EmailAttachment {
     pub filename: String,
     pub content_type: String,
@@ -59,6 +70,189 @@ impl EmailService {
                 .build()
         };
         Ok(transport)
+    }
+
+    /// Creates an async SMTP transport for bulk operations (non-blocking)
+    fn create_async_transport(
+        &self,
+    ) -> Result<AsyncSmtpTransport<Tokio1Executor>, Box<dyn std::error::Error + Send + Sync>> {
+        let creds = Credentials::new(self.smtp_user.clone(), self.smtp_password.clone());
+        let transport = if self.use_implicit_tls {
+            AsyncSmtpTransport::<Tokio1Executor>::relay(&self.smtp_host)?
+                .port(self.smtp_port)
+                .credentials(creds)
+                .build()
+        } else {
+            AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&self.smtp_host)?
+                .port(self.smtp_port)
+                .credentials(creds)
+                .build()
+        };
+        Ok(transport)
+    }
+
+    /// Send bulk mail in batches with bounded concurrency per batch.
+    /// Each batch uses a fresh SMTP transport to avoid server-side connection limits.
+    /// Returns (sent_count, failed_count, failed_recipients).
+    pub async fn send_bulk_mail_concurrent(
+        &self,
+        recipients: &[(String, String)], // (email, first_name)
+        subject: &str,
+        message: &str,
+        safe_message: &str,
+        signature_html: &str,
+        signature_text: &str,
+        attachments: &[EmailAttachment],
+        max_concurrency: usize,
+        batch_size: usize,
+        batch_delay: std::time::Duration,
+    ) -> (usize, usize, Vec<String>) {
+        if self.disable_send {
+            info!(
+                "EMAIL_DISABLE_SEND=true - skipping bulk send to {} recipients",
+                recipients.len()
+            );
+            return (recipients.len(), 0, Vec::new());
+        }
+
+        let from_address = format!("TSV BÜ Tennis App <{}>", self.from_email);
+        let subject = subject.to_string();
+        let message = message.to_string();
+        let safe_message = safe_message.to_string();
+        let signature_html = signature_html.to_string();
+        let signature_text = signature_text.to_string();
+        let attachments: Vec<_> = attachments
+            .iter()
+            .map(|a| EmailAttachment {
+                filename: a.filename.clone(),
+                content_type: a.content_type.clone(),
+                data: a.data.clone(),
+                content_id: a.content_id.clone(),
+            })
+            .collect();
+
+        let mut total_sent = 0;
+        let mut total_failed = 0;
+        let mut all_failed_recipients = Vec::new();
+
+        // Parse from address once — it's the same for all recipients
+        let from_mailbox: Mailbox = match from_address.parse() {
+            Ok(m) => m,
+            Err(e) => {
+                error!("Invalid from address '{}': {}", from_address, e);
+                return (
+                    0,
+                    recipients.len(),
+                    recipients.iter().map(|(e, _)| e.clone()).collect(),
+                );
+            }
+        };
+
+        for (batch_idx, chunk) in recipients.chunks(batch_size).enumerate() {
+            if batch_idx > 0 {
+                info!(
+                    "Batch {} complete (sent={}, failed={}), waiting {:?} before next batch",
+                    batch_idx, total_sent, total_failed, batch_delay
+                );
+                tokio::time::sleep(batch_delay).await;
+            }
+
+            info!(
+                "Starting batch {}/{} ({} recipients)",
+                batch_idx + 1,
+                (recipients.len() + batch_size - 1) / batch_size,
+                chunk.len()
+            );
+
+            // Fresh transport per batch
+            let transport = match self.create_async_transport() {
+                Ok(t) => std::sync::Arc::new(t),
+                Err(e) => {
+                    error!(
+                        "Failed to create SMTP transport for batch {}: {}",
+                        batch_idx + 1,
+                        e
+                    );
+                    total_failed += chunk.len();
+                    for (email, _) in chunk {
+                        all_failed_recipients.push(email.clone());
+                    }
+                    continue;
+                }
+            };
+
+            let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(max_concurrency));
+            let mut handles = Vec::with_capacity(chunk.len());
+
+            for (email, first_name) in chunk {
+                let permit = semaphore.clone().acquire_owned().await.unwrap();
+                let transport = transport.clone();
+                let email_addr = email.clone();
+                let first = first_name.clone();
+                let from_mailbox = from_mailbox.clone();
+                let subject = subject.clone();
+                let message = message.clone();
+                let safe_message = safe_message.clone();
+                let signature_html = signature_html.clone();
+                let signature_text = signature_text.clone();
+                let attachments = attachments.clone();
+
+                handles.push(tokio::spawn(async move {
+                    let html_content = format!(
+                        "<p>Hallo {safe_first_name},</p><p>{safe_message}</p>{signature_html}",
+                        safe_first_name = escape_html(&first),
+                    );
+                    let text_content = format!("Hallo {first},\n\n{message}\n\n{signature_text}",);
+
+                    let to_mailbox: Mailbox = match email_addr.parse() {
+                        Ok(m) => m,
+                        Err(e) => {
+                            drop(permit);
+                            return Err((email_addr, format!("Invalid to address: {e}")));
+                        }
+                    };
+
+                    let email_msg = match build_message(
+                        from_mailbox,
+                        to_mailbox,
+                        &subject,
+                        &html_content,
+                        &text_content,
+                        &attachments,
+                    ) {
+                        Ok(m) => m,
+                        Err(e) => {
+                            drop(permit);
+                            return Err((email_addr, format!("Build error: {e}")));
+                        }
+                    };
+
+                    let result = transport.send(email_msg).await;
+                    drop(permit);
+                    match result {
+                        Ok(_) => Ok(email_addr),
+                        Err(e) => Err((email_addr, e.to_string())),
+                    }
+                }));
+            }
+
+            for handle in handles {
+                match handle.await {
+                    Ok(Ok(_)) => total_sent += 1,
+                    Ok(Err((addr, err))) => {
+                        warn!("Bulk mail failed for {}: {}", addr, err);
+                        total_failed += 1;
+                        all_failed_recipients.push(addr);
+                    }
+                    Err(e) => {
+                        error!("Task join error in bulk send: {}", e);
+                        total_failed += 1;
+                    }
+                }
+            }
+        }
+
+        (total_sent, total_failed, all_failed_recipients)
     }
 
     pub async fn send_email(
@@ -262,5 +456,64 @@ Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese E-Mail bitte.
             &text_content,
         )
         .await
+    }
+}
+
+/// Build a lettre `Message` with optional attachments (shared by sync and async paths)
+fn build_message(
+    from: Mailbox,
+    to: Mailbox,
+    subject: &str,
+    html_content: &str,
+    text_content: &str,
+    attachments: &[EmailAttachment],
+) -> Result<Message, Box<dyn std::error::Error + Send + Sync>> {
+    let body = MultiPart::alternative()
+        .singlepart(
+            SinglePart::builder()
+                .header(ContentType::TEXT_PLAIN)
+                .body(text_content.to_string()),
+        )
+        .singlepart(
+            SinglePart::builder()
+                .header(ContentType::TEXT_HTML)
+                .body(html_content.to_string()),
+        );
+
+    if attachments.is_empty() {
+        Ok(Message::builder()
+            .from(from)
+            .to(to)
+            .subject(subject)
+            .multipart(body)?)
+    } else {
+        let mut mixed = MultiPart::mixed().multipart(body);
+        for att in attachments {
+            let content_type: ContentType = att
+                .content_type
+                .parse()
+                .unwrap_or(ContentType::parse("application/octet-stream").unwrap());
+            if let Some(ref cid) = att.content_id {
+                let part = SinglePart::builder()
+                    .header(content_type)
+                    .header(lettre::message::header::ContentId::from(format!("<{cid}>")))
+                    .header(
+                        lettre::message::header::ContentDisposition::inline_with_name(
+                            &att.filename,
+                        ),
+                    )
+                    .body(att.data.clone());
+                mixed = mixed.singlepart(part);
+            } else {
+                let attachment =
+                    Attachment::new(att.filename.clone()).body(att.data.clone(), content_type);
+                mixed = mixed.singlepart(attachment);
+            }
+        }
+        Ok(Message::builder()
+            .from(from)
+            .to(to)
+            .subject(subject)
+            .multipart(mixed)?)
     }
 }

@@ -21,4 +21,6 @@ export type {
     MemberContribution,
     RecipientFilter,
     SendBulkMailRequest,
+    MailJob,
+    MailJobStatus,
 } from './types';
