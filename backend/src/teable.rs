@@ -22,6 +22,43 @@ fn get_teable_config() -> Result<TeableConfig, Box<dyn std::error::Error + Send 
     })
 }
 
+/// Verifies read access to a specific table by fetching 1 record.
+/// Returns Ok(record_count_hint) or Err with details.
+pub async fn check_table_access(
+    client: &Client,
+    table_id: &str,
+    table_name: &str,
+) -> Result<u64, String> {
+    let config = get_teable_config().map_err(|e| format!("Config error: {e}"))?;
+    let url = format!("{}/table/{}/record?pageSize=1", config.api_url, table_id);
+
+    let response = make_teable_request(client, &url, &config.token, &format!("check_{table_name}"))
+        .await
+        .map_err(|e| format!("Request failed for table '{table_name}': {e}"))?;
+
+    let status = response.status();
+    let text = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response body for table '{table_name}': {e}"))?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "Table '{table_name}' ({table_id}): HTTP {status} — {text}"
+        ));
+    }
+
+    // Extract total record count; propagate JSON parse errors,
+    // but keep the 0 fallback for valid JSON that lacks a numeric total
+    let total = serde_json::from_str::<Value>(&text)
+        .map_err(|e| format!("Failed to parse response JSON for table '{table_name}': {e}"))?
+        .get("total")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    Ok(total)
+}
+
 fn extract_role(fields: &Value) -> Option<String> {
     fields["Rolle"].as_str().map(|s| s.to_string())
 }
@@ -793,7 +830,15 @@ pub async fn get_all_active_members(
 
     // Build filter: only role filter at API level (isEmpty/isNotEmpty not supported by Teable)
     // Empty email and Austrittsdatum filtering is done client-side below
-    let url = if let Some(role) = role_filter {
+    let base_url = format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id);
+
+    let mut req = client
+        .get(&base_url)
+        .header("Authorization", format!("Bearer {}", cfg.token))
+        .header("Accept", "application/json");
+
+    // Add role filter as a query parameter (must be done BEFORE projection[] to avoid query replacement)
+    if let Some(role) = role_filter {
         let filter = serde_json::json!({
             "conjunction": "and",
             "filterSet": [{
@@ -802,20 +847,8 @@ pub async fn get_all_active_members(
                 "value": role
             }]
         });
-        format!(
-            "{}/table/{}/record?filter={}",
-            cfg.api_url,
-            cfg.members_table_id,
-            urlencoding::encode(&filter.to_string())
-        )
-    } else {
-        format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id)
-    };
-
-    let mut req = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", cfg.token))
-        .header("Accept", "application/json");
+        req = req.query(&[("filter", &filter.to_string())]);
+    }
 
     for field in [
         "Vorname",

@@ -1,7 +1,7 @@
 use crate::config::{Config, EmailConfig};
 use lettre::{
     message::{header::ContentType, Attachment, Mailbox, Message, MultiPart, SinglePart},
-    transport::smtp::{authentication::Credentials, PoolConfig},
+    transport::smtp::authentication::Credentials,
     SmtpTransport, Transport,
 };
 use tracing::{error, info};
@@ -15,7 +15,11 @@ pub struct EmailAttachment {
 }
 
 pub struct EmailService {
-    transport: SmtpTransport,
+    smtp_host: String,
+    smtp_port: u16,
+    smtp_user: String,
+    smtp_password: String,
+    use_implicit_tls: bool,
     from_email: String,
     disable_send: bool,
 }
@@ -24,34 +28,37 @@ impl EmailService {
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let email_config = EmailConfig::from_env()?;
 
-        let creds = Credentials::new(email_config.user.clone(), email_config.password);
-
-        let transport = if email_config.use_implicit_tls {
-            // For port 465 (implicit TLS) - TLS connection starts immediately
-            SmtpTransport::relay(&email_config.host)?
-                .port(email_config.port)
-                .credentials(creds)
-                .pool_config(PoolConfig::new().max_size(1))
-                .build()
-        } else {
-            // For port 587 (STARTTLS) - connection starts in plaintext then upgrades
-            SmtpTransport::starttls_relay(&email_config.host)?
-                .port(email_config.port)
-                .credentials(creds)
-                .pool_config(PoolConfig::new().max_size(1))
-                .build()
-        };
-
         let disable_send = std::env::var("EMAIL_DISABLE_SEND")
             .ok()
             .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
             .unwrap_or(false);
 
         Ok(EmailService {
-            transport,
+            smtp_host: email_config.host,
+            smtp_port: email_config.port,
+            smtp_user: email_config.user,
+            smtp_password: email_config.password,
+            use_implicit_tls: email_config.use_implicit_tls,
             from_email: email_config.from_email,
             disable_send,
         })
+    }
+
+    /// Creates a fresh SMTP transport connection for each send to avoid session limits
+    fn create_transport(&self) -> Result<SmtpTransport, Box<dyn std::error::Error + Send + Sync>> {
+        let creds = Credentials::new(self.smtp_user.clone(), self.smtp_password.clone());
+        let transport = if self.use_implicit_tls {
+            SmtpTransport::relay(&self.smtp_host)?
+                .port(self.smtp_port)
+                .credentials(creds)
+                .build()
+        } else {
+            SmtpTransport::starttls_relay(&self.smtp_host)?
+                .port(self.smtp_port)
+                .credentials(creds)
+                .build()
+        };
+        Ok(transport)
     }
 
     pub async fn send_email(
@@ -87,7 +94,9 @@ impl EmailService {
                     ),
             )?;
 
-        match self.transport.send(&email) {
+        // Create a fresh transport per send to avoid SMTP session limits
+        let transport = self.create_transport()?;
+        match transport.send(&email) {
             Ok(response) => {
                 info!("Email sent successfully: {:?}", response);
                 Ok(())
@@ -129,6 +138,9 @@ impl EmailService {
                     .body(html_content.to_string()),
             );
 
+        // Create a fresh transport per send to avoid SMTP session limits
+        let transport = self.create_transport()?;
+
         if attachments.is_empty() {
             // No attachments — send as multipart/alternative only
             let email = Message::builder()
@@ -137,7 +149,7 @@ impl EmailService {
                 .subject(subject)
                 .multipart(body)?;
 
-            match self.transport.send(&email) {
+            match transport.send(&email) {
                 Ok(response) => {
                     info!("Email sent successfully: {:?}", response);
                     Ok(())
@@ -185,7 +197,7 @@ impl EmailService {
                 .subject(subject)
                 .multipart(mixed)?;
 
-            match self.transport.send(&email) {
+            match transport.send(&email) {
                 Ok(response) => {
                     info!(
                         "Email with {} attachment(s) sent successfully: {:?}",

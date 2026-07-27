@@ -58,6 +58,12 @@ impl Database {
         Ok(Database { pool })
     }
 
+    /// Pings the database to verify connectivity.
+    pub async fn health_check(&self) -> Result<(), sqlx::Error> {
+        sqlx::query("SELECT 1").execute(&self.pool).await?;
+        Ok(())
+    }
+
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<AuthUser>, sqlx::Error> {
         let row = sqlx::query(
             "SELECT id, email, password, created_at FROM details WHERE LOWER(email) = LOWER(?)",
