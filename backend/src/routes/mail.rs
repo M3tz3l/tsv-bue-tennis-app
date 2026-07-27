@@ -17,6 +17,8 @@ pub fn member_count_routes() -> axum::Router<AppState> {
     axum::Router::new().route("/recipient-counts", get(get_member_counts))
 }
 
+const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024;
+
 fn escape_html(input: &str) -> String {
     input
         .replace('\x26', "\x26amp;")
@@ -24,6 +26,17 @@ fn escape_html(input: &str) -> String {
         .replace('\x3E', "\x26gt;")
         .replace('\x22', "\x26quot;")
         .replace('\'', "\x26#39;")
+}
+
+fn build_signature(sender_first_name: &str) -> (String, String) {
+    let safe_name = escape_html(sender_first_name);
+    let html = format!(
+        r#"<p style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">mit sportlichen Grüßen,<br/>{safe_name} / die Abteilungsleitung</p><p style="margin-top: 12px;"><strong>Tennisabteilung des TSV Bad Überkingen</strong><br/><a href="mailto:tennisabteilung@tsv-bad-ueberkingen.de">tennisabteilung@tsv-bad-ueberkingen.de</a></p>"#
+    );
+    let text = format!(
+        "mit sportlichen Grüßen,\n{sender_first_name} / die Abteilungsleitung\n\nTennisabteilung des TSV Bad Überkingen\nE-Mail: tennisabteilung@tsv-bad-ueberkingen.de"
+    );
+    (html, text)
 }
 
 pub async fn send_test_mail(
@@ -96,7 +109,6 @@ pub async fn send_test_mail(
                     .bytes()
                     .await
                     .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
-                const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024; // 25MB
                 if data.len() > MAX_ATTACHMENT_SIZE {
                     return Ok(Json(serde_json::json!({
                         "success": false,
@@ -121,16 +133,8 @@ pub async fn send_test_mail(
     }
 
     let safe_first_name = escape_html(&user.first_name);
-    let safe_sender_first_name = escape_html(&user.first_name);
-    let safe_message = escape_html(&message);
-
-    let signature_html = format!(
-        r#"<p style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">mit sportlichen Grüßen,<br/>{safe_sender_first_name} / die Abteilungsleitung</p><p style="margin-top: 12px;"><strong>Tennisabteilung des TSV Bad Überkingen</strong><br/><a href="mailto:tennisabteilung@tsv-bad-ueberkingen.de">tennisabteilung@tsv-bad-ueberkingen.de</a></p>"#
-    );
-    let signature_text = format!(
-        "mit sportlichen Grüßen,\n{sender_first_name} / die Abteilungsleitung\n\nTennisabteilung des TSV Bad Überkingen\nE-Mail: tennisabteilung@tsv-bad-ueberkingen.de",
-        sender_first_name = user.first_name
-    );
+    let safe_message = escape_html(&message).replace('\n', "<br/>");
+    let (signature_html, signature_text) = build_signature(&user.first_name);
 
     let html_content =
         format!("<p>Hallo {safe_first_name},</p><p>{safe_message}</p>{signature_html}");
@@ -234,7 +238,6 @@ pub async fn send_bulk_mail(
                     .bytes()
                     .await
                     .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
-                const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024;
                 if data.len() > MAX_ATTACHMENT_SIZE {
                     return Ok(Json(serde_json::json!({
                         "success": false,
@@ -260,17 +263,16 @@ pub async fn send_bulk_mail(
 
     let recipient_filter: RecipientFilter = match recipient_filter_str.as_str() {
         "orga" => RecipientFilter::Orga,
-        _ => RecipientFilter::All,
+        "all" => RecipientFilter::All,
+        _ => {
+            return Ok(Json(serde_json::json!({
+                "success": false,
+                "message": format!("Unknown recipient_filter: '{}'. Valid values: 'all', 'orga'", recipient_filter_str)
+            })));
+        }
     };
 
-    let safe_sender_first_name = escape_html(&user.first_name);
-    let signature_html = format!(
-        r#"<p style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">mit sportlichen Grüßen,<br/>{safe_sender_first_name} / die Abteilungsleitung</p><p style="margin-top: 12px;"><strong>Tennisabteilung des TSV Bad Überkingen</strong><br/><a href="mailto:tennisabteilung@tsv-bad-ueberkingen.de">tennisabteilung@tsv-bad-ueberkingen.de</a></p>"#
-    );
-    let signature_text = format!(
-        "mit sportlichen Grüßen,\n{sender_first_name} / die Abteilungsleitung\n\nTennisabteilung des TSV Bad Überkingen\nE-Mail: tennisabteilung@tsv-bad-ueberkingen.de",
-        sender_first_name = user.first_name
-    );
+    let (signature_html, signature_text) = build_signature(&user.first_name);
 
     let recipients = match recipient_filter {
         RecipientFilter::Orga => teable::get_all_active_members(&state.http_client, Some("orga"))
@@ -302,7 +304,7 @@ pub async fn send_bulk_mail(
         })));
     }
 
-    let safe_message = escape_html(&message);
+    let safe_message = escape_html(&message).replace('\n', "<br/>");
 
     // Deduplicate recipients by email address to avoid sending the same mail multiple times
     let mut seen_emails = std::collections::HashSet::new();

@@ -13,6 +13,54 @@ use crate::state::AppState;
 use crate::teable;
 use crate::utils::extract_user_id_from_headers;
 
+/// Validate work hour date with one-month grace period.
+/// Returns Ok(()) if valid, or a JSON error body to return to the caller.
+fn validate_work_hour_date(date: &str, prefix: &str) -> Result<(), axum::Json<serde_json::Value>> {
+    let date_result = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d");
+    let work_date = match date_result {
+        Ok(d) => d,
+        Err(_) => {
+            warn!("{}: Invalid date format: {}", prefix, date);
+            return Err(axum::Json(serde_json::json!({
+                "success": false,
+                "message": "Ungültiges Datumsformat. Bitte verwenden Sie YYYY-MM-DD."
+            })));
+        }
+    };
+
+    let today = chrono::Utc::now().date_naive();
+    let current_year = today.year();
+    let current_month = today.month();
+    let work_year = work_date.year();
+
+    let min_allowed_year = if current_month == 1 {
+        current_year - 1
+    } else {
+        current_year
+    };
+
+    if work_year >= min_allowed_year {
+        return Ok(());
+    }
+
+    debug!(
+        "{}: Year validation failed - work year: {}, min allowed: {}",
+        prefix, work_year, min_allowed_year
+    );
+
+    if current_month == 1 {
+        Err(axum::Json(serde_json::json!({
+            "success": false,
+            "message": format!("Arbeitsstunden können nur für {} oder {} (Nachfrist bis Ende Januar) eingetragen werden.", current_year, current_year - 1)
+        })))
+    } else {
+        Err(axum::Json(serde_json::json!({
+            "success": false,
+            "message": format!("Arbeitsstunden können nur für das aktuelle Jahr {} eingetragen werden.", current_year)
+        })))
+    }
+}
+
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", post(create_work_hour))
@@ -158,43 +206,8 @@ pub async fn create_work_hour(
     }
 
     // Validate year with one-month grace period
-    let date_result = chrono::NaiveDate::parse_from_str(&payload.date, "%Y-%m-%d");
-    if let Ok(work_date) = date_result {
-        let today = chrono::Utc::now().date_naive();
-        let current_year = today.year();
-        let current_month = today.month(); // 1-based (1 = January, 2 = February, etc.)
-        let work_year = work_date.year();
-
-        // Calculate minimum allowed year based on grace period
-        let min_allowed_year = if current_month == 1 {
-            current_year - 1
-        } else {
-            current_year
-        };
-
-        if work_year < min_allowed_year {
-            debug!(
-                "Create Work Hour: Year validation failed - work year: {}, min allowed: {}",
-                work_year, min_allowed_year
-            );
-            if current_month == 1 {
-                return Ok(axum::Json(serde_json::json!({
-                    "success": false,
-                    "message": format!("Arbeitsstunden können nur für {} oder {} (Nachfrist bis Ende Januar) eingetragen werden.", current_year, current_year - 1)
-                })));
-            } else {
-                return Ok(axum::Json(serde_json::json!({
-                    "success": false,
-                    "message": format!("Arbeitsstunden können nur für das aktuelle Jahr {} eingetragen werden.", current_year)
-                })));
-            }
-        }
-    } else {
-        warn!("Create Work Hour: Invalid date format: {}", payload.date);
-        return Ok(axum::Json(serde_json::json!({
-            "success": false,
-            "message": "Ungültiges Datumsformat. Bitte verwenden Sie YYYY-MM-DD."
-        })));
+    if let Err(json_err) = validate_work_hour_date(&payload.date, "Create Work Hour") {
+        return Ok(json_err);
     }
 
     // Use get_member_by_id for efficiency
@@ -276,17 +289,9 @@ pub async fn create_work_hour(
         }
         Err(e) => {
             error!("Create Work Hour: Failed to create in Teable: {}", e);
-            // Return success anyway for now, just log the error
             Ok(axum::Json(serde_json::json!({
-                "success": true,
-                "message": "Work hour entry received successfully (Teable creation failed)",
-                "data": {
-                    "user": current_user.name(),
-                    "date": payload.date,
-                    "description": payload.description,
-                    "hours": payload.hours,
-                    "duration_hours": payload.hours
-                },
+                "success": false,
+                "message": "Arbeitsstunde konnte nicht gespeichert werden.",
                 "error": format!("Teable error: {}", e)
             })))
         }
@@ -352,43 +357,8 @@ pub async fn update_work_hour(
     }
 
     // Validate year with one-month grace period
-    let date_result = chrono::NaiveDate::parse_from_str(&payload.date, "%Y-%m-%d");
-    if let Ok(work_date) = date_result {
-        let today = chrono::Utc::now().date_naive();
-        let current_year = today.year();
-        let current_month = today.month(); // 1-based (1 = January, 2 = February, etc.)
-        let work_year = work_date.year();
-
-        // Calculate minimum allowed year based on grace period
-        let min_allowed_year = if current_month == 1 {
-            current_year - 1
-        } else {
-            current_year
-        };
-
-        if work_year < min_allowed_year {
-            debug!(
-                "Update Work Hour: Year validation failed - work year: {}, min allowed: {}",
-                work_year, min_allowed_year
-            );
-            if current_month == 1 {
-                return Ok(axum::Json(serde_json::json!({
-                    "success": false,
-                    "message": format!("Arbeitsstunden können nur für {} oder {} (Nachfrist bis Ende Januar) eingetragen werden.", current_year, current_year - 1)
-                })));
-            } else {
-                return Ok(axum::Json(serde_json::json!({
-                    "success": false,
-                    "message": format!("Arbeitsstunden können nur für das aktuelle Jahr {} eingetragen werden.", current_year)
-                })));
-            }
-        }
-    } else {
-        warn!("Update Work Hour: Invalid date format: {}", payload.date);
-        return Ok(axum::Json(serde_json::json!({
-            "success": false,
-            "message": "Ungültiges Datumsformat. Bitte verwenden Sie YYYY-MM-DD."
-        })));
+    if let Err(json_err) = validate_work_hour_date(&payload.date, "Update Work Hour") {
+        return Ok(json_err);
     }
 
     // Use get_member_by_id for efficiency
@@ -492,7 +462,27 @@ pub async fn delete_work_hour(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    let _user_id = extract_user_id_from_headers(&headers)?;
+    let user_id = extract_user_id_from_headers(&headers)?;
+
+    let existing = teable::get_work_hour_by_id(&state.http_client, &id)
+        .await
+        .map_err(|e| {
+            error!("Delete Work Hour: Failed to get work hour by id: {}", e);
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let owned = existing
+        .as_ref()
+        .and_then(|wh| wh.get_member_id())
+        .is_some_and(|member_id| member_id == user_id);
+
+    if !owned {
+        warn!("Delete Work Hour: {} not owned by user {}", id, user_id);
+        return Ok(axum::Json(serde_json::json!({
+            "success": false,
+            "message": "Work hour entry not found or you don't have permission to delete it"
+        })));
+    }
 
     match teable::delete_work_hour(&state.http_client, &id).await {
         Ok(_) => Ok(axum::Json(serde_json::json!({

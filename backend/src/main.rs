@@ -77,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         GovernorConfigBuilder::default()
             .per_second(1) // 1 request per second for all auth/security endpoints
             .burst_size(3) // Allow small bursts for retry scenarios
-            .key_extractor(state::IpKeyExtractor) // Use IP-based extraction for auth endpoints
+            .key_extractor(state::PeerIpKeyExtractor) // Use TCP peer IP for auth rate limiting
             .finish()
             .unwrap(),
     );

@@ -1,12 +1,12 @@
 use crate::auth;
 use axum::{
-    http::{Request, StatusCode},
+    http::StatusCode,
     middleware::Next,
     response::{Html, IntoResponse, Response},
 };
 use reqwest::Client;
 use std::sync::Arc;
-use tower_governor::{key_extractor::KeyExtractor, GovernorError};
+use tower_governor::GovernorError;
 
 use crate::database::Database;
 use crate::email::EmailService;
@@ -24,109 +24,35 @@ pub struct AppState {
 #[derive(Clone)]
 pub struct UserKeyExtractor;
 
-impl KeyExtractor for UserKeyExtractor {
+impl tower_governor::key_extractor::KeyExtractor for UserKeyExtractor {
     type Key = String;
 
     fn name(&self) -> &'static str {
         "user_id"
     }
 
-    fn extract<T>(&self, req: &Request<T>) -> Result<Self::Key, GovernorError> {
+    fn extract<T>(&self, req: &axum::http::Request<T>) -> Result<Self::Key, GovernorError> {
         let headers = req.headers();
 
-        // Extract the Authorization header
         let auth_header = headers
             .get("authorization")
             .and_then(|header| header.to_str().ok())
             .and_then(|header| header.strip_prefix("Bearer "));
 
         match auth_header {
-            Some(token) => {
-                // Verify and extract user ID from JWT token
-                match auth::verify_token(token) {
-                    Ok(claims) => {
-                        // Use user_id from JWT claims as the rate limiting key
-                        Ok(claims.sub)
-                    }
-                    Err(_) => {
-                        // If token is invalid, fall back to IP-based rate limiting
-                        // or you could choose to reject the request entirely
-                        Err(GovernorError::UnableToExtractKey)
-                    }
-                }
-            }
-            None => {
-                // No authorization header - this should be handled by auth middleware
-                // but for rate limiting purposes, we'll reject it
-                Err(GovernorError::UnableToExtractKey)
-            }
+            Some(token) => match auth::verify_token(token) {
+                Ok(claims) => Ok(claims.sub),
+                Err(_) => Err(GovernorError::UnableToExtractKey),
+            },
+            None => Err(GovernorError::UnableToExtractKey),
         }
     }
 }
 
-// IP-based key extractor for authentication endpoints (before login)
-#[derive(Clone)]
-pub struct IpKeyExtractor;
-
-impl KeyExtractor for IpKeyExtractor {
-    type Key = String;
-
-    fn name(&self) -> &'static str {
-        "client_ip"
-    }
-
-    fn extract<T>(&self, req: &Request<T>) -> Result<Self::Key, GovernorError> {
-        // Try to get the real IP from various headers (for proxy scenarios)
-        let headers = req.headers();
-
-        // Check X-Forwarded-For header first (most common for reverse proxies)
-        if let Some(forwarded_for) = headers.get("x-forwarded-for") {
-            if let Ok(forwarded_str) = forwarded_for.to_str() {
-                // X-Forwarded-For can contain multiple IPs, take the first one (original client)
-                if let Some(first_ip) = forwarded_str.split(',').next() {
-                    let ip = first_ip.trim();
-                    if !ip.is_empty() {
-                        return Ok(ip.to_string());
-                    }
-                }
-            }
-        }
-
-        // Check X-Real-IP header (used by some reverse proxies)
-        if let Some(real_ip) = headers.get("x-real-ip") {
-            if let Ok(ip_str) = real_ip.to_str() {
-                if !ip_str.trim().is_empty() {
-                    return Ok(ip_str.trim().to_string());
-                }
-            }
-        }
-
-        // Check CF-Connecting-IP header (Cloudflare)
-        if let Some(cf_ip) = headers.get("cf-connecting-ip") {
-            if let Ok(ip_str) = cf_ip.to_str() {
-                if !ip_str.trim().is_empty() {
-                    return Ok(ip_str.trim().to_string());
-                }
-            }
-        }
-
-        // Fallback: use a combination of User-Agent and a timestamp to create a semi-unique key
-        // This ensures rate limiting still works even if we can't get the real IP
-        let user_agent = headers
-            .get("user-agent")
-            .and_then(|ua| ua.to_str().ok())
-            .unwrap_or("unknown");
-
-        // Create a hash of the user agent for anonymity
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        let mut hasher = DefaultHasher::new();
-        user_agent.hash(&mut hasher);
-        let ua_hash = hasher.finish();
-
-        Ok(format!("fallback_{ua_hash}"))
-    }
-}
+/// PeerIpKeyExtractor from tower_governor uses the actual TCP peer IP,
+/// which is safe behind a trusted reverse proxy. The old custom IpKeyExtractor
+/// trusted spoofable forwarding headers (X-Forwarded-For, X-Real-IP, etc.).
+pub use tower_governor::key_extractor::PeerIpKeyExtractor;
 
 // Middleware to rewrite 429 responses to JSON
 pub async fn rewrite_429_to_json(req: axum::extract::Request, next: Next) -> Response {
@@ -147,16 +73,6 @@ pub async fn auth_middleware(
     request: axum::extract::Request,
     next: Next,
 ) -> Response {
-    let path = request.uri().path();
-
-    // Skip auth for login, register, forgot-password, reset-password
-    if matches!(
-        path,
-        "/api/login" | "/api/register" | "/api/forgotPassword" | "/api/resetPassword"
-    ) {
-        return next.run(request).await;
-    }
-
     let auth_header = headers
         .get("authorization")
         .and_then(|header| header.to_str().ok())
