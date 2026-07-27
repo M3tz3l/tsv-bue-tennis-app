@@ -2,7 +2,8 @@
 
 import {
     useSearchParams,
-    useNavigate
+    useNavigate,
+    Link
 } from "react-router-dom";
 import { toast } from "react-toastify";
 import TSVLogo from "../assets/TSV_Tennis.svg";
@@ -104,12 +105,12 @@ const ResetPassword = () => {
                         </div>
 
                         <div className="text-center">
-                            <a
-                                href="/login"
+                            <Link
+                                to="/login"
                                 className="text-sm font-medium text-green-600 hover:text-green-500 transition-colors duration-200"
                             >
                                 ← Zurück zur Anmeldung
-                            </a>
+                            </Link>
                         </div>
                     </form>
                 </div>
