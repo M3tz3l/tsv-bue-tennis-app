@@ -54,6 +54,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     export_type!(RecipientFilter);
     export_type!(SendBulkMailRequest);
     export_type!(SendTestMailRequest);
+    export_type!(MailJob);
+    export_type!(MailJobStatus);
 
     // Write to file
     std::fs::write(&output_path, typescript_code)?;

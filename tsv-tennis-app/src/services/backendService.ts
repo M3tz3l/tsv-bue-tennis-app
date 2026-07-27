@@ -6,6 +6,7 @@ import type {
   DashboardResponse,
   WorkHourEntry,
   SendBulkMailRequest,
+  MailJob,
 } from '@/types';
 
 // Generic API result type with optional data payload
@@ -293,6 +294,19 @@ class BackendService {
       return {
         success: false,
         message: error.response?.data?.message || 'Empfängerzahlen konnten nicht abgerufen werden'
+      };
+    }
+  }
+
+  async getMailJobStatus(jobId: string): Promise<{ success: boolean; job?: MailJob; message?: string }> {
+    try {
+      const response = await this.api.get(`/mail/jobs/${jobId}`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching mail job status:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Job-Status konnte nicht abgerufen werden'
       };
     }
   }

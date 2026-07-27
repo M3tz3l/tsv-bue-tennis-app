@@ -80,11 +80,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     info!("Startup diagnostics complete");
     // ──────────────────────────────────────────────────────────────────────────
 
+    let mail_jobs: state::MailJobStore =
+        std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
+
+    // Spawn periodic cleanup of stale mail jobs (older than 1 hour)
+    {
+        let jobs = mail_jobs.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(300)); // every 5 min
+            loop {
+                interval.tick().await;
+                let cutoff = chrono::Utc::now() - chrono::Duration::hours(1);
+                let mut jobs = jobs.write().await;
+                let before = jobs.len();
+                jobs.retain(|_, j| j.created_at > cutoff);
+                let removed = before - jobs.len();
+                if removed > 0 {
+                    info!("Cleaned up {} stale mail jobs", removed);
+                }
+            }
+        });
+    }
+
     let state = state::AppState {
         http_client: Client::new(),
         email_service,
         token_store,
         database,
+        mail_jobs,
     };
 
     let cors = CorsLayer::new()
@@ -152,6 +175,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .route("/user", get(get_user))
         .nest("/arbeitsstunden", routes::work_hours::routes())
         .merge(routes::mail::member_count_routes())
+        .route(
+            "/mail/jobs/{job_id}",
+            get(routes::mail::get_mail_job_status),
+        )
         .layer(GovernorLayer {
             config: read_governor_conf,
         })
@@ -303,6 +330,9 @@ mod tests {
             email_service,
             token_store,
             database,
+            mail_jobs: std::sync::Arc::new(tokio::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
         };
 
         let cors = CorsLayer::new()
@@ -337,6 +367,10 @@ mod tests {
             .route(
                 "/mail/send",
                 axum::routing::post(routes::mail::send_bulk_mail),
+            )
+            .route(
+                "/mail/jobs/{job_id}",
+                get(routes::mail::get_mail_job_status),
             )
             .nest("/arbeitsstunden", routes::work_hours::routes())
             .route_layer(middleware::from_fn(state::auth_middleware));

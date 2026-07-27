@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { XMarkIcon, PaperAirplaneIcon, EnvelopeIcon, UserGroupIcon, UsersIcon, PaperClipIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 import BackendService from '../services/backendService';
 import { useAuth } from '../context/AuthContext';
-import type { SendBulkMailRequest } from '../types';
+import type { SendBulkMailRequest, MailJob } from '../types';
 
 interface MailComposerProps {
   isOpen: boolean;
@@ -24,6 +24,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const [showBulkConfirmation, setShowBulkConfirmation] = useState(false);
   const [memberCounts, setMemberCounts] = useState({ all: 0, orga: 0 });
   const [countsLoaded, setCountsLoaded] = useState(false);
+  const [activeJob, setActiveJob] = useState<MailJob | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const fetchCounts = async () => {
@@ -41,6 +43,52 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
     fetchCounts();
   }, []);
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
+
+  const pollJobStatus = useCallback(async (jobId: string) => {
+    const response = await BackendService.getMailJobStatus(jobId);
+    if (response.success && response.job) {
+      setActiveJob(response.job);
+      if (response.job.status === 'completed' || response.job.status === 'failed') {
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
+        setIsLoading(false);
+        const job = response.job;
+        if (job.status === 'failed') {
+          toast.error(job.error || `Mail-Versand fehlgeschlagen (${job.failed}/${job.total_recipients} fehlgeschlagen)`);
+        } else if (job.failed === 0) {
+          toast.success(`Mail versandt an ${job.sent} Empfänger!`);
+        } else {
+          toast.warning(`Mail versandt an ${job.sent} von ${job.total_recipients} Empfängern (${job.failed} fehlgeschlagen)`);
+        }
+        // Reset form after a short delay so user can see the final status
+        setTimeout(() => {
+          setSubject('');
+          setMessage('');
+          setRecipientFilter('all');
+          setAttachments([]);
+          setActiveJob(null);
+          onClose();
+        }, 2000);
+      }
+    } else {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      setIsLoading(false);
+      setActiveJob(null);
+      toast.error(response.message || 'Job-Status konnte nicht abgerufen werden');
+    }
+  }, [onClose]);
 
   if (!isOpen) return null;
 
@@ -99,6 +147,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
     setShowBulkConfirmation(false);
     setIsLoading(true);
+    setActiveJob(null);
     try {
       const payload: SendBulkMailRequest = {
         subject: subject.trim(),
@@ -112,25 +161,19 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       );
 
       if (response.success) {
-        toast.success(`Mail versandt! ${(response as any).sent} Empfänger.`);
-        setSubject('');
-        setMessage('');
-        setRecipientFilter('all');
-        setAttachments([]);
-        onClose();
+        const jobId = (response as any).job_id as string;
+        const total = (response as any).total_recipients as number;
+        toast.info(`Mail-Versand gestartet für ${total} Empfänger...`);
+        // Start polling
+        pollingRef.current = setInterval(() => pollJobStatus(jobId), 1500);
+        // Also poll immediately
+        pollJobStatus(jobId);
       } else {
-        const failedCount = (response as any).failed;
-        if (failedCount && failedCount > 0) {
-          toast.warning(
-            `Mail versandt an ${(response as any).sent} von ${(response as any).sent + failedCount} Empfängern`
-          );
-        } else {
-          toast.error(response.message || 'Fehler beim Versenden der Mail');
-        }
+        toast.error(response.message || 'Fehler beim Versenden der Mail');
+        setIsLoading(false);
       }
     } catch (error: any) {
       toast.error(error?.message || 'Fehler beim Versenden der Mail');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -150,7 +193,15 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              if (pollingRef.current) {
+                clearInterval(pollingRef.current);
+                pollingRef.current = null;
+              }
+              setActiveJob(null);
+              setIsLoading(false);
+              onClose();
+            }}
             className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100"
             aria-label="Schließen"
           >
@@ -171,7 +222,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                 <button
                   type="button"
                   onClick={() => setRecipientFilter('all')}
-                  disabled={isLoading || isSendingTest}
+                  disabled={isLoading || isSendingTest || !!activeJob}
                   className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${recipientFilter === 'all'
                     ? 'border-purple-600 bg-purple-50 text-purple-800'
                     : 'border-gray-200 hover:border-purple-300 text-gray-700'
@@ -183,7 +234,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                 <button
                   type="button"
                   onClick={() => setRecipientFilter('orga')}
-                  disabled={isLoading || isSendingTest}
+                  disabled={isLoading || isSendingTest || !!activeJob}
                   className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${recipientFilter === 'orga'
                     ? 'border-purple-600 bg-purple-50 text-purple-800'
                     : 'border-gray-200 hover:border-purple-300 text-gray-700'
@@ -207,7 +258,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="z. B. Einladung zur Jahreshauptversammlung"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                disabled={isLoading || isSendingTest}
+                disabled={isLoading || isSendingTest || !!activeJob}
               />
             </div>
 
@@ -223,7 +274,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                 placeholder="Ihre Nachricht an die Mitglieder..."
                 rows={5}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-                disabled={isLoading || isSendingTest}
+                disabled={isLoading || isSendingTest || !!activeJob}
               />
             </div>
 
@@ -242,7 +293,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={isLoading || isSendingTest}
+                disabled={isLoading || isSendingTest || !!activeJob}
                 className="inline-flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-purple-400 hover:text-purple-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <PaperClipIcon className="h-4 w-4" />
@@ -305,16 +356,34 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
         {/* Footer */}
         <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 px-6 py-4 border-t border-gray-200 shrink-0">
+          {activeJob && (
+            <div className="flex-1 flex items-center gap-3 text-sm">
+              <div className="animate-spin h-4 w-4 border-2 border-purple-600 border-t-transparent rounded-full" />
+              <span className="text-gray-700">
+                {activeJob.status === 'completed' || activeJob.status === 'failed'
+                  ? `Fertig: ${activeJob.sent} gesendet, ${activeJob.failed} fehlgeschlagen`
+                  : `Sende Mails... ${activeJob.sent}/${activeJob.total_recipients}`}
+              </span>
+            </div>
+          )}
           <button
-            onClick={onClose}
+            onClick={() => {
+              if (pollingRef.current) {
+                clearInterval(pollingRef.current);
+                pollingRef.current = null;
+              }
+              setActiveJob(null);
+              setIsLoading(false);
+              onClose();
+            }}
             className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
-            disabled={isLoading || isSendingTest}
+            disabled={isSendingTest}
           >
-            Abbrechen
+            {activeJob ? 'Schließen' : 'Abbrechen'}
           </button>
           <button
             onClick={handleSendTest}
-            disabled={isLoading || isSendingTest || !subject.trim() || !message.trim()}
+            disabled={isLoading || isSendingTest || !!activeJob || !subject.trim() || !message.trim()}
             className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isSendingTest ? 'Test wird versendet...' : 'Test-Mail senden'}
@@ -322,11 +391,11 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           <div className="relative">
             <button
               onClick={() => setShowBulkConfirmation(true)}
-              disabled={isLoading || isSendingTest || !subject.trim() || !message.trim()}
+              disabled={isLoading || isSendingTest || !!activeJob || !subject.trim() || !message.trim()}
               className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <PaperAirplaneIcon className="-ml-1 mr-2 h-5 w-5" />
-              {isLoading ? 'Wird versendet...' : 'Versenden'}
+              {isLoading ? 'Wird gestartet...' : 'Versenden'}
             </button>
             {showBulkConfirmation && (
               <div className="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 p-4 z-10">

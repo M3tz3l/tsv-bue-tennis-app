@@ -1,14 +1,14 @@
 use axum::{
-    extract::{Multipart, State},
-    http::HeaderMap,
+    extract::{Multipart, Path, State},
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::get,
     Json,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
-use crate::email;
-use crate::models::RecipientFilter;
+use crate::email::{self, escape_html};
+use crate::models::{MailJob, MailJobStatus, RecipientFilter};
 use crate::state::AppState;
 use crate::teable;
 use crate::utils::extract_auth_claims_from_headers;
@@ -18,15 +18,9 @@ pub fn member_count_routes() -> axum::Router<AppState> {
 }
 
 const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024;
-
-fn escape_html(input: &str) -> String {
-    input
-        .replace('\x26', "\x26amp;")
-        .replace('\x3C', "\x26lt;")
-        .replace('\x3E', "\x26gt;")
-        .replace('\x22', "\x26quot;")
-        .replace('\'', "\x26#39;")
-}
+const BULK_MAIL_CONCURRENCY: usize = 5;
+const BULK_MAIL_BATCH_SIZE: usize = 8;
+const BULK_MAIL_BATCH_DELAY_SECS: u64 = 5;
 
 fn build_signature(sender_first_name: &str) -> (String, String) {
     let safe_name = escape_html(sender_first_name);
@@ -272,8 +266,7 @@ pub async fn send_bulk_mail(
         }
     };
 
-    let (signature_html, signature_text) = build_signature(&user.first_name);
-
+    // Fetch recipients
     let recipients = match recipient_filter {
         RecipientFilter::Orga => teable::get_all_active_members(&state.http_client, Some("orga"))
             .await
@@ -291,8 +284,6 @@ pub async fn send_bulk_mail(
         }
     };
 
-    let recipients_len = recipients.len();
-
     if recipients.is_empty() {
         warn!(
             "Send bulk mail: no recipients found for filter '{:?}'",
@@ -304,9 +295,7 @@ pub async fn send_bulk_mail(
         })));
     }
 
-    let safe_message = escape_html(&message).replace('\n', "<br/>");
-
-    // Deduplicate recipients by email address to avoid sending the same mail multiple times
+    // Deduplicate recipients by email address
     let mut seen_emails = std::collections::HashSet::new();
     let unique_recipients: Vec<_> = recipients
         .into_iter()
@@ -330,69 +319,125 @@ pub async fn send_bulk_mail(
         })));
     }
 
-    info!(
-        "Send bulk mail: deduplicated {} recipients to {} unique recipients for filter '{:?}'",
-        recipients_len,
-        unique_recipients.len(),
-        recipient_filter
-    );
+    let total = unique_recipients.len();
 
-    let mut sent_count = 0;
-    let mut failed_count = 0;
-    let mut failed_recipients = Vec::new();
+    // Pre-build template parts (done once, not per recipient)
+    let safe_message = escape_html(&message).replace('\n', "<br/>");
+    let (signature_html, signature_text) = build_signature(&user.first_name);
 
-    for recipient in unique_recipients {
-        let html_content = format!(
-            "<p>Hallo {safe_first_name},</p>\
-             <p>{safe_message}</p>\n            {signature_html}",
-            safe_first_name = escape_html(&recipient.first_name),
-            safe_message = safe_message,
-        );
-        let text_content = format!(
-            "Hallo {first_name},\n\n{message}\n\n{signature_text}",
-            first_name = recipient.first_name,
-            message = message,
-        );
+    // Prepare recipient data for the background task
+    let recipient_data: Vec<(String, String)> = unique_recipients
+        .into_iter()
+        .map(|r| (r.email, r.first_name))
+        .collect();
 
-        match state
-            .email_service
-            .send_email_with_attachments(
-                &recipient.email,
-                &subject,
-                &html_content,
-                &text_content,
-                &attachments,
-            )
-            .await
+    // Create job and return immediately
+    let job_id = uuid::Uuid::new_v4().to_string();
+    let job = MailJob {
+        id: job_id.clone(),
+        status: MailJobStatus::Pending,
+        total_recipients: total as i32,
+        sent: 0,
+        failed: 0,
+        failed_recipients: Vec::new(),
+        error: None,
+        created_at: chrono::Utc::now(),
+    };
+
+    state.mail_jobs.write().await.insert(job_id.clone(), job);
+
+    // Spawn background task
+    let email_service = state.email_service.clone();
+    let job_store = state.mail_jobs.clone();
+    let jid = job_id.clone();
+
+    tokio::spawn(async move {
+        // Mark as running
         {
-            Ok(_) => {
-                debug!("Bulk mail sent to {}", recipient.email);
-                sent_count += 1;
-            }
-            Err(e) => {
-                error!("Bulk mail failed for {}: {}", recipient.email, e);
-                failed_count += 1;
-                failed_recipients.push(recipient.email);
+            let mut jobs = job_store.write().await;
+            if let Some(job) = jobs.get_mut(&jid) {
+                job.status = MailJobStatus::Running;
             }
         }
-    }
+
+        // Run the actual send in a nested spawn so we can detect panics
+        // via the JoinHandle (catch_unwind is not async-safe)
+        let send_handle = tokio::spawn(async move {
+            email_service
+                .send_bulk_mail_concurrent(
+                    &recipient_data,
+                    &subject,
+                    &message,
+                    &safe_message,
+                    &signature_html,
+                    &signature_text,
+                    &attachments,
+                    BULK_MAIL_CONCURRENCY,
+                    BULK_MAIL_BATCH_SIZE,
+                    std::time::Duration::from_secs(BULK_MAIL_BATCH_DELAY_SECS),
+                )
+                .await
+        });
+
+        let result = send_handle.await;
+        let mut jobs = job_store.write().await;
+        if let Some(job) = jobs.get_mut(&jid) {
+            match result {
+                Ok((sent, failed, failed_recipients)) => {
+                    if sent == 0 && failed > 0 {
+                        job.status = MailJobStatus::Failed;
+                        job.error = Some(format!("All {} emails failed to send", failed));
+                    } else {
+                        job.status = MailJobStatus::Completed;
+                    }
+                    job.sent = sent as i32;
+                    job.failed = failed as i32;
+                    job.failed_recipients = failed_recipients;
+                    info!(
+                        "Bulk mail job {} completed: sent={}, failed={}",
+                        jid, sent, failed
+                    );
+                }
+                Err(join_err) => {
+                    job.status = MailJobStatus::Failed;
+                    job.error = Some(format!("Background task panicked: {}", join_err));
+                    error!("Bulk mail job {} panicked: {}", jid, join_err);
+                }
+            }
+        }
+    });
 
     info!(
-        "Bulk mail completed by user {}: sent={}, failed={}",
-        user.id, sent_count, failed_count
+        "Bulk mail job {} created for {} recipients by user {}",
+        job_id, total, user.id
     );
 
     Ok(Json(serde_json::json!({
-        "success": failed_count == 0,
-        "message": if failed_count == 0 {
-            format!("Bulk mail sent successfully to {sent_count} recipients")
-        } else {
-            format!("Bulk mail sent to {sent_count} recipients, {failed_count} failed")
-        },
-        "sent": sent_count,
-        "failed": failed_count,
-        "failed_recipients": failed_recipients,
+        "success": true,
+        "job_id": job_id,
+        "total_recipients": total,
+        "message": format!("Mail-Versand gestartet für {} Empfänger", total),
     })))
+}
+
+pub async fn get_mail_job_status(
+    State(state): State<AppState>,
+    Path(job_id): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let jobs = state.mail_jobs.read().await;
+    match jobs.get(&job_id) {
+        Some(job) => Ok(Json(serde_json::json!({
+            "success": true,
+            "job": job,
+        }))),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "success": false,
+                "message": "Job nicht gefunden"
+            })),
+        )),
+    }
 }
 
 pub async fn get_member_counts(

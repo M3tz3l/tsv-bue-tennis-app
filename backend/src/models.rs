@@ -67,6 +67,28 @@ pub struct SendBulkMailRequest {
     pub recipient_filter: RecipientFilter,
 }
 
+// Mail background job types
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum MailJobStatus {
+    Pending,
+    Running,
+    Completed,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Type)]
+pub struct MailJob {
+    pub id: String,
+    pub status: MailJobStatus,
+    pub total_recipients: i32,
+    pub sent: i32,
+    pub failed: i32,
+    pub failed_recipients: Vec<String>,
+    pub error: Option<String>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
 #[derive(Debug, Deserialize, Type)]
 pub struct CreateWorkHourRequest {
     #[serde(rename = "Datum")]
