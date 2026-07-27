@@ -62,10 +62,12 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
         }
         setIsLoading(false);
         const job = response.job;
-        if (job.failed === 0) {
-          toast.success(`Mail versandt an ${job.sent} Empf\u00e4nger!`);
+        if (job.status === 'failed') {
+          toast.error(job.error || `Mail-Versand fehlgeschlagen (${job.failed}/${job.total_recipients} fehlgeschlagen)`);
+        } else if (job.failed === 0) {
+          toast.success(`Mail versandt an ${job.sent} Empfänger!`);
         } else {
-          toast.warning(`Mail versandt an ${job.sent} von ${job.total_recipients} Empf\u00e4ngern (${job.failed} fehlgeschlagen)`);
+          toast.warning(`Mail versandt an ${job.sent} von ${job.total_recipients} Empfängern (${job.failed} fehlgeschlagen)`);
         }
         // Reset form after a short delay so user can see the final status
         setTimeout(() => {
@@ -77,6 +79,14 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           onClose();
         }, 2000);
       }
+    } else {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      setIsLoading(false);
+      setActiveJob(null);
+      toast.error(response.message || 'Job-Status konnte nicht abgerufen werden');
     }
   }, [onClose]);
 
@@ -153,7 +163,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       if (response.success) {
         const jobId = (response as any).job_id as string;
         const total = (response as any).total_recipients as number;
-        toast.info(`Mail-Versand gestartet f\u00fcr ${total} Empf\u00e4nger...`);
+        toast.info(`Mail-Versand gestartet für ${total} Empfänger...`);
         // Start polling
         pollingRef.current = setInterval(() => pollJobStatus(jobId), 1500);
         // Also poll immediately
@@ -193,7 +203,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
               onClose();
             }}
             className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100"
-            aria-label="Schlie\u00dfen"
+            aria-label="Schließen"
           >
             <XMarkIcon className="h-6 w-6" />
           </button>
@@ -369,7 +379,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
             className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
             disabled={isSendingTest}
           >
-            {activeJob ? 'Schlie\u00dfen' : 'Abbrechen'}
+            {activeJob ? 'Schließen' : 'Abbrechen'}
           </button>
           <button
             onClick={handleSendTest}

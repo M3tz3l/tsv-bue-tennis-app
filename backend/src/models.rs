@@ -81,9 +81,9 @@ pub enum MailJobStatus {
 pub struct MailJob {
     pub id: String,
     pub status: MailJobStatus,
-    pub total_recipients: usize,
-    pub sent: usize,
-    pub failed: usize,
+    pub total_recipients: i32,
+    pub sent: i32,
+    pub failed: i32,
     pub failed_recipients: Vec<String>,
     pub error: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,

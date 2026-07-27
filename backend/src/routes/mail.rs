@@ -336,7 +336,7 @@ pub async fn send_bulk_mail(
     let job = MailJob {
         id: job_id.clone(),
         status: MailJobStatus::Pending,
-        total_recipients: total,
+        total_recipients: total as i32,
         sent: 0,
         failed: 0,
         failed_recipients: Vec::new(),
@@ -379,9 +379,10 @@ pub async fn send_bulk_mail(
                 .await
         });
 
+        let result = send_handle.await;
         let mut jobs = job_store.write().await;
         if let Some(job) = jobs.get_mut(&jid) {
-            match send_handle.await {
+            match result {
                 Ok((sent, failed, failed_recipients)) => {
                     if sent == 0 && failed > 0 {
                         job.status = MailJobStatus::Failed;
@@ -389,8 +390,8 @@ pub async fn send_bulk_mail(
                     } else {
                         job.status = MailJobStatus::Completed;
                     }
-                    job.sent = sent;
-                    job.failed = failed;
+                    job.sent = sent as i32;
+                    job.failed = failed as i32;
                     job.failed_recipients = failed_recipients;
                     info!(
                         "Bulk mail job {} completed: sent={}, failed={}",
