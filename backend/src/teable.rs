@@ -37,7 +37,10 @@ pub async fn check_table_access(
         .map_err(|e| format!("Request failed for table '{table_name}': {e}"))?;
 
     let status = response.status();
-    let text = response.text().await.unwrap_or_default();
+    let text = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response body for table '{table_name}': {e}"))?;
 
     if !status.is_success() {
         return Err(format!(
@@ -45,10 +48,12 @@ pub async fn check_table_access(
         ));
     }
 
-    // Extract total record count if available
+    // Extract total record count; propagate JSON parse errors,
+    // but keep the 0 fallback for valid JSON that lacks a numeric total
     let total = serde_json::from_str::<Value>(&text)
-        .ok()
-        .and_then(|v| v["total"].as_u64())
+        .map_err(|e| format!("Failed to parse response JSON for table '{table_name}': {e}"))?
+        .get("total")
+        .and_then(|v| v.as_u64())
         .unwrap_or(0);
 
     Ok(total)
