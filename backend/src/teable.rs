@@ -30,7 +30,7 @@ pub async fn check_table_access(
     table_name: &str,
 ) -> Result<u64, String> {
     let config = get_teable_config().map_err(|e| format!("Config error: {e}"))?;
-    let url = format!("{}/table/{}/record?pageSize=1", config.api_url, table_id);
+    let url = format!("{}/table/{}/record?take=1", config.api_url, table_id);
 
     let response = make_teable_request(client, &url, &config.token, &format!("check_{table_name}"))
         .await
@@ -77,14 +77,14 @@ pub async fn get_work_hours_for_member_at_date(
         ]
     });
     let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-    let url = format!(
-        "{}/table/{}/record?filter={}",
-        cfg.api_url,
-        cfg.work_hours_table_id,
-        urlencoding::encode(&filter.to_string())
-    );
-    let response =
-        make_teable_request(http_client, &url, &cfg.token, "work_hours_for_date").await?;
+    let url = format!("{}/table/{}/record", cfg.api_url, cfg.work_hours_table_id);
+    let response = http_client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", cfg.token))
+        .header("Accept", "application/json")
+        .query(&[("filter", &filter.to_string())])
+        .send()
+        .await?;
     let response_text = handle_teable_response(response, "work_hours_for_date").await?;
     let teable_response: serde_json::Value = serde_json::from_str(&response_text)?;
     let records = teable_response["records"]
@@ -461,7 +461,7 @@ pub async fn get_work_hours_for_member_by_year(
 ) -> Result<TeableResponse<WorkHour>> {
     let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
 
-    let mut url = format!("{}/table/{}/record", cfg.api_url, cfg.work_hours_table_id);
+    let url = format!("{}/table/{}/record", cfg.api_url, cfg.work_hours_table_id);
 
     // Build filter set
     let mut filter_set = vec![];
@@ -492,20 +492,19 @@ pub async fn get_work_hours_for_member_by_year(
         }
     }));
 
-    if !filter_set.is_empty() {
-        let filter = serde_json::json!({
-            "conjunction": "and",
-            "filterSet": filter_set
-        });
-        url = format!(
-            "{}?filter={}",
-            url,
-            urlencoding::encode(&filter.to_string())
-        );
-        debug!("Filtering work hours with filter: {}", filter);
-    }
+    let filter = serde_json::json!({
+        "conjunction": "and",
+        "filterSet": filter_set
+    });
+    debug!("Filtering work hours with filter: {}", filter);
 
-    let response = make_teable_request(client, &url, &cfg.token, "work_hours").await?;
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", cfg.token))
+        .header("Accept", "application/json")
+        .query(&[("filter", &filter.to_string())])
+        .send()
+        .await?;
     let response_text = handle_teable_response(response, "work_hours").await?;
 
     // Log a preview of the response for debugging
@@ -821,36 +820,17 @@ pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Me
     Ok(members)
 }
 
-/// Fetches all active members from Teable with optional role filter
+/// Fetches all active members from Teable with optional role filter.
+/// Uses take/skip pagination (max take=1000 per Teable docs) to retrieve all records.
 pub async fn get_all_active_members(
     client: &Client,
     role_filter: Option<&str>,
 ) -> Result<Vec<Member>> {
     let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
 
-    // Build filter: only role filter at API level (isEmpty/isNotEmpty not supported by Teable)
-    // Empty email and Austrittsdatum filtering is done client-side below
     let base_url = format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id);
 
-    let mut req = client
-        .get(&base_url)
-        .header("Authorization", format!("Bearer {}", cfg.token))
-        .header("Accept", "application/json");
-
-    // Add role filter as a query parameter (must be done BEFORE projection[] to avoid query replacement)
-    if let Some(role) = role_filter {
-        let filter = serde_json::json!({
-            "conjunction": "and",
-            "filterSet": [{
-                "fieldId": "Rolle",
-                "operator": "contains",
-                "value": role
-            }]
-        });
-        req = req.query(&[("filter", &filter.to_string())]);
-    }
-
-    for field in [
+    let projection_fields = [
         "Vorname",
         "Nachname",
         "Email",
@@ -859,22 +839,67 @@ pub async fn get_all_active_members(
         "Eintrittsdatum",
         "Austrittsdatum",
         "Rolle",
-    ]
-    .iter()
-    {
-        req = req.query(&[("projection[]", *field)]);
+    ];
+
+    let page_size = 1000;
+    let mut all_records: Vec<Value> = Vec::new();
+
+    loop {
+        let skip = all_records.len();
+        let mut req = client
+            .get(&base_url)
+            .header("Authorization", format!("Bearer {}", cfg.token))
+            .header("Accept", "application/json")
+            .query(&[
+                ("take", &page_size.to_string()),
+                ("skip", &skip.to_string()),
+            ]);
+
+        // Add role filter as a query parameter
+        if let Some(role) = role_filter {
+            let filter = serde_json::json!({
+                "conjunction": "and",
+                "filterSet": [{
+                    "fieldId": "Rolle",
+                    "operator": "contains",
+                    "value": role
+                }]
+            });
+            req = req.query(&[("filter", &filter.to_string())]);
+        }
+
+        for field in projection_fields.iter() {
+            req = req.query(&[("projection[]", *field)]);
+        }
+
+        let response = req.send().await?;
+        let response_text = handle_teable_response(response, "all_active_members").await?;
+        let teable_response: Value = serde_json::from_str(&response_text)?;
+
+        let records = teable_response["records"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+
+        let fetched = records.len();
+        all_records.extend(records);
+
+        debug!(
+            "Pagination: skip={}, take={}, fetched={}, total_so_far={}",
+            skip,
+            page_size,
+            fetched,
+            all_records.len()
+        );
+
+        // Stop when this page returned fewer records than requested (last page)
+        if fetched < page_size as usize {
+            break;
+        }
     }
 
-    let response = req.send().await?;
-    let response_text = handle_teable_response(response, "all_active_members").await?;
-    let teable_response: Value = serde_json::from_str(&response_text)?;
-    let records = teable_response["records"]
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?
-        .clone();
-
     let mut members = Vec::new();
-    for record in records {
+    for record in &all_records {
         let fields = &record["fields"];
         // Skip members with an Austrittsdatum (exit date) — they are no longer active
         let has_exit_date = fields["Austrittsdatum"]
@@ -903,6 +928,11 @@ pub async fn get_all_active_members(
         }
     }
 
-    info!("Fetched {} active members", members.len());
+    info!(
+        "Fetched {} active members out of {} raw records ({} pages)",
+        members.len(),
+        all_records.len(),
+        (all_records.len() + page_size - 1) / page_size
+    );
     Ok(members)
 }
