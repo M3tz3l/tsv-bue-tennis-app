@@ -151,6 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .route("/dashboard/:year", get(routes::dashboard::dashboard))
         .route("/user", get(get_user))
         .nest("/arbeitsstunden", routes::work_hours::routes())
+        .merge(routes::mail::member_count_routes())
         .layer(GovernorLayer {
             config: read_governor_conf,
         })
@@ -166,7 +167,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             "/mail/send",
             axum::routing::post(routes::mail::send_bulk_mail),
         )
-        .merge(routes::mail::member_count_routes())
         .layer(GovernorLayer {
             config: write_governor_conf,
         })
@@ -191,9 +191,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .with_state(state);
 
     let port = config.port;
-    let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
-        .await
-        .unwrap();
+    let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await.unwrap();
     info!("Server starting on port {}", port);
     axum::serve(
         listener,

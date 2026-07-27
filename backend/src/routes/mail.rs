@@ -14,7 +14,7 @@ use crate::teable;
 use crate::utils::extract_auth_claims_from_headers;
 
 pub fn member_count_routes() -> axum::Router<AppState> {
-    axum::Router::new().route("/recipient-counts", get(get_member_counts))
+    axum::Router::new().route("/mail/recipient-counts", get(get_member_counts))
 }
 
 const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024;

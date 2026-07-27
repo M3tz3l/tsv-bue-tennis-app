@@ -29,25 +29,19 @@ pub async fn check_table_access(
     table_id: &str,
     table_name: &str,
 ) -> Result<u64, String> {
-    let config = get_teable_config().map_err(|e| format!("Config error: {}", e))?;
+    let config = get_teable_config().map_err(|e| format!("Config error: {e}"))?;
     let url = format!("{}/table/{}/record?pageSize=1", config.api_url, table_id);
 
-    let response = make_teable_request(
-        client,
-        &url,
-        &config.token,
-        &format!("check_{}", table_name),
-    )
-    .await
-    .map_err(|e| format!("Request failed for table '{}': {}", table_name, e))?;
+    let response = make_teable_request(client, &url, &config.token, &format!("check_{table_name}"))
+        .await
+        .map_err(|e| format!("Request failed for table '{table_name}': {e}"))?;
 
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
 
     if !status.is_success() {
         return Err(format!(
-            "Table '{}' ({}): HTTP {} — {}",
-            table_name, table_id, status, text
+            "Table '{table_name}' ({table_id}): HTTP {status} — {text}"
         ));
     }
 
@@ -831,7 +825,15 @@ pub async fn get_all_active_members(
 
     // Build filter: only role filter at API level (isEmpty/isNotEmpty not supported by Teable)
     // Empty email and Austrittsdatum filtering is done client-side below
-    let url = if let Some(role) = role_filter {
+    let base_url = format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id);
+
+    let mut req = client
+        .get(&base_url)
+        .header("Authorization", format!("Bearer {}", cfg.token))
+        .header("Accept", "application/json");
+
+    // Add role filter as a query parameter (must be done BEFORE projection[] to avoid query replacement)
+    if let Some(role) = role_filter {
         let filter = serde_json::json!({
             "conjunction": "and",
             "filterSet": [{
@@ -840,20 +842,8 @@ pub async fn get_all_active_members(
                 "value": role
             }]
         });
-        format!(
-            "{}/table/{}/record?filter={}",
-            cfg.api_url,
-            cfg.members_table_id,
-            urlencoding::encode(&filter.to_string())
-        )
-    } else {
-        format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id)
-    };
-
-    let mut req = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", cfg.token))
-        .header("Accept", "application/json");
+        req = req.query(&[("filter", &filter.to_string())]);
+    }
 
     for field in [
         "Vorname",
