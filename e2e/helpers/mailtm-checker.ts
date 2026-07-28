@@ -1,4 +1,21 @@
 import type { TestFixtures } from '../seed/lib/fixtures.js';
+import { setGlobalDispatcher, ProxyAgent } from 'undici';
+
+const MAILTM_API = 'https://api.mail.tm';
+
+let proxyInitialized = false;
+
+function ensureTestProxy() {
+  if (proxyInitialized) return;
+  proxyInitialized = true;
+  const proxyUrl = process.env.MAILTM_PROXY;
+  if (proxyUrl) {
+    setGlobalDispatcher(new ProxyAgent(proxyUrl));
+  }
+}
+
+// Auto-init proxy on first import
+ensureTestProxy();
 
 const MAILTM_API = 'https://api.mail.tm';
 

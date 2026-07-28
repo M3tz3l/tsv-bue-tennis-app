@@ -4,12 +4,18 @@ import { fileURLToPath } from 'url';
 import { config } from './lib/config.js';
 import { deleteTeableRecordsByEmailDomain } from './lib/teable.js';
 import { deleteAccount, fetchWithRetry, sleep } from './lib/mailtm.js';
+import { ensureMailTmProxy } from './lib/proxy.js';
 import type { TestFixtures } from './lib/fixtures.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 async function main() {
   console.log('=== E2E Test Cleanup ===\n');
+
+  // Set up proxy for mail.tm
+  console.log('0. Setting up mail.tm proxy...');
+  await ensureMailTmProxy();
+  console.log('');
 
   const fixturePath = join(__dirname, 'fixtures', 'test-users.json');
 

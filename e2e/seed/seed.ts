@@ -6,6 +6,7 @@ import { getAvailableDomain, createAccountsBatch, type MailTmAccount } from './l
 import { createTeableRecords, deleteTeableRecord } from './lib/teable.js';
 import { seedSqlite } from './lib/sqlite.js';
 import { generateTestUsers, type TestUser, type TestFixtures } from './lib/fixtures.js';
+import { ensureMailTmProxy } from './lib/proxy.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = join(__dirname, 'fixtures', 'test-users.json');
@@ -32,6 +33,11 @@ async function main() {
     console.error('  TEABLE_API_URL, TEABLE_TOKEN, MEMBERS_TABLE_ID');
     process.exit(1);
   }
+
+  // Set up proxy for mail.tm (bypasses shared CI IP rate limits)
+  console.log('0. Setting up mail.tm proxy...');
+  await ensureMailTmProxy();
+  console.log('');
 
   // Check for existing fixtures
   const existing = loadExistingFixtures();
