@@ -27,7 +27,7 @@ interface MailTmAccountResponse {
 
 let cachedDomain: string | null = null;
 
-async function sleep(ms: number): Promise<void> {
+export async function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
 }
 
@@ -45,7 +45,7 @@ export async function getAvailableDomain(): Promise<string> {
   return cachedDomain;
 }
 
-async function fetchWithRetry(
+export async function fetchWithRetry(
   url: string,
   options: RequestInit,
   maxRetries = 3,
@@ -86,8 +86,13 @@ async function tryGetToken(address: string, password: string): Promise<string | 
     return data.token;
   }
 
-  // 401 = wrong password, 404 = not found
-  return null;
+  // 401 = wrong password, 404 = not found — expected, return null
+  if (res.status === 401 || res.status === 404) {
+    return null;
+  }
+
+  // Other non-2xx = transient failure, propagate
+  throw new Error(`tryGetToken failed for ${address}: ${res.status}`);
 }
 
 /**

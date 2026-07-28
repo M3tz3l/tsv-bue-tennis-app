@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { getOrgaUser, getFixtures, loginViaApi } from '../helpers/auth-helper';
+import { getOrgaUser, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
 import { waitForEmail, checkBulkDelivery } from '../helpers/mailtm-checker';
 
 test.describe('Mail Delivery Verification', () => {
@@ -8,13 +8,8 @@ test.describe('Mail Delivery Verification', () => {
     expect(user).toBeTruthy();
 
     const fixtures = getFixtures();
-    const { token } = await loginViaApi(user!.email, fixtures.password);
 
-    // Navigate and set auth
-    await page.goto('/');
-    await page.evaluate((t) => localStorage.setItem('authToken', t), token);
-    await page.reload();
-    await page.waitForURL('**/dashboard**', { timeout: 10_000 });
+    await loginViaBrowser(page, user!.email, fixtures.password);
 
     // Open mail composer
     await page.locator('button:has-text("Rundmail"), a:has-text("Rundmail")').click();
@@ -51,12 +46,8 @@ test.describe('Mail Delivery Verification', () => {
     expect(user!.mailTmToken).toBeTruthy();
 
     const fixtures = getFixtures();
-    const { token } = await loginViaApi(user!.email, fixtures.password);
 
-    await page.goto('/');
-    await page.evaluate((t) => localStorage.setItem('authToken', t), token);
-    await page.reload();
-    await page.waitForURL('**/dashboard**', { timeout: 10_000 });
+    await loginViaBrowser(page, user!.email, fixtures.password);
 
     // Send a test mail
     await page.locator('button:has-text("Rundmail"), a:has-text("Rundmail")').click();

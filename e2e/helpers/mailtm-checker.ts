@@ -18,7 +18,7 @@ export interface MailTmMessage {
  */
 export async function waitForEmail(
   mailTmToken: string,
-  subject: string,
+  subject: string | RegExp,
   timeoutMs = 30_000,
   pollIntervalMs = 2_000,
 ): Promise<MailTmMessage | null> {
@@ -33,7 +33,11 @@ export async function waitForEmail(
       if (res.ok) {
         const data = await res.json() as { 'hydra:member': MailTmMessage[] };
         const messages = data['hydra:member'] || [];
-        const match = messages.find(m => m.subject === subject);
+        const match = messages.find(m =>
+          typeof subject === 'string'
+            ? m.subject === subject
+            : subject.test(m.subject),
+        );
         if (match) return match;
       }
     } catch {
@@ -52,7 +56,7 @@ export async function waitForEmail(
  */
 export async function hasEmail(
   mailTmToken: string,
-  subject: string,
+  subject: string | RegExp,
 ): Promise<boolean> {
   try {
     const res = await fetch(`${MAILTM_API}/messages`, {
@@ -63,7 +67,11 @@ export async function hasEmail(
 
     const data = await res.json() as { 'hydra:member': MailTmMessage[] };
     const messages = data['hydra:member'] || [];
-    return messages.some(m => m.subject === subject);
+    return messages.some(m =>
+      typeof subject === 'string'
+        ? m.subject === subject
+        : subject.test(m.subject),
+    );
   } catch {
     return false;
   }

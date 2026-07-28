@@ -1,22 +1,13 @@
 import { test, expect } from '@playwright/test';
-import { getOrgaUser, getRegularUser, getFixtures } from '../helpers/auth-helper';
-import { waitForEmail } from '../helpers/mailtm-checker';
-
-async function loginViaForm(page: any, email: string, password: string) {
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
-  await page.fill('input[type="email"], input[placeholder*="E-Mail"], input[placeholder*="e-mail"]', email);
-  await page.fill('input[type="password"], input[placeholder*="Passwort"], input[placeholder*="password"]', password);
-  await page.click('button:has-text("Anmelden")');
-  await page.waitForURL('**/dashboard**', { timeout: 15_000 });
-}
+import { getOrgaUser, getRegularUser, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
+import { waitForEmail, checkBulkDelivery } from '../helpers/mailtm-checker';
 
 test.describe('Send Bulk Mail', () => {
   test('orga user can open mail composer', async ({ page }) => {
     const user = getOrgaUser();
     expect(user).toBeTruthy();
 
-    await loginViaForm(page, user!.email, getFixtures().password);
+    await loginViaBrowser(page, user!.email, getFixtures().password);
 
     // Find and click the Rundmail button
     const mailButton = page.locator('button:has-text("Rundmail"), a:has-text("Rundmail")');
@@ -31,7 +22,7 @@ test.describe('Send Bulk Mail', () => {
     const user = getRegularUser();
     expect(user).toBeTruthy();
 
-    await loginViaForm(page, user!.email, getFixtures().password);
+    await loginViaBrowser(page, user!.email, getFixtures().password);
 
     // Rundmail button should NOT be visible
     const mailButton = page.locator('button:has-text("Rundmail"), a:has-text("Rundmail")');
@@ -43,7 +34,7 @@ test.describe('Send Bulk Mail', () => {
     expect(user).toBeTruthy();
     expect(user!.mailTmToken).toBeTruthy();
 
-    await loginViaForm(page, user!.email, getFixtures().password);
+    await loginViaBrowser(page, user!.email, getFixtures().password);
 
     // Open mail composer
     await page.locator('button:has-text("Rundmail"), a:has-text("Rundmail")').click();
@@ -70,7 +61,7 @@ test.describe('Send Bulk Mail', () => {
     expect(user).toBeTruthy();
     expect(user!.mailTmToken).toBeTruthy();
 
-    await loginViaForm(page, user!.email, getFixtures().password);
+    await loginViaBrowser(page, user!.email, getFixtures().password);
 
     // Open mail composer
     await page.locator('button:has-text("Rundmail"), a:has-text("Rundmail")').click();
@@ -95,23 +86,14 @@ test.describe('Send Bulk Mail', () => {
       page.locator('text=Sende Mails').or(page.locator('text=Wird gestartet')).or(page.locator('text=gestartet'))
     ).toBeVisible({ timeout: 10_000 });
 
-    // Wait for completion (poll for a while)
+    // Wait for sending to start
     await page.waitForTimeout(5_000);
 
-    // Verify at least a few emails were received
+    // Use checkBulkDelivery for concurrent polling
     const fixtures = getFixtures();
-    const sampleSize = 5;
-    const sample = fixtures.users.slice(0, sampleSize);
-
-    let received = 0;
-    for (const u of sample) {
-      if (u.mailTmToken) {
-        const found = await waitForEmail(u.mailTmToken, testSubject, 15_000);
-        if (found) received++;
-      }
-    }
+    const result = await checkBulkDelivery(fixtures.users, testSubject, 5, 30_000);
 
     // At least 3 out of 5 should have received the email
-    expect(received).toBeGreaterThanOrEqual(3);
+    expect(result.received).toBeGreaterThanOrEqual(3);
   });
 });

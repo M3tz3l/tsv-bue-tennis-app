@@ -119,10 +119,10 @@ export async function createTeableRecords(
 
     const data = await res.json() as { records: TeableRecordResponse[] };
 
-    // Add new records to map
-    data.records.forEach((record, idx) => {
-      const email = batch[idx].email.toLowerCase();
-      idMap.set(email, record.id);
+    // Add new records to map — derive email from the returned record
+    data.records.forEach((record) => {
+      const email = (record.fields?.Email || '').toLowerCase();
+      if (email) idMap.set(email, record.id);
     });
 
     if (i + batchSize < toCreate.length) {
@@ -176,12 +176,31 @@ export async function deleteTeableRecordsByEmailDomain(domain: string): Promise<
 
       if (deleteRes.ok) {
         deleted += testRecords.length;
+        // Adjust offset: deleted records shift remaining left
+        skip += take - testRecords.length;
+      } else {
+        skip += take;
       }
+    } else {
+      skip += take;
     }
 
-    skip += take;
     if (data.records.length < take) break;
   }
 
   return deleted;
+}
+
+export async function deleteTeableRecord(recordId: string): Promise<boolean> {
+  const res = await fetch(
+    `${config.teableApiUrl}/table/${config.membersTableId}/record/${recordId}`,
+    {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${config.teableToken}`,
+        'Content-Type': 'application/json',
+      },
+    },
+  );
+  return res.ok;
 }

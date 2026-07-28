@@ -1,21 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { getOrgaUser, getRegularUser, getFixtures } from '../helpers/auth-helper';
-
-async function loginViaForm(page: any, email: string, password: string) {
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
-  await page.fill('input[type="email"], input[placeholder*="E-Mail"], input[placeholder*="e-mail"]', email);
-  await page.fill('input[type="password"], input[placeholder*="Passwort"], input[placeholder*="password"]', password);
-  await page.click('button:has-text("Anmelden")');
-}
+import { getOrgaUser, getRegularUser, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
 
 test.describe('Login', () => {
   test('login with orga user and reach dashboard', async ({ page }) => {
     const user = getOrgaUser();
     expect(user).toBeTruthy();
 
-    await loginViaForm(page, user!.email, getFixtures().password);
-    await page.waitForURL('**/dashboard**', { timeout: 15_000 });
+    await loginViaBrowser(page, user!.email, getFixtures().password);
     await expect(page).toHaveURL(/dashboard/);
     await expect(page.locator('span:has-text("Willkommen,")')).toBeVisible({ timeout: 5_000 });
   });
@@ -24,13 +15,16 @@ test.describe('Login', () => {
     const user = getRegularUser();
     expect(user).toBeTruthy();
 
-    await loginViaForm(page, user!.email, getFixtures().password);
-    await page.waitForURL('**/dashboard**', { timeout: 15_000 });
+    await loginViaBrowser(page, user!.email, getFixtures().password);
     await expect(page).toHaveURL(/dashboard/);
   });
 
   test('login with invalid credentials shows error', async ({ page }) => {
-    await loginViaForm(page, 'nonexistent@example.com', 'WrongPassword123!');
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await page.fill('input[type="email"], input[placeholder*="E-Mail"]', 'nonexistent@example.com');
+    await page.fill('input[type="password"], input[placeholder*="Passwort"]', 'WrongPassword123!');
+    await page.click('button:has-text("Anmelden")');
     await page.waitForTimeout(2000);
 
     // Should stay on login page
@@ -45,8 +39,7 @@ test.describe('Login', () => {
     const user = getOrgaUser();
     expect(user).toBeTruthy();
 
-    await loginViaForm(page, user!.email, getFixtures().password);
-    await page.waitForURL('**/dashboard**', { timeout: 15_000 });
+    await loginViaBrowser(page, user!.email, getFixtures().password);
 
     const token = await page.evaluate(() => localStorage.getItem('authToken'));
     expect(token).toBeTruthy();

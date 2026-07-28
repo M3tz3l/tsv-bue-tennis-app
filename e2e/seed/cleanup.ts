@@ -3,7 +3,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { config } from './lib/config.js';
 import { deleteTeableRecordsByEmailDomain } from './lib/teable.js';
-import { deleteAccount } from './lib/mailtm.js';
+import { deleteAccount, fetchWithRetry, sleep } from './lib/mailtm.js';
 import type { TestFixtures } from './lib/fixtures.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -33,22 +33,24 @@ async function main() {
   // Delete mail.tm accounts
   console.log('2. Deleting mail.tm accounts...');
   let deletedAccounts = 0;
-  for (const user of fixtures.users) {
+  for (let i = 0; i < fixtures.users.length; i++) {
+    const user = fixtures.users[i];
     if (user.mailTmToken) {
       try {
-        // We need the account ID, but we stored the token
-        // For cleanup, we can just skip mail.tm accounts (they expire)
-        // or use the /me endpoint to get the ID
-        const res = await fetch(`${config.mailtmApiUrl}/me`, {
+        const meRes = await fetchWithRetry(`${config.mailtmApiUrl}/me`, {
           headers: { Authorization: `Bearer ${user.mailTmToken}` },
         });
-        if (res.ok) {
-          const me = await res.json() as { id: string };
+        if (meRes.ok) {
+          const me = await meRes.json() as { id: string };
           await deleteAccount(me.id, user.mailTmToken);
           deletedAccounts++;
         }
       } catch {
         // Ignore errors during cleanup
+      }
+      // Pace at 250ms to respect rate limits
+      if (i < fixtures.users.length - 1) {
+        await sleep(250);
       }
     }
   }
