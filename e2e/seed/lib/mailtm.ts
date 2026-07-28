@@ -34,7 +34,7 @@ export async function sleep(ms: number): Promise<void> {
 export async function getAvailableDomain(): Promise<string> {
   if (cachedDomain) return cachedDomain;
 
-  const res = await fetch(`${config.mailtmApiUrl}/domains`);
+  const res = await fetchWithRetry(`${config.mailtmApiUrl}/domains`);
   if (!res.ok) throw new Error(`Failed to fetch mail.tm domains: ${res.status}`);
 
   const data = await res.json() as { 'hydra:member': MailTmDomain[] };
@@ -48,18 +48,21 @@ export async function getAvailableDomain(): Promise<string> {
 export async function fetchWithRetry(
   url: string,
   options: RequestInit,
-  maxRetries = 3,
+  maxRetries = 5,
 ): Promise<Response> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const res = await fetch(url, options);
 
     if (res.status === 429) {
       const retryAfter = res.headers.get('retry-after');
+      // Exponential backoff with ±20% jitter: 3s, 6s, 12s, 24s, 30s
+      const baseDelay = attempt === 4 ? 30000 : 3000 * Math.pow(2, attempt);
+      const jitter = 0.8 + Math.random() * 0.4; // 0.8–1.2
       const delayMs = retryAfter
-        ? Math.max(parseInt(retryAfter, 10) * 1000, 2000)
-        : 2000 * (attempt + 1);
+        ? Math.max(parseInt(retryAfter, 10) * 1000, baseDelay) * jitter
+        : baseDelay * jitter;
 
-      console.log(`    429, waiting ${delayMs}ms...`);
+      console.log(`    429, waiting ${Math.round(delayMs)}ms...`);
       await sleep(delayMs);
       continue;
     }
@@ -160,7 +163,9 @@ export async function deleteAccount(id: string, token: string): Promise<void> {
  * - New account: 2 requests (create + token)
  * - Existing with wrong password: 2 requests (token fail + create fail)
  *
- * 8 QPS limit, 250ms between requests = 4 QPS safe.
+ * CI runners share IPs, so mail.tm rate limits (8 QPS) are shared across
+ * concurrent jobs.  Pacing is set conservatively (1.5s between accounts,
+ * ~0.67 QPS) with an initial 5s cool-down and exponential backoff on 429.
  */
 export async function createAccountsBatch(
   accounts: Array<{ address: string; password: string }>,
@@ -169,6 +174,10 @@ export async function createAccountsBatch(
   let tokenOnlyCount = 0;
   let createdCount = 0;
   let failedCount = 0;
+
+  // Initial cool-down: let any burst from other CI jobs on the same IP settle
+  console.log(`  Waiting 5s before starting (shared IP rate-limit buffer)...`);
+  await sleep(5000);
 
   for (let i = 0; i < accounts.length; i++) {
     const account = accounts[i];
@@ -202,12 +211,13 @@ export async function createAccountsBatch(
     } catch (err: any) {
       console.error(`  ${account.address}: ${err.message}`);
       failedCount++;
-      await sleep(2000); // Extra wait after failure
+      // After a rate-limit failure, wait longer for the IP to cool down
+      await sleep(5000);
     }
 
-    // 250ms between requests = 4 QPS (well under 8 QPS limit)
+    // 1500ms between accounts ≈ 0.67 QPS (well under 8 QPS, safe for shared IPs)
     if (i < accounts.length - 1) {
-      await sleep(250);
+      await sleep(1500);
     }
   }
 
