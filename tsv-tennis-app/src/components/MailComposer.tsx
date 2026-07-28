@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
-import { XMarkIcon, PaperAirplaneIcon, EnvelopeIcon, UserGroupIcon, UsersIcon, PaperClipIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { Dialog, DialogPanel, DialogTitle, Disclosure, DisclosureButton, DisclosurePanel, Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
+import { XMarkIcon, PaperAirplaneIcon, EnvelopeIcon, UserGroupIcon, UsersIcon, PaperClipIcon, TrashIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 import BackendService from '../services/backendService';
 import { useAuth } from '../context/AuthContext';
@@ -22,7 +22,6 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [showBulkConfirmation, setShowBulkConfirmation] = useState(false);
   const [memberCounts, setMemberCounts] = useState({ all: 0, orga: 0 });
   const [countsLoaded, setCountsLoaded] = useState(false);
   const [activeJob, setActiveJob] = useState<MailJob | null>(null);
@@ -91,14 +90,16 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     }
   }, [onClose]);
 
+  const isBusy = isLoading || isSendingTest || (activeJob !== null && activeJob.status !== 'completed' && activeJob.status !== 'failed');
+
   const handleClose = () => {
+    if (isBusy) return;
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
     setActiveJob(null);
     setIsLoading(false);
-    setShowBulkConfirmation(false);
     onClose();
   };
 
@@ -155,7 +156,6 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       return;
     }
 
-    setShowBulkConfirmation(false);
     setIsLoading(true);
     setActiveJob(null);
     try {
@@ -191,15 +191,12 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   return (
     <Dialog
       open={isOpen}
-      onClose={() => {
-        if (isLoading || isSendingTest || (activeJob && activeJob.status !== 'completed' && activeJob.status !== 'failed')) return;
-        handleClose();
-      }}
+      onClose={handleClose}
       className="relative z-50"
     >
       <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
-      <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
-        <DialogPanel className="max-w-3xl w-full max-h-[90vh] overflow-y-auto bg-white rounded-xl shadow-2xl flex flex-col">
+      <div className="fixed inset-0 flex w-screen items-center justify-center p-4 sm:p-6">
+        <DialogPanel className="max-w-3xl w-full max-h-[90vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden">
           {/* Header */}
           <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 shrink-0">
             <div className="flex items-center gap-3">
@@ -212,7 +209,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
             </div>
             <button
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100"
+              disabled={isBusy}
+              className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
               aria-label="Schließen"
             >
               <XMarkIcon className="h-6 w-6" />
@@ -220,9 +218,10 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           </div>
 
           {/* Content */}
-          <div className="flex flex-col md:flex-row gap-6 p-6 overflow-hidden">
-            {/* Left column: inputs */}
-            <div className="flex-1 min-w-0 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="flex flex-col md:flex-row gap-4 sm:gap-6 p-4 sm:p-6">
+              {/* Left column: inputs — bottom on mobile, right on desktop */}
+              <div className="order-last md:order-last flex-1 min-w-0 space-y-4">
               {/* Recipient Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -332,36 +331,82 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                   </ul>
                 )}
               </div>
-            </div>
+              </div>
 
-            {/* Right column: preview */}
-            <div className="md:w-80 shrink-0 flex flex-col">
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Vorschau
-              </label>
-              <div className="flex-1 min-h-0 border border-gray-200 rounded-lg bg-gray-50 p-4 overflow-y-auto">
-                <div className="bg-white rounded-lg shadow-sm p-4 text-sm text-gray-900">
-                  <p className="font-medium mb-2">{subject.trim() || 'Kein Betreff'}</p>
-                  <p className="text-gray-700 mb-2">
-                    Hallo Max,
-                  </p>
-                  <p className="whitespace-pre-wrap text-gray-700">
-                    {message.trim() || 'Ihre Nachricht erscheint hier...'}
-                  </p>
-                  <div className="mt-4 pt-3 border-t border-gray-100 text-sm text-gray-700">
-                    <p className="mb-1">mit sportlichen Grüßen,</p>
-                    <p className="mb-3">{senderFirstName} / die Abteilungsleitung</p>
-                    <p className="font-semibold text-gray-900">Tennisabteilung des TSV Bad Überkingen</p>
-                    <a
-                      href="mailto:tennisabteilung@tsv-bad-ueberkingen.de"
-                      className="text-blue-600 hover:underline"
-                    >
-                      tennisabteilung@tsv-bad-ueberkingen.de
-                    </a>
+              {/* Right column: preview — top on mobile, left on desktop */}
+              <div className="order-first md:order-first md:w-80 shrink-0 flex flex-col">
+              {/* Mobile: collapsible preview using Disclosure */}
+              <div className="md:hidden">
+                <Disclosure>
+                  {({ open }) => (
+                    <>
+                      <DisclosureButton className="flex items-center justify-between w-full text-sm font-medium text-gray-700 mb-1.5">
+                        <span>Vorschau</span>
+                        {open ? (
+                          <ChevronUpIcon className="h-4 w-4 text-gray-500" />
+                        ) : (
+                          <ChevronDownIcon className="h-4 w-4 text-gray-500" />
+                        )}
+                      </DisclosureButton>
+                      <DisclosurePanel className="overflow-y-auto max-h-48">
+                        <div className="border border-gray-200 rounded-lg bg-gray-50 p-4">
+                          <div className="bg-white rounded-lg shadow-sm p-4 text-sm text-gray-900">
+                            <p className="font-medium mb-2">{subject.trim() || 'Kein Betreff'}</p>
+                            <p className="text-gray-700 mb-2">
+                              Hallo Max,
+                            </p>
+                            <p className="whitespace-pre-wrap text-gray-700">
+                              {message.trim() || 'Ihre Nachricht erscheint hier...'}
+                            </p>
+                            <div className="mt-4 pt-3 border-t border-gray-100 text-sm text-gray-700">
+                              <p className="mb-1">mit sportlichen Grüßen,</p>
+                              <p className="mb-3">{senderFirstName} / die Abteilungsleitung</p>
+                              <p className="font-semibold text-gray-900">Tennisabteilung des TSV Bad Überkingen</p>
+                              <a
+                                href="mailto:tennisabteilung@tsv-bad-ueberkingen.de"
+                                className="text-blue-600 hover:underline"
+                              >
+                                tennisabteilung@tsv-bad-ueberkingen.de
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      </DisclosurePanel>
+                    </>
+                  )}
+                </Disclosure>
+              </div>
+
+              {/* Desktop: always-visible preview */}
+              <div className="hidden md:block">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Vorschau
+                </label>
+                <div className="flex-1 min-h-0 border border-gray-200 rounded-lg bg-gray-50 p-4 overflow-y-auto">
+                  <div className="bg-white rounded-lg shadow-sm p-4 text-sm text-gray-900">
+                    <p className="font-medium mb-2">{subject.trim() || 'Kein Betreff'}</p>
+                    <p className="text-gray-700 mb-2">
+                      Hallo Max,
+                    </p>
+                    <p className="whitespace-pre-wrap text-gray-700">
+                      {message.trim() || 'Ihre Nachricht erscheint hier...'}
+                    </p>
+                    <div className="mt-4 pt-3 border-t border-gray-100 text-sm text-gray-700">
+                      <p className="mb-1">mit sportlichen Grüßen,</p>
+                      <p className="mb-3">{senderFirstName} / die Abteilungsleitung</p>
+                      <p className="font-semibold text-gray-900">Tennisabteilung des TSV Bad Überkingen</p>
+                      <a
+                        href="mailto:tennisabteilung@tsv-bad-ueberkingen.de"
+                        className="text-blue-600 hover:underline"
+                      >
+                        tennisabteilung@tsv-bad-ueberkingen.de
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
           </div>
 
           {/* Footer */}
@@ -378,8 +423,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
             )}
             <button
               onClick={handleClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
-              disabled={isSendingTest}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={isBusy}
             >
               {activeJob ? 'Schließen' : 'Abbrechen'}
             </button>
@@ -390,41 +435,35 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
             >
               {isSendingTest ? 'Test wird versendet...' : 'Test-Mail senden'}
             </button>
-            <div className="relative">
-              <button
-                onClick={() => setShowBulkConfirmation(true)}
+            <Popover className="relative">
+              <PopoverButton
                 disabled={isLoading || isSendingTest || !!activeJob || !subject.trim() || !message.trim()}
                 className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <PaperAirplaneIcon className="-ml-1 mr-2 h-5 w-5" />
                 {isLoading ? 'Wird gestartet...' : 'Versenden'}
-              </button>
-              {showBulkConfirmation && (
-                <div className="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 p-4 z-10">
-                  <p className="text-sm text-gray-700 mb-2">
-                    Diese Mail wird an {recipientFilter === 'all' ? 'alle Mitglieder' : 'alle orga-Mitglieder'} versendet.
-                    <span className="block mt-1 text-xs text-gray-500">
-                      {countsLoaded
-                        ? `(${recipientFilter === 'all' ? memberCounts.all : memberCounts.orga} Empfänger)`
-                        : '(Empfänger werden geladen...)'}</span>
-                  </p>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => setShowBulkConfirmation(false)}
-                      className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-                    >
-                      Abbrechen
-                    </button>
-                    <button
-                      onClick={handleSendBulk}
-                      className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
-                    >
-                      Bestätigen
-                    </button>
-                  </div>
+              </PopoverButton>
+              <PopoverPanel className="absolute bottom-full right-0 mb-2 w-56 sm:w-64 bg-white rounded-lg shadow-lg border border-gray-200 p-4 z-10">
+                <p className="text-sm text-gray-700 mb-2">
+                  Diese Mail wird an {recipientFilter === 'all' ? 'alle Mitglieder' : 'alle orga-Mitglieder'} versendet.
+                  <span className="block mt-1 text-xs text-gray-500">
+                    {countsLoaded
+                      ? `(${recipientFilter === 'all' ? memberCounts.all : memberCounts.orga} Empfänger)`
+                      : '(Empfänger werden geladen...)'}</span>
+                </p>
+                <div className="flex justify-end gap-2">
+                  <PopoverButton className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
+                    Abbrechen
+                  </PopoverButton>
+                  <button
+                    onClick={handleSendBulk}
+                    className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
+                  >
+                    Bestätigen
+                  </button>
                 </div>
-              )}
-            </div>
+              </PopoverPanel>
+            </Popover>
           </div>
         </DialogPanel>
       </div>
