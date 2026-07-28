@@ -33,6 +33,7 @@ pub struct EmailService {
     use_implicit_tls: bool,
     from_email: String,
     disable_send: bool,
+    disable_tls: bool,
 }
 
 impl EmailService {
@@ -52,13 +53,19 @@ impl EmailService {
             use_implicit_tls: email_config.use_implicit_tls,
             from_email: email_config.from_email,
             disable_send,
+            disable_tls: email_config.disable_tls,
         })
     }
 
     /// Creates a fresh SMTP transport connection for each send to avoid session limits
     fn create_transport(&self) -> Result<SmtpTransport, Box<dyn std::error::Error + Send + Sync>> {
         let creds = Credentials::new(self.smtp_user.clone(), self.smtp_password.clone());
-        let transport = if self.use_implicit_tls {
+        let transport = if self.disable_tls {
+            SmtpTransport::builder_dangerous(&self.smtp_host)
+                .port(self.smtp_port)
+                .credentials(creds)
+                .build()
+        } else if self.use_implicit_tls {
             SmtpTransport::relay(&self.smtp_host)?
                 .port(self.smtp_port)
                 .credentials(creds)
@@ -77,7 +84,12 @@ impl EmailService {
         &self,
     ) -> Result<AsyncSmtpTransport<Tokio1Executor>, Box<dyn std::error::Error + Send + Sync>> {
         let creds = Credentials::new(self.smtp_user.clone(), self.smtp_password.clone());
-        let transport = if self.use_implicit_tls {
+        let transport = if self.disable_tls {
+            AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&self.smtp_host)
+                .port(self.smtp_port)
+                .credentials(creds)
+                .build()
+        } else if self.use_implicit_tls {
             AsyncSmtpTransport::<Tokio1Executor>::relay(&self.smtp_host)?
                 .port(self.smtp_port)
                 .credentials(creds)

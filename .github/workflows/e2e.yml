@@ -28,6 +28,7 @@ jobs:
       E2E_DATABASE_PATH: ../../backend/e2e_test.db
       JWT_SECRET: e2e-test-secret-do-not-use-in-prod
       EMAIL_DISABLE_SEND: "false"
+      EMAIL_DISABLE_TLS: "true"
       EMAIL_HOST: localhost
       EMAIL_PORT: "1025"
       EMAIL_USER: ""
