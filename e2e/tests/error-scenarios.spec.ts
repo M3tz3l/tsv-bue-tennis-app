@@ -88,21 +88,23 @@ test.describe('Error Scenarios', () => {
     // Login as regular user
     await loginViaBrowser(page, regularUser!.email, fixtures.password);
 
-    // Get auth token from localStorage and call mail API with it
+    // Get auth token from localStorage and call mail API with multipart form data
     const response = await page.evaluate(async () => {
       const token = localStorage.getItem('authToken');
+      const formData = new FormData();
+      formData.append('subject', 'Test');
+      formData.append('message', 'Test');
       const res = await fetch('/api/mail/test-send', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ subject: 'Test', message: 'Test' }),
+        body: formData,
       });
       return { status: res.status, ok: res.ok };
     });
 
     expect(response.ok).toBe(false);
-    expect([400, 401, 403]).toContain(response.status);
+    expect(response.status).toBe(403);
   });
 });
