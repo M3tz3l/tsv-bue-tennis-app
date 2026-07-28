@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { config } from './lib/config.js';
@@ -138,6 +138,7 @@ async function main() {
 
   // Step 6: Write/update fixture file
   console.log('6. Writing fixture file...');
+  mkdirSync(join(__dirname, 'fixtures'), { recursive: true });
   const fixtures: TestFixtures = {
     generatedAt: new Date().toISOString(),
     domain,
