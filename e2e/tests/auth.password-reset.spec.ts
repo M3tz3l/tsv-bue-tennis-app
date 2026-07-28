@@ -4,11 +4,11 @@ import { waitForEmail, getMessages } from '../helpers/mailtm-checker';
 
 const MAILTM_API = 'https://api.mail.tm';
 
-// Use the last orga user (index orgaCount-1) as an isolated user for destructive reset flows
+// Pick an orga user that has a mail.tm token (prefer the last one for isolation from other tests)
 function getIsolatedOrgaUser() {
   const fixtures = getFixtures();
-  const orgaUsers = fixtures.users.filter(u => u.role === 'orga');
-  return orgaUsers[orgaUsers.length - 1];
+  const orgaUsers = fixtures.users.filter(u => u.role === 'orga' && u.mailTmToken);
+  return orgaUsers[orgaUsers.length - 1] || null;
 }
 
 const ORIGINAL_PASSWORD = 'Test1234!';

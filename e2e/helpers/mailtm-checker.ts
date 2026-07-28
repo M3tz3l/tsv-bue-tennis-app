@@ -105,13 +105,14 @@ export async function checkBulkDelivery(
   const shuffled = [...users].sort(() => Math.random() - 0.5);
   const sample = shuffled.slice(0, Math.min(sampleSize, shuffled.length));
 
-  let received = 0;
-  const checks = sample.map(async user => {
-    if (!user.mailTmToken) return;
-    const found = await waitForEmail(user.mailTmToken, subject, timeoutMs);
-    if (found) received++;
-  });
+  // Collect results into an array to avoid race condition on shared counter
+  const results = await Promise.all(
+    sample.map(async user => {
+      if (!user.mailTmToken) return false;
+      return !!(await waitForEmail(user.mailTmToken, subject, timeoutMs));
+    }),
+  );
 
-  await Promise.all(checks);
+  const received = results.filter(Boolean).length;
   return { received, total: sample.length };
 }

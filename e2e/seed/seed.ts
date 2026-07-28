@@ -86,6 +86,24 @@ async function main() {
       }
       console.log(`   Updated ${Math.min(config.orgaCount, users.length)} users to orga\n`);
     }
+
+    // After role changes, ensure all orga users have mail.tm tokens
+    const orgaWithoutToken = users.filter(u => u.role === 'orga' && !u.mailTmToken);
+    if (orgaWithoutToken.length > 0) {
+      console.log(`   Creating mail.tm accounts for ${orgaWithoutToken.length} orga users missing tokens...`);
+      const orgaMailAccounts = await createAccountsBatch(
+        orgaWithoutToken.map(u => ({ address: u.email, password: config.testPassword })),
+      );
+      const accountMap = new Map<string, MailTmAccount>();
+      for (const account of orgaMailAccounts) {
+        accountMap.set(account.address.toLowerCase(), account);
+      }
+      for (const user of orgaWithoutToken) {
+        const account = accountMap.get(user.email.toLowerCase());
+        if (account) user.mailTmToken = account.token;
+      }
+      console.log(`   Orga mail accounts: ${orgaMailAccounts.length} created\n`);
+    }
   } else {
     console.log('2. Generating test user fixtures...');
     users = generateTestUsers(domain);
