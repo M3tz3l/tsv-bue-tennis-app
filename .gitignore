@@ -52,3 +52,13 @@ dist/
 # Temporary files
 tmp/
 temp/
+
+# E2E test artifacts
+e2e/test-results/
+e2e/playwright-report/
+e2e/seed/fixtures/test-users.json
+e2e/seed/node_modules/
+e2e/node_modules/
+
+.mimocode/
+mimocode.json
