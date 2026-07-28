@@ -135,6 +135,29 @@ async function main() {
     console.log(`   Created ${mailAccounts.length} mail.tm accounts\n`);
   }
 
+  // Retry orga users that still lack tokens — they're critical for e2e tests
+  let orgaRetries = 0;
+  let orgaWithoutToken = users.filter(u => u.role === 'orga' && !u.mailTmToken);
+  while (orgaWithoutToken.length > 0 && orgaRetries < 3) {
+    orgaRetries++;
+    console.log(`   Retrying ${orgaWithoutToken.length} orga users without tokens (attempt ${orgaRetries})...`);
+    const orgaMailAccounts = await createAccountsBatch(
+      orgaWithoutToken.map(u => ({ address: u.email, password: config.testPassword })),
+    );
+    const accountMap = new Map<string, MailTmAccount>();
+    for (const account of orgaMailAccounts) {
+      accountMap.set(account.address.toLowerCase(), account);
+    }
+    for (const user of orgaWithoutToken) {
+      const account = accountMap.get(user.email.toLowerCase());
+      if (account) user.mailTmToken = account.token;
+    }
+    orgaWithoutToken = users.filter(u => u.role === 'orga' && !u.mailTmToken);
+  }
+  if (orgaWithoutToken.length > 0) {
+    console.error(`   WARNING: ${orgaWithoutToken.length} orga users still lack mail.tm tokens after ${orgaRetries} retries`);
+  }
+
   // Step 4: Create Teable records (skip those that already have IDs)
   const needTeable = users.filter(u => !u.teableRecordId);
   if (needTeable.length === 0) {

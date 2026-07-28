@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { getOrgaUser, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
+import { getOrgaUserWithToken, getOrgaUser, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
 import { waitForEmail, checkBulkDelivery } from '../helpers/mailtm-checker';
 
 test.describe('Mail Delivery Verification', () => {
@@ -41,9 +41,8 @@ test.describe('Mail Delivery Verification', () => {
   });
 
   test('email content is correct', async ({ page }) => {
-    const user = getOrgaUser();
+    const user = getOrgaUserWithToken();
     expect(user).toBeTruthy();
-    expect(user!.mailTmToken).toBeTruthy();
 
     const fixtures = getFixtures();
 

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { getOrgaUser, getRegularUser, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
+import { getOrgaUser, getRegularUser, getOrgaUserWithToken, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
 import { waitForEmail, checkBulkDelivery } from '../helpers/mailtm-checker';
 
 test.describe('Send Bulk Mail', () => {
@@ -30,9 +30,8 @@ test.describe('Send Bulk Mail', () => {
   });
 
   test('send test mail to self', async ({ page }) => {
-    const user = getOrgaUser();
+    const user = getOrgaUserWithToken();
     expect(user).toBeTruthy();
-    expect(user!.mailTmToken).toBeTruthy();
 
     await loginViaBrowser(page, user!.email, getFixtures().password);
 
@@ -57,9 +56,8 @@ test.describe('Send Bulk Mail', () => {
   });
 
   test('send bulk mail to all members', async ({ page }) => {
-    const user = getOrgaUser();
+    const user = getOrgaUserWithToken();
     expect(user).toBeTruthy();
-    expect(user!.mailTmToken).toBeTruthy();
 
     await loginViaBrowser(page, user!.email, getFixtures().password);
 

@@ -23,6 +23,11 @@ export function getOrgaUser() {
   return getFixtures().users.find(u => u.role === 'orga');
 }
 
+/** Like getOrgaUser but only returns one that has a mail.tm token. */
+export function getOrgaUserWithToken() {
+  return getFixtures().users.find(u => u.role === 'orga' && u.mailTmToken);
+}
+
 export function getRegularUser() {
   return getFixtures().users.find(u => u.role !== 'orga');
 }
