@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { getOrgaUser, getRegularUser, getOrgaUserWithToken, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
-import { waitForEmail, checkBulkDelivery } from '../helpers/mailtm-checker';
+import { getOrgaUser, getRegularUser, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
+import { waitForEmail, checkBulkDelivery } from '../helpers/mailpit-checker';
 
 test.describe('Send Bulk Mail', () => {
   test('orga user can open mail composer', async ({ page }) => {
@@ -30,7 +30,7 @@ test.describe('Send Bulk Mail', () => {
   });
 
   test('send test mail to self', async ({ page }) => {
-    const user = getOrgaUserWithToken();
+    const user = getOrgaUser();
     expect(user).toBeTruthy();
 
     await loginViaBrowser(page, user!.email, getFixtures().password);
@@ -50,13 +50,13 @@ test.describe('Send Bulk Mail', () => {
     // Should show success toast
     await expect(page.locator('text=Test-Mail gesendet')).toBeVisible({ timeout: 10_000 });
 
-    // Verify email was received via mail.tm
-    const received = await waitForEmail(user!.mailTmToken!, testSubject, 30_000);
+    // Verify email was received via Mailpit
+    const received = await waitForEmail(user!.email, testSubject, 30_000);
     expect(received).toBeTruthy();
   });
 
   test('send bulk mail to all members', async ({ page }) => {
-    const user = getOrgaUserWithToken();
+    const user = getOrgaUser();
     expect(user).toBeTruthy();
 
     await loginViaBrowser(page, user!.email, getFixtures().password);
@@ -89,7 +89,8 @@ test.describe('Send Bulk Mail', () => {
 
     // Use checkBulkDelivery for concurrent polling
     const fixtures = getFixtures();
-    const result = await checkBulkDelivery(fixtures.users, testSubject, 5, 30_000);
+    const recipientEmails = fixtures.users.map(u => u.email);
+    const result = await checkBulkDelivery(recipientEmails, testSubject, 5, 30_000);
 
     // At least 3 out of 5 should have received the email
     expect(result.received).toBeGreaterThanOrEqual(3);

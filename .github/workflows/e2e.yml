@@ -28,11 +28,11 @@ jobs:
       E2E_DATABASE_PATH: ../../backend/e2e_test.db
       JWT_SECRET: e2e-test-secret-do-not-use-in-prod
       EMAIL_DISABLE_SEND: "false"
-      EMAIL_HOST: ${{ secrets.E2E_EMAIL_HOST }}
-      EMAIL_PORT: ${{ secrets.E2E_EMAIL_PORT }}
-      EMAIL_USER: ${{ secrets.E2E_EMAIL_USER }}
-      EMAIL_PASSWORD: ${{ secrets.E2E_EMAIL_PASSWORD }}
-      EMAIL_FROM: ${{ secrets.E2E_EMAIL_FROM }}
+      EMAIL_HOST: localhost
+      EMAIL_PORT: "1025"
+      EMAIL_USER: ""
+      EMAIL_PASSWORD: ""
+      EMAIL_FROM: e2e-test@tsv-tennis.local
       FRONTEND_URL: http://localhost:5173
       BACKEND_URL: http://localhost:5000
       BASE_URL: http://localhost:5173
@@ -122,6 +122,14 @@ jobs:
           path: e2e/seed/fixtures/test-users.json
           retention-days: 90
           overwrite: true
+
+      - name: Start Mailpit (SMTP capture server)
+        run: |
+          curl -sL https://github.com/axllent/mailpit/releases/latest/download/mailpit-linux-amd64.tar.gz | tar xz -C /tmp
+          /tmp/mailpit &
+          sleep 2
+          # Verify Mailpit is running
+          curl -sf http://localhost:8025/api/v1/messages > /dev/null && echo "Mailpit ready"
 
       - name: Start backend
         working-directory: backend

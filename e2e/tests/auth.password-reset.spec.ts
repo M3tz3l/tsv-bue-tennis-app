@@ -1,31 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { getFixtures } from '../helpers/auth-helper';
-import { waitForEmail, getMessages } from '../helpers/mailtm-checker';
-
-const MAILTM_API = 'https://api.mail.tm';
-
-// Pick an orga user that has a mail.tm token (prefer the last one for isolation from other tests)
-function getIsolatedOrgaUser() {
-  const fixtures = getFixtures();
-  const orgaUsers = fixtures.users.filter(u => u.role === 'orga' && u.mailTmToken);
-  return orgaUsers[orgaUsers.length - 1] || null;
-}
+import { getOrgaUser, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
+import { waitForEmail, getMessageById, getAllMessages } from '../helpers/mailpit-checker';
 
 const ORIGINAL_PASSWORD = 'Test1234!';
 
-async function getFullMessage(token: string, messageId: string) {
-  const res = await fetch(`${MAILTM_API}/messages/${messageId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`Failed to fetch message: ${res.status}`);
-  return res.json() as Promise<{ text: string; html: string[] }>;
-}
-
 test.describe('Password Reset', () => {
   test('forgot password sends reset email', async ({ page }) => {
-    const user = getIsolatedOrgaUser();
+    const fixtures = getFixtures();
+    // Use the first orga user
+    const user = fixtures.users.find(u => u.role === 'orga');
     expect(user).toBeTruthy();
-    expect(user!.mailTmToken).toBeTruthy();
 
     // Navigate directly to forgot password page
     await page.goto('/forgotPassword');
@@ -42,18 +26,18 @@ test.describe('Password Reset', () => {
       page.locator('text=reset link has been sent').or(page.locator('text=Erfolgreich'))
     ).toBeVisible({ timeout: 5_000 });
 
-    // Check mail.tm for the reset email
-    const email = await waitForEmail(user!.mailTmToken!, /passwort|reset/i, 30_000);
+    // Check Mailpit for the reset email
+    const email = await waitForEmail(user!.email, /passwort|reset/i, 30_000);
     expect(email).toBeTruthy();
   });
 
   test('reset password link works and allows new login', async ({ page }) => {
-    const user = getIsolatedOrgaUser();
+    const fixtures = getFixtures();
+    const user = fixtures.users.find(u => u.role === 'orga');
     expect(user).toBeTruthy();
-    expect(user!.mailTmToken).toBeTruthy();
 
-    // Count existing emails before requesting reset
-    const existingMessages = await getMessages(user!.mailTmToken!);
+    // Get existing messages count before requesting reset
+    const existingMessages = await getAllMessages();
 
     // Request password reset
     await page.goto('/forgotPassword');
@@ -68,7 +52,7 @@ test.describe('Password Reset', () => {
     const deadline = Date.now() + 30_000;
     let latestEmail: any = null;
     while (Date.now() < deadline) {
-      const messages = await getMessages(user!.mailTmToken!);
+      const messages = await getAllMessages();
       const newMessages = messages.filter(
         (m: any) => !existingMessages.some((e: any) => e.id === m.id) &&
           /passwort|reset/i.test(m.subject),
@@ -82,8 +66,9 @@ test.describe('Password Reset', () => {
     expect(latestEmail).toBeTruthy();
 
     // Fetch full message body to extract reset link
-    const fullMessage = await getFullMessage(user!.mailTmToken!, latestEmail.id);
-    const body = fullMessage.text || fullMessage.html?.join('\n') || '';
+    const fullMessage = await getMessageById(latestEmail.id);
+    expect(fullMessage).toBeTruthy();
+    const body = fullMessage!.text || fullMessage!.html || '';
     const linkMatch = body.match(/https?:\/\/[^\s]+resetPassword[^\s]*/);
     expect(linkMatch).toBeTruthy();
 

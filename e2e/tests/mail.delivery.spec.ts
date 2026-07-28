@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { getOrgaUserWithToken, getOrgaUser, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
-import { waitForEmail, checkBulkDelivery } from '../helpers/mailtm-checker';
+import { getOrgaUser, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
+import { waitForEmail, checkBulkDelivery } from '../helpers/mailpit-checker';
 
 test.describe('Mail Delivery Verification', () => {
   test('bulk mail is delivered to sample recipients', async ({ page }) => {
@@ -29,8 +29,9 @@ test.describe('Mail Delivery Verification', () => {
     await page.waitForTimeout(10_000);
 
     // Check delivery across sample users
+    const recipientEmails = fixtures.users.map(u => u.email);
     const result = await checkBulkDelivery(
-      fixtures.users,
+      recipientEmails,
       testSubject,
       10,  // sample 10 users
       60_000, // 60s timeout
@@ -41,7 +42,7 @@ test.describe('Mail Delivery Verification', () => {
   });
 
   test('email content is correct', async ({ page }) => {
-    const user = getOrgaUserWithToken();
+    const user = getOrgaUser();
     expect(user).toBeTruthy();
 
     const fixtures = getFixtures();
@@ -60,9 +61,13 @@ test.describe('Mail Delivery Verification', () => {
     await page.click('button:has-text("Test-Mail senden")');
     await expect(page.locator('text=Test-Mail gesendet')).toBeVisible({ timeout: 10_000 });
 
-    // Wait for email and verify content
-    const email = await waitForEmail(user!.mailTmToken!, testSubject, 30_000);
+    // Wait for email and verify content via Mailpit
+    const email = await waitForEmail(user!.email, testSubject, 30_000);
     expect(email).toBeTruthy();
-    expect(email!.intro).toContain(testBody.substring(0, 20));
+    // Fetch full message to check body
+    const { getMessageById } = await import('../helpers/mailpit-checker.js');
+    const full = await getMessageById(email!.id);
+    expect(full).toBeTruthy();
+    expect(full!.text || full!.html).toContain(testBody.substring(0, 20));
   });
 });

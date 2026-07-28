@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { getOrgaUser, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
-import { waitForEmail } from '../helpers/mailtm-checker';
 
 test.describe('Error Scenarios', () => {
   test('wrong password shows error on login', async ({ page }) => {

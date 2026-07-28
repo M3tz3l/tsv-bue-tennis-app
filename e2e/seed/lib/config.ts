@@ -18,9 +18,6 @@ export const config = {
   teableToken: process.env.TEABLE_TOKEN || '',
   membersTableId: process.env.MEMBERS_TABLE_ID || '',
 
-  // mail.tm
-  mailtmApiUrl: 'https://api.mail.tm',
-
   // Test credentials
   testPassword: 'Test1234!',
   userCount: parseInt(process.env.E2E_USER_COUNT || '20', 10),

@@ -9,17 +9,15 @@ export interface TestUser {
   joinDate: string;
   role: string;
   teableRecordId?: string;
-  mailTmToken?: string;
 }
 
 export interface TestFixtures {
   generatedAt: string;
-  domain: string;
   password: string;
   users: TestUser[];
 }
 
-export function generateTestUsers(domain: string): TestUser[] {
+export function generateTestUsers(): TestUser[] {
   const users: TestUser[] = [];
 
   for (let i = 1; i <= config.userCount; i++) {
@@ -38,7 +36,7 @@ export function generateTestUsers(domain: string): TestUser[] {
     const joinDay = String(1 + (i * 7) % 28).padStart(2, '0');
 
     users.push({
-      email: `${config.emailPrefix}${padded}@${domain}`,
+      email: `${config.emailPrefix}${padded}@e2e-test.local`,
       firstName: 'Test',
       lastName: `User${padded}`,
       familyId: familyIndex,
