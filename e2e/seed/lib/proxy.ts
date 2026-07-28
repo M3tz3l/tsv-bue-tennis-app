@@ -1,63 +1,90 @@
 import { setGlobalDispatcher, ProxyAgent } from 'undici';
 
-const PROXY_LIST_URL = 'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt';
+const PROXY_SOURCES = [
+  'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt',
+  'https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all&ssl=all',
+  'https://www.proxy-list.download/api/v1/get?type=http&anon=elite',
+];
+
 const TIMEOUT_MS = 5000;
-const MAX_PROBES = 10;
+const MAX_PROBES = 50;
 
 let proxyInitialized = false;
 
+async function fetchProxyList(): Promise<string[]> {
+  for (const url of PROXY_SOURCES) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) continue;
+      const text = await res.text();
+      // Each source may have different delimiters (newline vs CRLF, optional port after colon)
+      const proxies = text.split('\n')
+        .map(l => l.trim())
+        .filter(l => /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}$/.test(l));
+      if (proxies.length > 0) {
+        console.log(`  Fetched ${proxies.length} proxies from ${url.split('/')[2]}`);
+        return proxies;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return [];
+}
+
 /**
- * Fetch a list of public HTTP proxies from a maintained GitHub list,
- * test each against mail.tm, and return the first working one.
+ * Test multiple proxies in parallel batches.
+ * Returns the first working proxy URL, or null.
  */
 async function discoverWorkingProxy(): Promise<string | null> {
-  try {
-    const res = await fetch(PROXY_LIST_URL);
-    if (!res.ok) {
-      console.log(`  Proxy list fetch failed: ${res.status}`);
-      return null;
-    }
+  const proxies = await fetchProxyList();
+  const toTest = proxies.slice(0, MAX_PROBES);
+  if (toTest.length === 0) {
+    console.log('  No proxies found from any source');
+    return null;
+  }
 
-    const text = await res.text();
-    const proxies = text.trim().split('\n').filter(Boolean).slice(0, MAX_PROBES);
-    console.log(`  Testing ${proxies.length} proxies...`);
+  console.log(`  Testing up to ${toTest.length} proxies (${TIMEOUT_MS}ms timeout each)...`);
 
-    for (const [i, proxy] of proxies.entries()) {
-      const url = `http://${proxy}`;
-      try {
+  // Test in batches of 5 to avoid overwhelming the network
+  const BATCH = 5;
+  for (let batchStart = 0; batchStart < toTest.length; batchStart += BATCH) {
+    const batch = toTest.slice(batchStart, batchStart + BATCH);
+
+    const results = await Promise.allSettled(
+      batch.map(async (proxy) => {
+        const url = `http://${proxy}`;
         const agent = new ProxyAgent(url);
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
-        const testRes = await fetch('https://api.mail.tm/domains', {
+        const res = await fetch('https://api.mail.tm/domains', {
           dispatcher: agent,
-          signal: controller.signal,
+          signal: AbortSignal.timeout(TIMEOUT_MS),
         });
-        clearTimeout(timeout);
+        if (res.ok) return url;
+        throw new Error(`Status ${res.status}`);
+      }),
+    );
 
-        if (testRes.ok) {
-          console.log(`  Proxy #${i + 1} works: ${url}`);
-          return url;
-        }
-      } catch {
-        // Proxy failed, try next
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value) {
+        const success = result.value.replace(/^http:\/\//, '');
+        console.log(`  Proxy works: ${success}`);
+        return result.value;
       }
     }
 
-    console.log('  No working proxy found in tested list');
-    return null;
-  } catch (err) {
-    console.log(`  Proxy discovery error: ${err}`);
-    return null;
+    if (batchStart + BATCH < toTest.length) {
+      process.stderr.write('.');
+    }
   }
+  process.stderr.write('\n');
+
+  console.log('  No working proxy found');
+  return null;
 }
 
 /**
  * Set up a global proxy for all mail.tm requests.
  * Priority: MAILTM_PROXY env var > auto-discovered public proxy > direct.
- *
- * Once called, all subsequent `fetch` calls in this process automatically
- * route through the proxy (via undici's global dispatcher).
  */
 export async function ensureMailTmProxy(): Promise<void> {
   if (proxyInitialized) return;
