@@ -65,7 +65,7 @@ jobs:
 
       - name: Generate TypeScript bindings
         working-directory: backend
-        run: cargo run --bin generate-types
+        run: cargo run --bin generate-types --release
 
       - name: Install frontend dependencies
         working-directory: tsv-tennis-app
