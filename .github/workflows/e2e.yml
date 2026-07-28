@@ -25,7 +25,7 @@ jobs:
       MEMBERS_TABLE_ID: ${{ secrets.E2E_MEMBERS_TABLE_ID }}
       WORK_HOURS_TABLE_ID: ${{ secrets.E2E_WORK_HOURS_TABLE_ID }}
       DATABASE_URL: sqlite:./e2e_test.db
-      E2E_DATABASE_PATH: ../backend/e2e_test.db
+      E2E_DATABASE_PATH: ../../backend/e2e_test.db
       JWT_SECRET: e2e-test-secret-do-not-use-in-prod
       EMAIL_DISABLE_SEND: "false"
       EMAIL_HOST: ${{ secrets.E2E_EMAIL_HOST }}
