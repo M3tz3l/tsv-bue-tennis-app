@@ -43,7 +43,7 @@ pub struct EmailConfig {
     pub password: String,
     pub from_email: String,
     pub use_implicit_tls: bool,
-    pub disable_tls: bool,
+    pub accept_invalid_certs: bool,
 }
 
 impl EmailConfig {
@@ -56,7 +56,7 @@ impl EmailConfig {
         // Use implicit TLS for port 465, STARTTLS for other ports (like 587)
         let use_implicit_tls = port == 465;
 
-        let disable_tls = env::var("EMAIL_DISABLE_TLS")
+        let accept_invalid_certs = env::var("EMAIL_ACCEPT_INVALID_CERTS")
             .ok()
             .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
             .unwrap_or(false);
@@ -68,7 +68,7 @@ impl EmailConfig {
             password: env::var("EMAIL_PASSWORD").map_err(|_| "EMAIL_PASSWORD must be set")?,
             from_email: env::var("EMAIL_FROM").map_err(|_| "EMAIL_FROM must be set")?,
             use_implicit_tls,
-            disable_tls,
+            accept_invalid_certs,
         })
     }
 }

@@ -28,7 +28,7 @@ jobs:
       E2E_DATABASE_PATH: ../../backend/e2e_test.db
       JWT_SECRET: e2e-test-secret-do-not-use-in-prod
       EMAIL_DISABLE_SEND: "false"
-      EMAIL_DISABLE_TLS: "true"
+      EMAIL_ACCEPT_INVALID_CERTS: "true"
       EMAIL_HOST: localhost
       EMAIL_PORT: "1025"
       EMAIL_USER: ""
@@ -112,7 +112,9 @@ jobs:
         env:
           E2E_USER_COUNT: ${{ env.E2E_USER_COUNT }}
           E2E_ORGA_COUNT: ${{ env.E2E_ORGA_COUNT }}
-        run: npx tsx seed.ts
+        run: |
+          rm -f ../../backend/e2e_test.db
+          npx tsx seed.ts
 
       # Save fixtures for next run (only on success)
       - name: Upload fixtures for next run
@@ -127,7 +129,10 @@ jobs:
       - name: Start Mailpit (SMTP capture server)
         run: |
           curl -sL https://github.com/axllent/mailpit/releases/latest/download/mailpit-linux-amd64.tar.gz | tar xz -C /tmp
-          /tmp/mailpit &
+          /tmp/mailpit \
+            --smtp-tls-cert sans:localhost \
+            --smtp-tls-key sans:localhost \
+            --smtp-require-starttls &
           sleep 2
           # Verify Mailpit is running
           curl -sf http://localhost:8025/api/v1/messages > /dev/null && echo "Mailpit ready"

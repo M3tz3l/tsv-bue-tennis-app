@@ -1,7 +1,10 @@
 use crate::config::{Config, EmailConfig};
 use lettre::{
     message::{header::ContentType, Attachment, Mailbox, Message, MultiPart, SinglePart},
-    transport::smtp::authentication::Credentials,
+    transport::smtp::{
+        authentication::Credentials,
+        client::{Tls, TlsParameters},
+    },
     AsyncSmtpTransport, AsyncTransport, SmtpTransport, Tokio1Executor, Transport,
 };
 use tracing::{error, info, warn};
@@ -33,7 +36,7 @@ pub struct EmailService {
     use_implicit_tls: bool,
     from_email: String,
     disable_send: bool,
-    disable_tls: bool,
+    accept_invalid_certs: bool,
 }
 
 impl EmailService {
@@ -53,54 +56,61 @@ impl EmailService {
             use_implicit_tls: email_config.use_implicit_tls,
             from_email: email_config.from_email,
             disable_send,
-            disable_tls: email_config.disable_tls,
+            accept_invalid_certs: email_config.accept_invalid_certs,
         })
+    }
+
+    /// Build TLS parameters, optionally accepting invalid certificates (for testing with self-signed certs).
+    fn build_tls_params(&self) -> Result<TlsParameters, Box<dyn std::error::Error + Send + Sync>> {
+        let mut builder = TlsParameters::builder(self.smtp_host.clone());
+        if self.accept_invalid_certs {
+            builder = builder.dangerous_accept_invalid_certs(true);
+        }
+        Ok(builder.build()?)
     }
 
     /// Creates a fresh SMTP transport connection for each send to avoid session limits
     fn create_transport(&self) -> Result<SmtpTransport, Box<dyn std::error::Error + Send + Sync>> {
-        let creds = Credentials::new(self.smtp_user.clone(), self.smtp_password.clone());
-        let transport = if self.disable_tls {
+        let builder = if self.use_implicit_tls {
+            let tls = self.build_tls_params()?;
             SmtpTransport::builder_dangerous(&self.smtp_host)
                 .port(self.smtp_port)
-                .credentials(creds)
-                .build()
-        } else if self.use_implicit_tls {
-            SmtpTransport::relay(&self.smtp_host)?
-                .port(self.smtp_port)
-                .credentials(creds)
-                .build()
+                .tls(Tls::Wrapper(tls))
         } else {
-            SmtpTransport::starttls_relay(&self.smtp_host)?
+            let tls = self.build_tls_params()?;
+            SmtpTransport::builder_dangerous(&self.smtp_host)
                 .port(self.smtp_port)
-                .credentials(creds)
-                .build()
+                .tls(Tls::Opportunistic(tls))
         };
-        Ok(transport)
+        let builder = if !self.smtp_user.is_empty() {
+            builder.credentials(Credentials::new(self.smtp_user.clone(), self.smtp_password.clone()))
+        } else {
+            builder
+        };
+        Ok(builder.build())
     }
 
     /// Creates an async SMTP transport for bulk operations (non-blocking)
     fn create_async_transport(
         &self,
     ) -> Result<AsyncSmtpTransport<Tokio1Executor>, Box<dyn std::error::Error + Send + Sync>> {
-        let creds = Credentials::new(self.smtp_user.clone(), self.smtp_password.clone());
-        let transport = if self.disable_tls {
+        let builder = if self.use_implicit_tls {
+            let tls = self.build_tls_params()?;
             AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&self.smtp_host)
                 .port(self.smtp_port)
-                .credentials(creds)
-                .build()
-        } else if self.use_implicit_tls {
-            AsyncSmtpTransport::<Tokio1Executor>::relay(&self.smtp_host)?
-                .port(self.smtp_port)
-                .credentials(creds)
-                .build()
+                .tls(Tls::Wrapper(tls))
         } else {
-            AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&self.smtp_host)?
+            let tls = self.build_tls_params()?;
+            AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&self.smtp_host)
                 .port(self.smtp_port)
-                .credentials(creds)
-                .build()
+                .tls(Tls::Opportunistic(tls))
         };
-        Ok(transport)
+        let builder = if !self.smtp_user.is_empty() {
+            builder.credentials(Credentials::new(self.smtp_user.clone(), self.smtp_password.clone()))
+        } else {
+            builder
+        };
+        Ok(builder.build())
     }
 
     /// Send bulk mail in batches with bounded concurrency per batch.

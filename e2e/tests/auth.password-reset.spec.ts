@@ -101,16 +101,40 @@ test.describe('Password Reset', () => {
     await page.waitForURL('**/dashboard**', { timeout: 15_000 });
     await expect(page).toHaveURL(/dashboard/);
 
-    // Restore original password via API for fixture consistency
+    // Restore original password via forgot-password → reset flow
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
-    const token = await page.evaluate(() => localStorage.getItem('authToken'));
-    await fetch(`${backendUrl}/api/reset-password`, {
+    await fetch(`${backendUrl}/api/forgotPassword`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ newPassword: ORIGINAL_PASSWORD }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: user!.email }),
     });
+    // Wait for restore email
+    const restoreDeadline = Date.now() + 15_000;
+    let restoreEmail: any = null;
+    while (Date.now() < restoreDeadline) {
+      const msgs = await getAllMessages();
+      restoreEmail = msgs
+        .filter((m: any) => /passwort|reset/i.test(m.subject))
+        .sort((a: any, b: any) => new Date(b.created).getTime() - new Date(a.created).getTime())[0];
+      if (restoreEmail) break;
+      await new Promise(r => setTimeout(r, 1_000));
+    }
+    if (restoreEmail) {
+      const fullRestore = await getMessageById(restoreEmail.id);
+      const restoreBody = fullRestore!.text || fullRestore!.html || '';
+      const restoreMatch = restoreBody.match(/https?:\/\/[^\s]+resetPassword[^\s]*/);
+      if (restoreMatch) {
+        const restoreUrl = restoreMatch[0];
+        const tokenMatch = restoreUrl.match(/token=([^&]+)/);
+        const idMatch = restoreUrl.match(/id=([^&\s]+)/);
+        if (tokenMatch && idMatch) {
+          await fetch(`${backendUrl}/api/resetPassword`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tokenMatch[1], password: ORIGINAL_PASSWORD, userId: idMatch[1] }),
+          });
+        }
+      }
+    }
   });
 });

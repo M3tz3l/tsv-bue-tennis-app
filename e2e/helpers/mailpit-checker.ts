@@ -17,6 +17,28 @@ interface MailpitListResponse {
 }
 
 /**
+ * Normalize a raw Mailpit API message (PascalCase keys) to our camelCase interface.
+ * Mailpit returns { ID, Subject, From: { Name, Address }, To: [...], Created, ... }
+ * but the rest of the code expects { id, subject, from: { name, address }, ... }.
+ */
+function normalizeMessage(raw: any): MailpitMessage {
+  const normalizeAddr = (a: any) => ({ name: a.Name ?? a.name ?? '', address: a.Address ?? a.address ?? '' });
+  const rawFrom = raw.From ?? raw.from;
+  const from = Array.isArray(rawFrom) ? rawFrom.map(normalizeAddr) : [normalizeAddr(rawFrom ?? {})];
+  const rawTo = raw.To ?? raw.to;
+  const to = Array.isArray(rawTo) ? rawTo.map(normalizeAddr) : [normalizeAddr(rawTo ?? {})];
+  return {
+    id: raw.ID ?? raw.id ?? '',
+    subject: raw.Subject ?? raw.subject ?? '',
+    from,
+    to,
+    created: raw.Created ?? raw.created ?? '',
+    text: raw.Text ?? raw.text,
+    html: raw.HTML ?? raw.html,
+  };
+}
+
+/**
  * Poll Mailpit for a message matching a recipient and subject.
  * Returns the message if found within timeout, null otherwise.
  */
@@ -32,8 +54,9 @@ export async function waitForEmail(
     try {
       const res = await fetch(`${MAILPIT_API}/api/v1/messages?start=0&limit=50`);
       if (res.ok) {
-        const data = await res.json() as MailpitListResponse;
-        const match = data.messages.find(m => {
+        const raw = await res.json() as any;
+        const messages: MailpitMessage[] = (raw.messages ?? []).map(normalizeMessage);
+        const match = messages.find(m => {
           const addrMatch = m.to.some(t => t.address.toLowerCase() === toAddress.toLowerCase());
           const subjMatch = typeof subject === 'string'
             ? m.subject === subject
@@ -59,8 +82,8 @@ export async function getAllMessages(): Promise<MailpitMessage[]> {
   try {
     const res = await fetch(`${MAILPIT_API}/api/v1/messages?start=0&limit=200`);
     if (!res.ok) return [];
-    const data = await res.json() as MailpitListResponse;
-    return data.messages;
+    const raw = await res.json() as any;
+    return (raw.messages ?? []).map(normalizeMessage);
   } catch {
     return [];
   }
@@ -73,7 +96,8 @@ export async function getMessageById(id: string): Promise<MailpitMessage | null>
   try {
     const res = await fetch(`${MAILPIT_API}/api/v1/message/${id}`);
     if (!res.ok) return null;
-    return res.json() as Promise<MailpitMessage>;
+    const raw = await res.json();
+    return normalizeMessage(raw);
   } catch {
     return null;
   }
@@ -99,8 +123,9 @@ export async function checkBulkDelivery(
     try {
       const res = await fetch(`${MAILPIT_API}/api/v1/messages?start=0&limit=200`);
       if (res.ok) {
-        const data = await res.json() as MailpitListResponse;
-        const matchingMessages = data.messages.filter(m => m.subject === subject);
+        const raw = await res.json() as any;
+        const messages: MailpitMessage[] = (raw.messages ?? []).map(normalizeMessage);
+        const matchingMessages = messages.filter(m => m.subject === subject);
         const deliveredAddresses = new Set(
           matchingMessages.flatMap(m => m.to.map(t => t.address.toLowerCase())),
         );
@@ -120,8 +145,9 @@ export async function checkBulkDelivery(
   // Final count after timeout
   const res = await fetch(`${MAILPIT_API}/api/v1/messages?start=0&limit=200`);
   if (res.ok) {
-    const data = await res.json() as MailpitListResponse;
-    const matchingMessages = data.messages.filter(m => m.subject === subject);
+    const raw = await res.json() as any;
+    const messages: MailpitMessage[] = (raw.messages ?? []).map(normalizeMessage);
+    const matchingMessages = messages.filter(m => m.subject === subject);
     const deliveredAddresses = new Set(
       matchingMessages.flatMap(m => m.to.map(t => t.address.toLowerCase())),
     );
