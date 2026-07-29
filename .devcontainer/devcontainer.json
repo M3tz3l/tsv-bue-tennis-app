@@ -6,7 +6,9 @@
 	"runArgs": [
 		"--cap-add=SYS_PTRACE",
 		"--security-opt",
-		"seccomp=unconfined"
+		"seccomp=unconfined",
+		"--env-file",
+		".devcontainer/.env"
 	],
 	"mounts": [
 		// Caches your compiled targets locally so they survive container rebuilds
@@ -36,13 +38,13 @@
 				"serayuzgur.crates",
 				"dbaeumer.vscode-eslint",
 				"esbenp.prettier-vscode",
-				"bradlc.vscode-tailwindcss"
+				"bradlc.vscode-tailwindcss",
+				"saoudrizwan.claude-dev"
 			]
 		}
 	},
 	"remoteEnv": {
-		"DATABASE_URL": "sqlite:tennis_app.db",
-		"OPENROUTER_API_KEY": "${localEnv:OPENROUTER_API_KEY}"
+		"DATABASE_URL": "sqlite:tennis_app.db"
 	},
 	"forwardPorts": [
 		5000,
