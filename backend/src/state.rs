@@ -5,17 +5,14 @@ use axum::{
     response::{Html, IntoResponse, Response},
 };
 use reqwest::Client;
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tower_governor::GovernorError;
 
 use crate::database::Database;
 use crate::email::EmailService;
-use crate::models::MailJob;
 use crate::token_store::TokenStore;
 
-pub type MailJobStore = Arc<RwLock<HashMap<String, MailJob>>>;
+pub use crate::models::MailJobStore;
 
 #[derive(Clone)]
 pub struct AppState {

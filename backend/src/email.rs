@@ -1,4 +1,5 @@
 use crate::config::{Config, EmailConfig};
+use crate::models::MailJobStore;
 use lettre::{
     message::{header::ContentType, Attachment, Mailbox, Message, MultiPart, SinglePart},
     transport::smtp::{
@@ -135,6 +136,8 @@ impl EmailService {
         max_concurrency: usize,
         batch_size: usize,
         batch_delay: std::time::Duration,
+        job_store: MailJobStore,
+        job_id: String,
     ) -> (usize, usize, Vec<String>) {
         if self.disable_send {
             info!(
@@ -285,6 +288,15 @@ impl EmailService {
                         error!("Task join error in bulk send: {}", e);
                         total_failed += 1;
                     }
+                }
+            }
+
+            // Write intermediate progress to the job store after each batch
+            {
+                let mut jobs = job_store.write().await;
+                if let Some(job) = jobs.get_mut(&job_id) {
+                    job.sent = total_sent as i32;
+                    job.failed = total_failed as i32;
                 }
             }
         }

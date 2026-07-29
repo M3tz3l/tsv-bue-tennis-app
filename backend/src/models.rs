@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 // Request/Response models
 #[derive(Debug, Deserialize, Type)]
@@ -88,6 +91,8 @@ pub struct MailJob {
     pub error: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
+
+pub type MailJobStore = Arc<RwLock<HashMap<String, MailJob>>>;
 
 #[derive(Debug, Deserialize, Type)]
 pub struct CreateWorkHourRequest {

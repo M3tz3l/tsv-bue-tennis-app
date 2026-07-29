@@ -379,6 +379,8 @@ pub async fn send_bulk_mail(
 
         // Run the actual send in a nested spawn so we can detect panics
         // via the JoinHandle (catch_unwind is not async-safe)
+        let job_store_inner = job_store.clone();
+        let jid_inner = jid.clone();
         let send_handle = tokio::spawn(async move {
             email_service
                 .send_bulk_mail_concurrent(
@@ -393,6 +395,8 @@ pub async fn send_bulk_mail(
                     BULK_MAIL_CONCURRENCY,
                     BULK_MAIL_BATCH_SIZE,
                     std::time::Duration::from_secs(BULK_MAIL_BATCH_DELAY_SECS),
+                    job_store_inner,
+                    jid_inner,
                 )
                 .await
         });
@@ -443,6 +447,10 @@ pub async fn get_mail_job_status(
     Path(job_id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let jobs = state.mail_jobs.read().await;
+    info!("Job status lookup: requested_id={}, jobs_in_store={}", job_id, jobs.len());
+    for (id, job) in jobs.iter() {
+        info!("  stored job: id={}, status={:?}, created_at={}", id, job.status, job.created_at);
+    }
     match jobs.get(&job_id) {
         Some(job) => Ok(Json(serde_json::json!({
             "success": true,

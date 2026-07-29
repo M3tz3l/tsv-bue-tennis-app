@@ -176,7 +176,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .nest("/arbeitsstunden", routes::work_hours::routes())
         .merge(routes::mail::member_count_routes())
         .route(
-            "/mail/jobs/{job_id}",
+            "/mail/jobs/:job_id",
             get(routes::mail::get_mail_job_status),
         )
         .layer(GovernorLayer {
@@ -369,7 +369,7 @@ mod tests {
                 axum::routing::post(routes::mail::send_bulk_mail),
             )
             .route(
-                "/mail/jobs/{job_id}",
+                "/mail/jobs/:job_id",
                 get(routes::mail::get_mail_job_status),
             )
             .nest("/arbeitsstunden", routes::work_hours::routes())
