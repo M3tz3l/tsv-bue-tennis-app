@@ -83,7 +83,10 @@ impl EmailService {
                 .tls(Tls::Opportunistic(tls))
         };
         let builder = if !self.smtp_user.is_empty() {
-            builder.credentials(Credentials::new(self.smtp_user.clone(), self.smtp_password.clone()))
+            builder.credentials(Credentials::new(
+                self.smtp_user.clone(),
+                self.smtp_password.clone(),
+            ))
         } else {
             builder
         };
@@ -106,7 +109,10 @@ impl EmailService {
                 .tls(Tls::Opportunistic(tls))
         };
         let builder = if !self.smtp_user.is_empty() {
-            builder.credentials(Credentials::new(self.smtp_user.clone(), self.smtp_password.clone()))
+            builder.credentials(Credentials::new(
+                self.smtp_user.clone(),
+                self.smtp_password.clone(),
+            ))
         } else {
             builder
         };
