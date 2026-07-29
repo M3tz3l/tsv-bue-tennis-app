@@ -32,41 +32,24 @@ async function main() {
     process.exit(1);
   }
 
-  // Step 1: Load or generate test user fixtures
+  // Step 1: Always generate fresh test users (fixtures from previous runs may be stale)
+  console.log('1. Generating test user fixtures...');
+  let users = generateTestUsers();
+
+  // Preserve teableRecordIds from existing fixtures if email matches
   const existing = loadExistingFixtures();
-  let users: TestUser[];
-
   if (existing) {
-    console.log(`1. Loaded existing fixtures (${existing.users.length} users, generated ${existing.generatedAt})`);
-    users = existing.users;
-
-    // If we need more users than the fixture has, generate additional ones
-    if (users.length < config.userCount) {
-      const additionalCount = config.userCount - users.length;
-      console.log(`   Need ${additionalCount} more users (have ${users.length}, need ${config.userCount})`);
-      const allUsers = generateTestUsers();
-      const existingEmails = new Set(users.map(u => u.email.toLowerCase()));
-      const newUsers = allUsers.filter(u => !existingEmails.has(u.email.toLowerCase()));
-      users = [...users, ...newUsers.slice(0, additionalCount)];
-      console.log(`   Added ${users.length - existing.users.length} new users, total: ${users.length}`);
-    }
-
-    // Update orga roles if orgaCount changed (e.g., PR->nightly)
-    const currentOrgaCount = users.filter(u => u.role === 'orga').length;
-    if (currentOrgaCount !== config.orgaCount) {
-      console.log(`   Updating orga roles: ${currentOrgaCount} -> ${config.orgaCount}`);
-      users.forEach(u => u.role = '');
-      for (let i = 0; i < Math.min(config.orgaCount, users.length); i++) {
-        users[i].role = 'orga';
+    const existingByEmail = new Map(existing.users.map(u => [u.email.toLowerCase(), u]));
+    for (const user of users) {
+      const prev = existingByEmail.get(user.email.toLowerCase());
+      if (prev?.teableRecordId) {
+        user.teableRecordId = prev.teableRecordId;
       }
-      console.log(`   Updated ${Math.min(config.orgaCount, users.length)} users to orga`);
     }
-    console.log('');
-  } else {
-    console.log('1. Generating test user fixtures...');
-    users = generateTestUsers();
-    console.log(`   Generated ${users.length} users (${config.orgaCount} orga, ${users.length - config.orgaCount} regular)\n`);
+    console.log(`   Preserved ${users.filter(u => u.teableRecordId).length} Teable IDs from previous fixtures`);
   }
+
+  console.log(`   Generated ${users.length} users (${config.orgaCount} orga, ${users.length - config.orgaCount} regular)\n`);
 
   // Step 2: Create Teable records (skip those that already have IDs)
   const needTeable = users.filter(u => !u.teableRecordId);
