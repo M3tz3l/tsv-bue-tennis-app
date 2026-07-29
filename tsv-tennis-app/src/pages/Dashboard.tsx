@@ -84,11 +84,12 @@ const Dashboard = () => {
                 else setShowAddForm(false);
                 queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
             } else {
-                toast.error(response?.message || (editingRow ? 'Fehler beim Aktualisieren' : 'Fehler beim Erstellen'));
+                const backendMsg = (response as any)?.error || (response as any)?.message;
+                toast.error(backendMsg || (editingRow ? 'Fehler beim Aktualisieren' : 'Fehler beim Erstellen'));
             }
         } catch (error: any) {
             const msg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Ein Fehler ist aufgetreten';
-            if (typeof msg === 'string' && (msg.includes('duplicate') || msg.includes('bereits vorhanden'))) {
+            if (typeof msg === 'string' && /duplicate|bereits (vorhanden|ein Eintrag)/i.test(msg)) {
                 toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
             } else {
                 toast.error(msg);
