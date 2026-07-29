@@ -29,157 +29,69 @@ const Dashboard = () => {
 
     const handleEdit = async (row: WorkHourEntry) => {
         try {
-            console.log('🔍 Fetching work hour details for ID:', row.id);
-
-            // Fetch the complete work hour entry using the GET endpoint
             const response = await BackendService.getArbeitsstundenById(String(row.id));
 
             if (response && (response as any).success) {
-                console.log('✅ Fetched work hour data:', (response as any).data);
                 setEditingRow(((response as any).data as WorkHourEntry) ?? null);
                 setShowAddForm(false);
             } else {
                 toast.error('Fehler beim Laden der Daten zum Bearbeiten');
-                console.error('Failed to fetch work hour:', (response as any)?.message ?? 'unknown');
             }
         } catch (error) {
-            console.error('Error fetching work hour for edit:', error);
             toast.error((error as any)?.message || 'Fehler beim Laden der Daten zum Bearbeiten');
         }
     };
 
+    // Consolidate current user's entries from personal + family data
+    const getMyEntries = (): WorkHourEntry[] => {
+        const personal = dashboardData?.personal?.entries || [];
+        const family = (dashboardData?.family?.memberContributions ?? [])
+            .filter((m: MemberContribution) => m.id === user?.id)
+            .flatMap((m: MemberContribution) => m.entries || []);
+        return [...personal, ...family];
+    };
+
     const handleSave = async (formData: Partial<CreateWorkHourRequest> & { [key: string]: unknown }) => {
         try {
-            // For new entries, use backend API
+            const myEntries = getMyEntries();
+
+            // Check for duplicate entry on the same date
             if (!editingRow) {
-                console.log('🚀 Creating new work hours entry:', formData);
-                console.log('🚀 Stunden value:', formData.Stunden, 'type:', typeof formData.Stunden);
-
-                // Check for existing entry on the same date (client-side check)
-                let existingEntries: WorkHourEntry[] = [];
-
-                // Get all entries from both personal and family data
-                if (dashboardData?.personal?.entries) {
-                    existingEntries = dashboardData.personal.entries;
-                }
-                if (dashboardData?.family?.memberContributions) {
-                    const memberEntries = dashboardData.family.memberContributions
-                        .filter((m: MemberContribution) => m.id === user?.id)
-                        .flatMap((m: MemberContribution) => m.entries || []);
-                    existingEntries = existingEntries.concat(memberEntries);
-                }
-
-                console.log('🔍 Checking for duplicates. Existing entries:', existingEntries.length);
-                console.log('🔍 Looking for date:', formData.Datum, 'name:', formData.Vorname, formData.Nachname);
-                console.log('🔍 All existing entries:', existingEntries.map(e => ({ id: e.id, Datum: e.Datum })));
-
-                const sameDate = existingEntries.find(entry => {
-                    // Since the dashboard data doesn't include names, we'll check by date only
-                    // This is still valid because each person can only have one entry per day
-                    const entryDate = entry.Datum;
-                    const formDate = formData.Datum;
-
-                    const dateMatch = entryDate === formDate;
-
-                    console.log('🔍 Comparing dates only (names not available in dashboard data):', {
-                        existingDate: entryDate,
-                        newDate: formDate,
-                        dateMatch: dateMatch
-                    });
-
-                    if (dateMatch) {
-                        console.log('🔍 Found matching date:', entry);
-                    }
-                    return dateMatch;
-                });
-
-                if (sameDate) {
-                    console.log('❌ Duplicate entry found, blocking creation');
+                if (hasDuplicateEntry(myEntries, formData)) {
                     toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
                     return;
                 }
-
-                // Use util to detect duplicates across family/personal entries (current member only)
-                const allExistingEntries = [
-                    ...(dashboardData?.personal?.entries || []),
-                    ...((dashboardData?.family?.memberContributions ?? [])
-                        .filter((m: MemberContribution) => m.id === user?.id)
-                        .flatMap((m: MemberContribution) => m.entries || []))
-                ];
-
-                if (hasDuplicateEntry(allExistingEntries, formData)) {
+            } else if (editingRow.Datum !== formData.Datum) {
+                if (hasDuplicateEntry(myEntries, formData, editingRow.id)) {
                     toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
                     return;
-                }
-
-                const requestPayload: CreateWorkHourRequest = {
-                    Datum: formData.Datum || '',
-                    Tätigkeit: String(formData.Tätigkeit ?? ''),
-                    Stunden: Number(formData.Stunden) || 0
-                };
-
-                const response = await BackendService.createArbeitsstunden(requestPayload);
-
-                console.log('✅ Response from backend:', response);
-
-                if (response && response.success) {
-                    toast.success('Eintrag erfolgreich erstellt');
-                    setShowAddForm(false);
-                    queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
-                } else {
-                    toast.error(response?.message || 'Fehler beim Erstellen');
-                }
-            } else {
-                console.log('🚀 Updating work hours entry:', editingRow.id, formData);
-
-                // For updates, check if we're changing the date and if so, check for duplicates
-                if (editingRow.Datum !== formData.Datum) {
-                    console.log('🔍 Date changed from', editingRow.Datum, 'to', formData.Datum, '- checking for duplicates');
-
-                    // Consolidate entries and use the util to check for duplicates (excluding the edited entry)
-                    const allExistingEntries = [
-                        ...(dashboardData?.personal?.entries || []),
-                        ...((dashboardData?.family?.memberContributions ?? [])
-                            .filter((m: MemberContribution) => m.id === user?.id)
-                            .flatMap((m: MemberContribution) => m.entries || []))
-                    ];
-
-                    if (hasDuplicateEntry(allExistingEntries, formData, editingRow.id)) {
-                        console.log('❌ Duplicate entry found for new date, blocking update');
-                        toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
-                        return;
-                    }
-                }
-
-                // Send the form data as-is (with German field names)
-                console.log('🚀 Sending update data:', formData);
-
-                const updatePayload: CreateWorkHourRequest = {
-                    Datum: formData.Datum || '',
-                    Tätigkeit: String(formData.Tätigkeit ?? ''),
-                    Stunden: Number(formData.Stunden) || 0
-                };
-
-                const response = await BackendService.updateArbeitsstunden(String(editingRow.id), updatePayload);
-
-                console.log('✅ Update response from backend:', response);
-
-                if (response && response.success) {
-                    toast.success('Eintrag erfolgreich aktualisiert');
-                    setEditingRow(null);
-                    queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
-                } else {
-                    toast.error(response?.message || 'Fehler beim Aktualisieren');
                 }
             }
+
+            const payload: CreateWorkHourRequest = {
+                Datum: formData.Datum || '',
+                Tätigkeit: String(formData.Tätigkeit ?? ''),
+                Stunden: Number(formData.Stunden) || 0
+            };
+
+            const response = editingRow
+                ? await BackendService.updateArbeitsstunden(String(editingRow.id), payload)
+                : await BackendService.createArbeitsstunden(payload);
+
+            if (response && response.success) {
+                toast.success(editingRow ? 'Eintrag erfolgreich aktualisiert' : 'Eintrag erfolgreich erstellt');
+                if (editingRow) setEditingRow(null);
+                else setShowAddForm(false);
+                queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
+            } else {
+                toast.error(response?.message || (editingRow ? 'Fehler beim Aktualisieren' : 'Fehler beim Erstellen'));
+            }
         } catch (error: any) {
-            console.error('Error saving work hours:', error);
-            // Handle specific error messages from backend
-            const msg = error?.response?.data?.message || error?.response?.data?.error || (error as any)?.message || 'Ein Fehler ist aufgetreten';
+            const msg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Ein Fehler ist aufgetreten';
             if (typeof msg === 'string' && (msg.includes('duplicate') || msg.includes('bereits vorhanden'))) {
                 toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
             } else {
-                toast.error(msg as string);
+                toast.error(msg);
             }
         }
     };
@@ -247,8 +159,12 @@ const Dashboard = () => {
 
         // Get field names from the first data entry, excluding system fields
         const sampleRow = data[0] as WorkHourEntry;
-        console.log("🔍 Sample row keys:", Object.keys(sampleRow));
-        console.log("🔍 Sample row data:", sampleRow);
+
+        const FIELD_LABELS: Record<string, string> = {
+            Datum: 'Datum',
+            Tätigkeit: 'Tätigkeit',
+            Stunden: 'Stunden',
+        };
 
         const fieldNames = Object.keys(sampleRow).filter(key =>
             key !== 'order' &&
@@ -259,8 +175,6 @@ const Dashboard = () => {
             key !== 'Nachname' &&
             key.toLowerCase() !== 'id'
         ) as Array<keyof WorkHourEntry>;
-
-        console.log("🔍 Filtered field names:", fieldNames);
 
         return (
             <div className="bg-white shadow-lg rounded-lg overflow-hidden">
@@ -321,10 +235,7 @@ const Dashboard = () => {
                                         key={field}
                                         className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"
                                     >
-                                        {(() => {
-                                            const fieldKey = String(field);
-                                            return fieldKey.replace(/_/g, ' ');
-                                        })()}
+                                        {FIELD_LABELS[String(field)] ?? String(field).replace(/_/g, ' ')}
                                     </th>
                                 ))}
                                 <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">

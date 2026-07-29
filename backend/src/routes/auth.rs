@@ -226,7 +226,7 @@ pub async fn forgot_password(
             info!("Password reset email sent successfully to: {}", user.email);
             Ok(axum::Json(serde_json::json!({
                 "success": true,
-                "message": "A password reset link has been sent to your email."
+                "message": "Ein Link zum Zurücksetzen Ihres Passworts wurde an Ihre E-Mail gesendet."
             })))
         }
         Err(e) => {
@@ -236,7 +236,7 @@ pub async fn forgot_password(
             );
             Ok(axum::Json(serde_json::json!({
                 "success": false,
-                "message": "Failed to send password reset email. Please try again later."
+                "message": "Fehler beim Senden der Passwort-Reset-E-Mail. Bitte versuchen Sie es später erneut."
             })))
         }
     }

@@ -23,7 +23,7 @@ test.describe('Password Reset', () => {
 
     // Should show success toast (backend returns English message)
     await expect(
-      page.locator('text=reset link has been sent').or(page.locator('text=Erfolgreich'))
+      page.locator('text=Zurücksetzen Ihres Passworts').or(page.locator('text=Erfolgreich'))
     ).toBeVisible({ timeout: 5_000 });
 
     // Check Mailpit for the reset email
@@ -45,7 +45,7 @@ test.describe('Password Reset', () => {
     await page.fill('input[type="email"]', user!.email);
     await page.click('button:has-text("Reset-Link senden")');
     await expect(
-      page.locator('text=reset link has been sent').or(page.locator('text=Erfolgreich'))
+      page.locator('text=Zurücksetzen Ihres Passworts').or(page.locator('text=Erfolgreich'))
     ).toBeVisible({ timeout: 5_000 });
 
     // Wait for the new reset email (ignore previous ones)
