@@ -80,7 +80,7 @@ impl EmailService {
             let tls = self.build_tls_params()?;
             SmtpTransport::builder_dangerous(&self.smtp_host)
                 .port(self.smtp_port)
-                .tls(Tls::Opportunistic(tls))
+                .tls(Tls::Required(tls))
         };
         let builder = if !self.smtp_user.is_empty() {
             builder.credentials(Credentials::new(
@@ -106,7 +106,7 @@ impl EmailService {
             let tls = self.build_tls_params()?;
             AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&self.smtp_host)
                 .port(self.smtp_port)
-                .tls(Tls::Opportunistic(tls))
+                .tls(Tls::Required(tls))
         };
         let builder = if !self.smtp_user.is_empty() {
             builder.credentials(Credentials::new(
