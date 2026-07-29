@@ -1,4 +1,5 @@
 use crate::config::{Config, EmailConfig};
+use crate::models::MailJobStore;
 use lettre::{
     message::{header::ContentType, Attachment, Mailbox, Message, MultiPart, SinglePart},
     transport::smtp::{
@@ -131,9 +132,12 @@ impl EmailService {
         signature_html: &str,
         signature_text: &str,
         attachments: &[EmailAttachment],
+        include_greeting: bool,
         max_concurrency: usize,
         batch_size: usize,
         batch_delay: std::time::Duration,
+        job_store: MailJobStore,
+        job_id: String,
     ) -> (usize, usize, Vec<String>) {
         if self.disable_send {
             info!(
@@ -205,6 +209,14 @@ impl EmailService {
                     for (email, _) in chunk {
                         all_failed_recipients.push(email.clone());
                     }
+                    // Write progress before skipping this batch
+                    {
+                        let mut jobs = job_store.write().await;
+                        if let Some(job) = jobs.get_mut(&job_id) {
+                            job.sent = total_sent as i32;
+                            job.failed = total_failed as i32;
+                        }
+                    }
                     continue;
                 }
             };
@@ -226,11 +238,19 @@ impl EmailService {
                 let attachments = attachments.clone();
 
                 handles.push(tokio::spawn(async move {
-                    let html_content = format!(
-                        "<p>Hallo {safe_first_name},</p><p>{safe_message}</p>{signature_html}",
-                        safe_first_name = escape_html(&first),
-                    );
-                    let text_content = format!("Hallo {first},\n\n{message}\n\n{signature_text}",);
+                    let html_content = if include_greeting {
+                        format!(
+                            "<p>Hallo {safe_first_name},</p><p>{safe_message}</p>{signature_html}",
+                            safe_first_name = escape_html(&first),
+                        )
+                    } else {
+                        format!("<p>{safe_message}</p>{signature_html}")
+                    };
+                    let text_content = if include_greeting {
+                        format!("Hallo {first},\n\n{message}\n\n{signature_text}",)
+                    } else {
+                        format!("{message}\n\n{signature_text}",)
+                    };
 
                     let to_mailbox: Mailbox = match email_addr.parse() {
                         Ok(m) => m,
@@ -276,6 +296,15 @@ impl EmailService {
                         error!("Task join error in bulk send: {}", e);
                         total_failed += 1;
                     }
+                }
+            }
+
+            // Write intermediate progress to the job store after each batch
+            {
+                let mut jobs = job_store.write().await;
+                if let Some(job) = jobs.get_mut(&job_id) {
+                    job.sent = total_sent as i32;
+                    job.failed = total_failed as i32;
                 }
             }
         }

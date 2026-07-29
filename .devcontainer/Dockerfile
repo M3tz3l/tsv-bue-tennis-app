@@ -38,5 +38,9 @@ USER vscode
 RUN mkdir -p /home/vscode/.local/state /home/vscode/.local/share/mimocode/log /home/vscode/.config/gh
 RUN npm install -g @mimo-ai/cli
 
+# Install OpenCode (terminal-based AI coding assistant)
+RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
+    && echo 'export PATH="$HOME/.opencode/bin:$PATH"' >> ~/.bashrc
+
 # Pre-install Playwright Chromium so the MCP server is ready immediately
 RUN npx -y playwright install chromium

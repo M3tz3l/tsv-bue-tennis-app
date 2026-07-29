@@ -77,6 +77,7 @@ pub async fn send_test_mail(
     // Parse multipart form data
     let mut subject = String::new();
     let mut message = String::new();
+    let mut include_greeting = true;
     let mut attachments: Vec<email::EmailAttachment> = Vec::new();
 
     while let Some(field) = multipart
@@ -91,6 +92,10 @@ pub async fn send_test_mail(
             }
             "message" => {
                 message = field.text().await.unwrap_or_default();
+            }
+            "include_greeting" => {
+                let val = field.text().await.unwrap_or_default();
+                include_greeting = val != "false" && val != "0";
             }
             _ => {
                 // Treat any other field as a file attachment
@@ -130,12 +135,19 @@ pub async fn send_test_mail(
     let safe_message = escape_html(&message).replace('\n', "<br/>");
     let (signature_html, signature_text) = build_signature(&user.first_name);
 
-    let html_content =
-        format!("<p>Hallo {safe_first_name},</p><p>{safe_message}</p>{signature_html}");
-    let text_content = format!(
-        "Hallo {},\n\n{}\n\n{}",
-        user.first_name, message, signature_text
-    );
+    let html_content = if include_greeting {
+        format!("<p>Hallo {safe_first_name},</p><p>{safe_message}</p>{signature_html}")
+    } else {
+        format!("<p>{safe_message}</p>{signature_html}")
+    };
+    let text_content = if include_greeting {
+        format!(
+            "Hallo {},\n\n{}\n\n{}",
+            user.first_name, message, signature_text
+        )
+    } else {
+        format!("{}\n\n{}", message, signature_text)
+    };
 
     state
         .email_service
@@ -204,6 +216,7 @@ pub async fn send_bulk_mail(
     let mut subject = String::new();
     let mut message = String::new();
     let mut recipient_filter_str = String::from("all");
+    let mut include_greeting = true;
     let mut attachments: Vec<email::EmailAttachment> = Vec::new();
 
     while let Some(field) = multipart
@@ -221,6 +234,10 @@ pub async fn send_bulk_mail(
             }
             "recipient_filter" => {
                 recipient_filter_str = field.text().await.unwrap_or_default();
+            }
+            "include_greeting" => {
+                let val = field.text().await.unwrap_or_default();
+                include_greeting = val != "false" && val != "0";
             }
             _ => {
                 let file_name = field.file_name().unwrap_or("attachment").to_string();
@@ -362,6 +379,8 @@ pub async fn send_bulk_mail(
 
         // Run the actual send in a nested spawn so we can detect panics
         // via the JoinHandle (catch_unwind is not async-safe)
+        let job_store_inner = job_store.clone();
+        let jid_inner = jid.clone();
         let send_handle = tokio::spawn(async move {
             email_service
                 .send_bulk_mail_concurrent(
@@ -372,9 +391,12 @@ pub async fn send_bulk_mail(
                     &signature_html,
                     &signature_text,
                     &attachments,
+                    include_greeting,
                     BULK_MAIL_CONCURRENCY,
                     BULK_MAIL_BATCH_SIZE,
                     std::time::Duration::from_secs(BULK_MAIL_BATCH_DELAY_SECS),
+                    job_store_inner,
+                    jid_inner,
                 )
                 .await
         });
@@ -426,10 +448,13 @@ pub async fn get_mail_job_status(
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let jobs = state.mail_jobs.read().await;
     match jobs.get(&job_id) {
-        Some(job) => Ok(Json(serde_json::json!({
-            "success": true,
-            "job": job,
-        }))),
+        Some(job) => {
+            info!("Job status lookup: id={}, status={:?}", job_id, job.status);
+            Ok(Json(serde_json::json!({
+                "success": true,
+                "job": job,
+            })))
+        }
         None => Err((
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({
