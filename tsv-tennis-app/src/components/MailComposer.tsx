@@ -26,6 +26,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const [countsLoaded, setCountsLoaded] = useState(false);
   const [activeJob, setActiveJob] = useState<MailJob | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const fetchCounts = async () => {
@@ -44,10 +45,11 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     fetchCounts();
   }, []);
 
-  // Clean up polling on unmount
+  // Clean up polling and reset timeout on unmount
   useEffect(() => {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
+      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
     };
   }, []);
 
@@ -70,7 +72,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           toast.warning(`Mail versandt an ${job.sent} von ${job.total_recipients} Empfängern (${job.failed} fehlgeschlagen)`);
         }
         // Reset form after a short delay so user can see the final status
-        setTimeout(() => {
+        resetTimeoutRef.current = setTimeout(() => {
+          resetTimeoutRef.current = null;
           setSubject('');
           setMessage('');
           setRecipientFilter('all');
@@ -97,6 +100,10 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
+    }
+    if (resetTimeoutRef.current) {
+      clearTimeout(resetTimeoutRef.current);
+      resetTimeoutRef.current = null;
     }
     setActiveJob(null);
     setIsLoading(false);
@@ -378,7 +385,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Desktop: always-visible preview */}
-              <div className="hidden md:block">
+              <div className="hidden md:flex md:flex-1 md:min-h-0 md:flex-col">
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Vorschau
                 </label>
@@ -457,7 +464,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                   </PopoverButton>
                   <button
                     onClick={handleSendBulk}
-                    className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
+                    disabled={isLoading}
+                    className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     Bestätigen
                   </button>

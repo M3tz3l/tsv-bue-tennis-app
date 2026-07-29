@@ -6,11 +6,12 @@
 	"runArgs": [
 		"--cap-add=SYS_PTRACE",
 		"--security-opt",
-		"seccomp=unconfined"
+		"seccomp=unconfined",
+		"--env-file", "${localWorkspaceFolder}/.devcontainer/.env"
 	],
 	"mounts": [
-		// Caches your compiled targets locally so they survive container rebuilds
-		"source=${localWorkspaceFolder}/.cargo-target,target=${containerWorkspaceFolder}/target,type=bind",
+		// Caches compiled targets via named volume (avoids root-owned bind mount issues)
+		"source=tsv-cargo-target,target=${containerWorkspaceFolder}/target,type=volume",
 		// Caches downloaded crates so you never download them twice
 		"source=isolated-cargo-cache,target=/home/vscode/.cargo/registry,type=volume",
 		// Persists MiMo Code session memory and global state across rebuilds
@@ -48,6 +49,6 @@
 		5000,
 		5173
 	],
-	"postCreateCommand": "mkdir -p /home/vscode/.local/state /home/vscode/.local/share/mimocode/log /home/vscode/.config/gh && chown -R vscode:vscode /home/vscode/.local /home/vscode/.config/gh && cd tsv-tennis-app && npm install",
+	"postCreateCommand": "mkdir -p /home/vscode/.local/state /home/vscode/.local/share/mimocode/log /home/vscode/.config/gh && cd tsv-tennis-app && npm install",
 	"remoteUser": "vscode"
 }

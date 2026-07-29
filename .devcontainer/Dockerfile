@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/rust:latest
+FROM mcr.microsoft.com/devcontainers/rust:1.85-bookworm
 
 # Install system dependencies for the Rust backend (SQLite via sqlx)
 RUN apt-get update \
@@ -19,24 +19,28 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 20 LTS (system-wide, works on both amd64 and arm64)
+# Install Node.js 20 LTS with checksum verification
 ARG NODE_VERSION=20.19.0
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then NODE_ARCH="x64"; \
     elif [ "$ARCH" = "arm64" ]; then NODE_ARCH="arm64"; \
     else echo "Unsupported architecture: $ARCH" && exit 1; fi && \
-    curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" \
-    | tar -xJ -C /usr/local --strip-components=1 && \
+    curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" -o /tmp/node.tar.xz && \
+    curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" -o /tmp/SHASUMS256.txt && \
+    grep "node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" /tmp/SHASUMS256.txt | sha256sum -c - && \
+    tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 && \
+    rm /tmp/node.tar.xz /tmp/SHASUMS256.txt && \
     node --version && npm --version
 
 # Install Playwright browser dependencies (for MCP server)
 RUN npx -y playwright install-deps chromium
 
-# Install MiMo-Code globally as the workspace user
-# Rebuild sqlite3 native module from source to link against the container's glibc
+# Install MiMo-Code globally as root (global prefix under /usr/local is root-owned)
+RUN npm install -g @mimo-ai/cli
+
+# Switch to vscode user for remaining setup
 USER vscode
 RUN mkdir -p /home/vscode/.local/state /home/vscode/.local/share/mimocode/log /home/vscode/.config/gh
-RUN npm install -g @mimo-ai/cli
 
 # Pre-install Playwright Chromium so the MCP server is ready immediately
 RUN npx -y playwright install chromium
