@@ -131,6 +131,7 @@ impl EmailService {
         signature_html: &str,
         signature_text: &str,
         attachments: &[EmailAttachment],
+        include_greeting: bool,
         max_concurrency: usize,
         batch_size: usize,
         batch_delay: std::time::Duration,
@@ -226,11 +227,19 @@ impl EmailService {
                 let attachments = attachments.clone();
 
                 handles.push(tokio::spawn(async move {
-                    let html_content = format!(
-                        "<p>Hallo {safe_first_name},</p><p>{safe_message}</p>{signature_html}",
-                        safe_first_name = escape_html(&first),
-                    );
-                    let text_content = format!("Hallo {first},\n\n{message}\n\n{signature_text}",);
+                    let html_content = if include_greeting {
+                        format!(
+                            "<p>Hallo {safe_first_name},</p><p>{safe_message}</p>{signature_html}",
+                            safe_first_name = escape_html(&first),
+                        )
+                    } else {
+                        format!("<p>{safe_message}</p>{signature_html}")
+                    };
+                    let text_content = if include_greeting {
+                        format!("Hallo {first},\n\n{message}\n\n{signature_text}",)
+                    } else {
+                        format!("{message}\n\n{signature_text}",)
+                    };
 
                     let to_mailbox: Mailbox = match email_addr.parse() {
                         Ok(m) => m,

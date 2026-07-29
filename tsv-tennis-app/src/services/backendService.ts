@@ -203,11 +203,12 @@ class BackendService {
     }
   }
 
-  async sendTestMail(payload: SendTestMailPayload = {}, attachments?: File[]): Promise<ApiResult | ApiError> {
+  async sendTestMail(payload: SendTestMailPayload = {}, attachments?: File[], includeGreeting: boolean = true): Promise<ApiResult | ApiError> {
     try {
       const formData = new FormData();
       if (payload.subject) formData.append('subject', payload.subject);
       if (payload.message) formData.append('message', payload.message);
+      formData.append('include_greeting', String(includeGreeting));
       if (attachments) {
         for (const file of attachments) {
           formData.append('attachments', file, file.name);
@@ -247,12 +248,13 @@ class BackendService {
     }
   }
 
-  async sendBulkMail(payload: SendBulkMailRequest, attachments?: File[]): Promise<ApiResult | ApiError> {
+  async sendBulkMail(payload: SendBulkMailRequest, attachments?: File[], includeGreeting: boolean = true): Promise<ApiResult | ApiError> {
     try {
       const formData = new FormData();
       formData.append('subject', payload.subject);
       formData.append('message', payload.message);
       formData.append('recipient_filter', payload.recipient_filter);
+      formData.append('include_greeting', String(includeGreeting));
       if (attachments) {
         for (const file of attachments) {
           formData.append('attachments', file, file.name);
