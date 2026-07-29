@@ -133,9 +133,10 @@ jobs:
             --smtp-tls-cert sans:localhost \
             --smtp-tls-key sans:localhost \
             --smtp-require-starttls &
-          sleep 2
-          # Verify Mailpit is running
-          curl -sf http://localhost:8025/api/v1/messages > /dev/null && echo "Mailpit ready"
+          for i in $(seq 1 10); do
+            curl -sf http://localhost:8025/api/v1/messages > /dev/null && echo "Mailpit ready" && break
+            sleep 1
+          done
 
       - name: Start backend
         working-directory: backend
