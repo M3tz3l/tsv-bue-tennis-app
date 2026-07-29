@@ -447,22 +447,14 @@ pub async fn get_mail_job_status(
     Path(job_id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let jobs = state.mail_jobs.read().await;
-    info!(
-        "Job status lookup: requested_id={}, jobs_in_store={}",
-        job_id,
-        jobs.len()
-    );
-    for (id, job) in jobs.iter() {
-        info!(
-            "  stored job: id={}, status={:?}, created_at={}",
-            id, job.status, job.created_at
-        );
-    }
     match jobs.get(&job_id) {
-        Some(job) => Ok(Json(serde_json::json!({
-            "success": true,
-            "job": job,
-        }))),
+        Some(job) => {
+            info!("Job status lookup: id={}, status={:?}", job_id, job.status);
+            Ok(Json(serde_json::json!({
+                "success": true,
+                "job": job,
+            })))
+        }
         None => Err((
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({

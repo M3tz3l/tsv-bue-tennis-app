@@ -81,7 +81,7 @@ test.describe('Send Bulk Mail', () => {
 
     // Should show progress view
     await expect(
-      page.locator('text=Mails werden versendet').or(page.locator('text=Mail versenden'))
+      page.locator('text=Mails werden versendet')
     ).toBeVisible({ timeout: 10_000 });
 
     // Wait for sending to start

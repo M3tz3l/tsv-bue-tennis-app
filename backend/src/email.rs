@@ -209,6 +209,14 @@ impl EmailService {
                     for (email, _) in chunk {
                         all_failed_recipients.push(email.clone());
                     }
+                    // Write progress before skipping this batch
+                    {
+                        let mut jobs = job_store.write().await;
+                        if let Some(job) = jobs.get_mut(&job_id) {
+                            job.sent = total_sent as i32;
+                            job.failed = total_failed as i32;
+                        }
+                    }
                     continue;
                 }
             };

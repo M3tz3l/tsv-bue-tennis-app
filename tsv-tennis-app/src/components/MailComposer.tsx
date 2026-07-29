@@ -309,9 +309,17 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                         activeJob.status === 'failed' ? 'bg-red-500' : 'bg-purple-600'
                       }`}
                       style={{
-                        width: `${Math.round(
-                          ((activeJob.sent + activeJob.failed) / activeJob.total_recipients) * 100
-                        )}%`,
+                        width: `${
+                          activeJob.total_recipients > 0
+                            ? Math.min(
+                                100,
+                                Math.round(
+                                  ((activeJob.sent + activeJob.failed) /
+                                    activeJob.total_recipients) * 100
+                                )
+                              )
+                            : 0
+                        }%`,
                       }}
                     />
                   </div>
@@ -507,7 +515,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     onClick={() => !isBusy && setIncludeGreeting(!includeGreeting)}
                   >
                     Persönliche Anrede
-                    <span className="text-gray-400 ml-1">({senderFirstName})</span>
+                    <span className="text-gray-400 ml-1">(Vorname des Empfängers)</span>
                   </label>
                 </div>
 
@@ -688,7 +696,7 @@ const PreviewContent: React.FC<{
 }> = ({ subject, message, senderFirstName, includeGreeting }) => (
   <div className="bg-white rounded-lg shadow-sm p-4 text-sm text-gray-900">
     <p className="font-medium mb-3">{subject.trim() || 'Kein Betreff'}</p>
-    {includeGreeting && <p className="text-gray-700 mb-1">Hallo Max,</p>}
+    {includeGreeting && <p className="text-gray-700 mb-1">Hallo [Vorname],</p>}
     <p className="whitespace-pre-wrap text-gray-700">
       {message.trim() || 'Ihre Nachricht erscheint hier...'}
     </p>
