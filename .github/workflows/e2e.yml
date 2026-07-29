@@ -87,26 +87,6 @@ jobs:
         working-directory: e2e/seed
         run: npm ci
 
-      # Download existing fixtures from previous run (persists across CI runs)
-      - name: Get latest successful run ID
-        id: get-run
-        run: |
-          RUN_ID=$(gh run list --branch ${{ github.head_ref || github.ref_name }} --workflow "${{ github.workflow }}" --status success --json databaseId --jq '.[0].databaseId' 2>/dev/null || echo "")
-          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-      - name: Download existing fixtures
-        if: steps.get-run.outputs.run_id != ''
-        uses: actions/download-artifact@v4
-        with:
-          name: e2e-fixtures
-          path: e2e/seed/fixtures
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.get-run.outputs.run_id }}
-          github-token: ${{ github.token }}
-        continue-on-error: true  # OK if no previous run exists
-
       - name: Seed test data
         working-directory: e2e/seed
         env:
@@ -115,16 +95,6 @@ jobs:
         run: |
           rm -f ../../backend/e2e_test.db
           npx tsx seed.ts
-
-      # Save fixtures for next run (only on success)
-      - name: Upload fixtures for next run
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-fixtures
-          path: e2e/seed/fixtures/test-users.json
-          retention-days: 90
-          overwrite: true
 
       - name: Start Mailpit (SMTP capture server)
         run: |

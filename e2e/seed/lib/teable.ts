@@ -74,6 +74,13 @@ export async function createTeableRecords(
     idMap.set(email, id);
   }
 
+  // Update existing records (e.g. role changes)
+  const toUpdate = members.filter(m => existing.has(m.email.toLowerCase()));
+  if (toUpdate.length > 0) {
+    console.log(`  Updating ${toUpdate.length} existing records...`);
+    await updateTeableRecords(toUpdate, existing);
+  }
+
   // Filter out members that already exist
   const toCreate = members.filter(m => !existing.has(m.email.toLowerCase()));
   if (toCreate.length === 0) {
@@ -131,6 +138,60 @@ export async function createTeableRecords(
   }
 
   return idMap;
+}
+
+/**
+ * Update existing Teable records (e.g. role changes).
+ */
+async function updateTeableRecords(
+  members: TeableMemberData[],
+  existingIds: Map<string, string>,
+): Promise<void> {
+  const batchSize = 50;
+  for (let i = 0; i < members.length; i += batchSize) {
+    const batch = members.slice(i, i + batchSize);
+    const records = batch
+      .map(m => {
+        const id = existingIds.get(m.email.toLowerCase());
+        if (!id) return null;
+        return {
+          id,
+          fields: {
+            Vorname: m.firstName,
+            Nachname: m.lastName,
+            Email: m.email.toLowerCase(),
+            Familie: m.familyId,
+            Geburtsdatum: m.birthDate,
+            Eintrittsdatum: m.joinDate,
+            Rolle: m.role || '',
+          },
+        };
+      })
+      .filter(Boolean);
+
+    if (records.length === 0) continue;
+
+    const res = await fetch(
+      `${config.teableApiUrl}/table/${config.membersTableId}/record`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${config.teableToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ records }),
+      },
+    );
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error(`  Warning: failed to update batch: ${res.status} ${err}`);
+    }
+
+    if (i + batchSize < members.length) {
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
 }
 
 export async function deleteTeableRecordsByEmailDomain(domain: string): Promise<number> {

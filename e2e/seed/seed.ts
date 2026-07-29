@@ -2,7 +2,7 @@ import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { config } from './lib/config.js';
-import { createTeableRecords, deleteTeableRecord } from './lib/teable.js';
+import { createTeableRecords } from './lib/teable.js';
 import { seedSqlite } from './lib/sqlite.js';
 import { generateTestUsers, type TestUser, type TestFixtures } from './lib/fixtures.js';
 
@@ -58,17 +58,6 @@ async function main() {
       users.forEach(u => u.role = '');
       for (let i = 0; i < Math.min(config.orgaCount, users.length); i++) {
         users[i].role = 'orga';
-      }
-      // Delete stale Teable records for role-changed users so Step 2 recreates them
-      for (const user of users) {
-        if (user.teableRecordId) {
-          try {
-            await deleteTeableRecord(user.teableRecordId);
-            user.teableRecordId = '';
-          } catch {
-            // Best effort
-          }
-        }
       }
       console.log(`   Updated ${Math.min(config.orgaCount, users.length)} users to orga`);
     }
