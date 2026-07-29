@@ -51,19 +51,13 @@ async function main() {
 
   console.log(`   Generated ${users.length} users (${config.orgaCount} orga, ${users.length - config.orgaCount} regular)\n`);
 
-  // Step 2: Create Teable records (skip those that already have IDs)
-  const needTeable = users.filter(u => !u.teableRecordId);
-  if (needTeable.length === 0) {
-    console.log('2. All Teable records already exist, skipping...\n');
-  } else {
-    console.log(`2. Creating ${needTeable.length} Teable records (${users.length - needTeable.length} already exist)...`);
-    const teableIds = await createTeableRecords(needTeable);
-
-    for (const user of needTeable) {
-      user.teableRecordId = teableIds.get(user.email.toLowerCase()) || '';
-    }
-    console.log(`   Created ${teableIds.size} Teable records\n`);
+  // Step 2: Create or update Teable records for all users
+  console.log(`2. Syncing ${users.length} Teable records...`);
+  const teableIds = await createTeableRecords(users);
+  for (const user of users) {
+    user.teableRecordId = teableIds.get(user.email.toLowerCase()) || user.teableRecordId || '';
   }
+  console.log(`   Synced ${teableIds.size} Teable records\n`);
 
   // Step 3: Seed SQLite (uses INSERT OR IGNORE, so always safe)
   console.log('3. Seeding SQLite auth database...');
