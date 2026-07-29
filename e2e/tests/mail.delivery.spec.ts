@@ -22,8 +22,8 @@ test.describe('Mail Delivery Verification', () => {
 
     // Send to all
     await page.click('button:has-text("Alle Mitglieder")');
-    await page.click('button:has-text("Versenden")');
-    await page.click('button:has-text("Bestätigen")');
+    await page.click('button:has-text("Versenden"):not(:has-text("Jetzt"))');
+    await page.click('button:has-text("Jetzt senden")');
 
     // Wait for sending to complete
     await page.waitForTimeout(10_000);

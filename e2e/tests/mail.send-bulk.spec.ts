@@ -73,15 +73,15 @@ test.describe('Send Bulk Mail', () => {
     // Select "Alle Mitglieder" (should be default)
     await page.click('button:has-text("Alle Mitglieder")');
 
-    // Click send
-    await page.click('button:has-text("Versenden")');
+    // Click send — shows inline confirmation
+    await page.click('button:has-text("Versenden"):not(:has-text("Jetzt"))');
 
-    // Confirm in popover
-    await page.click('button:has-text("Bestätigen")');
+    // Confirm inline — click "Jetzt senden"
+    await page.click('button:has-text("Jetzt senden")');
 
-    // Should show sending progress or toast
+    // Should show progress view
     await expect(
-      page.locator('text=Sende Mails').or(page.locator('text=Wird gestartet')).or(page.locator('text=gestartet'))
+      page.locator('text=Mails werden versendet').or(page.locator('text=Mail versenden'))
     ).toBeVisible({ timeout: 10_000 });
 
     // Wait for sending to start
