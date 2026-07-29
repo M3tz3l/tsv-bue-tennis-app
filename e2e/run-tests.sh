@@ -32,10 +32,15 @@ fuser -k 5000/tcp 5173/tcp 8025/tcp 1025/tcp 2>/dev/null || true
 sleep 2
 cleanup() {
     info "Cleaning up…"
-    [[ -n "$FRONTEND_PID" ]] && kill "$FRONTEND_PID" 2>/dev/null || true
-    [[ -n "$BACKEND_PID"  ]] && kill "$BACKEND_PID"  2>/dev/null || true
-    [[ -n "$MAILPIT_PID"  ]] && kill "$MAILPIT_PID"  2>/dev/null || true
-    wait 2>/dev/null || true
+    for pid_var in FRONTEND_PID BACKEND_PID MAILPIT_PID; do
+        local pid="${!pid_var}"
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null || true
+        fi
+    done
+    # Give processes a moment to exit, then force-kill any survivors on our ports
+    sleep 1
+    fuser -k 5173/tcp 5000/tcp 1025/tcp 8025/tcp 2>/dev/null || true
     info "Done."
 }
 trap cleanup EXIT INT TERM
