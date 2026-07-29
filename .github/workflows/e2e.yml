@@ -1,0 +1,151 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '3 4 * * *'  # Nightly at 04:03 UTC
+  workflow_dispatch:
+    inputs:
+      user_count:
+        description: 'Number of test users to create'
+        required: false
+        default: '20'
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      TEABLE_API_URL: ${{ secrets.E2E_TEABLE_API_URL }}
+      TEABLE_TOKEN: ${{ secrets.E2E_TEABLE_TOKEN }}
+      MEMBERS_TABLE_ID: ${{ secrets.E2E_MEMBERS_TABLE_ID }}
+      WORK_HOURS_TABLE_ID: ${{ secrets.E2E_WORK_HOURS_TABLE_ID }}
+      DATABASE_URL: sqlite:./e2e_test.db
+      E2E_DATABASE_PATH: ../../backend/e2e_test.db
+      JWT_SECRET: e2e-test-secret-do-not-use-in-prod
+      EMAIL_DISABLE_SEND: "false"
+      EMAIL_ACCEPT_INVALID_CERTS: "true"
+      EMAIL_HOST: localhost
+      EMAIL_PORT: "1025"
+      EMAIL_USER: ""
+      EMAIL_PASSWORD: ""
+      EMAIL_FROM: e2e-test@tsv-tennis.local
+      FRONTEND_URL: http://localhost:5173
+      BACKEND_URL: http://localhost:5000
+      BASE_URL: http://localhost:5173
+      # PR: 20 users, Nightly: 110 users
+      E2E_USER_COUNT: ${{ github.event_name == 'schedule' && '110' || inputs.user_count || '20' }}
+      E2E_ORGA_COUNT: '5'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "backend"
+
+      - name: Build backend
+        working-directory: backend
+        run: cargo build --release
+
+      - name: Generate TypeScript bindings
+        working-directory: backend
+        run: cargo run --bin generate-types --release
+
+      - name: Install frontend dependencies
+        working-directory: tsv-tennis-app
+        run: npm ci
+
+      - name: Copy generated types to frontend
+        run: cp backend/bindings/types.ts tsv-tennis-app/src/types/types.ts
+
+      - name: Install E2E dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Install seed dependencies
+        working-directory: e2e/seed
+        run: npm ci
+
+      - name: Seed test data
+        working-directory: e2e/seed
+        env:
+          E2E_USER_COUNT: ${{ env.E2E_USER_COUNT }}
+          E2E_ORGA_COUNT: ${{ env.E2E_ORGA_COUNT }}
+        run: |
+          rm -f ../../backend/e2e_test.db
+          npx tsx seed.ts
+
+      - name: Start Mailpit (SMTP capture server)
+        run: |
+          curl -sL https://github.com/axllent/mailpit/releases/latest/download/mailpit-linux-amd64.tar.gz | tar xz -C /tmp
+          /tmp/mailpit \
+            --smtp-tls-cert sans:localhost \
+            --smtp-tls-key sans:localhost \
+            --smtp-require-starttls &
+          for i in $(seq 1 10); do
+            curl -sf http://localhost:8025/api/v1/messages > /dev/null && echo "Mailpit ready" && break
+            sleep 1
+          done
+
+      - name: Start backend
+        working-directory: backend
+        run: |
+          ./target/release/tsv-tennis-backend &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5000/api/health && break
+            sleep 1
+          done
+
+      - name: Start frontend dev server
+        working-directory: tsv-tennis-app
+        run: |
+          npm run dev -- --port 5173 &
+          sleep 5
+
+      - name: Verify servers
+        run: |
+          curl -sf http://localhost:5000/api/health
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5173 > /dev/null && break
+            sleep 1
+          done
+
+      - name: Run E2E tests
+        working-directory: e2e
+        run: npx playwright test --reporter=list
+
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results-${{ github.event_name }}
+          path: |
+            e2e/test-results/
+            e2e/playwright-report/
+
+      - name: Cleanup Teable test records
+        if: always()
+        working-directory: e2e/seed
+        run: npx tsx cleanup.ts
+        continue-on-error: true
