@@ -27,15 +27,36 @@ error() { echo -e "${RED}[-]${NC} $*"; }
 # ── PIDs for cleanup ─────────────────────────────────────────────────────────
 MAILPIT_PID="" BACKEND_PID="" FRONTEND_PID=""
 
-# Kill any stale processes from previous runs
-fuser -k 5000/tcp 5173/tcp 8025/tcp 1025/tcp 2>/dev/null || true
-sleep 2
+# Kill only processes we own on our ports (stale from previous runs)
+kill_port_owners() {
+    local port=$1
+    local pids
+    pids=$(fuser "$port/tcp" 2>/dev/null) || return 0
+    for pid in $pids; do
+        # Only kill if it looks like our test processes (mailpit, backend, vite)
+        local comm
+        comm=$(ps -p "$pid" -o comm= 2>/dev/null) || continue
+        case "$comm" in
+            mailpit|tsv-tennis-back|node|esbuild)
+                kill "$pid" 2>/dev/null || true
+                ;;
+        esac
+    done
+}
+for port in 5000 5173 1025 8025; do kill_port_owners "$port"; done
+sleep 1
+
 cleanup() {
     info "Cleaning up…"
-    [[ -n "$FRONTEND_PID" ]] && kill "$FRONTEND_PID" 2>/dev/null || true
-    [[ -n "$BACKEND_PID"  ]] && kill "$BACKEND_PID"  2>/dev/null || true
-    [[ -n "$MAILPIT_PID"  ]] && kill "$MAILPIT_PID"  2>/dev/null || true
-    wait 2>/dev/null || true
+    for pid_var in FRONTEND_PID BACKEND_PID MAILPIT_PID; do
+        local pid="${!pid_var}"
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null || true
+        fi
+    done
+    # Give processes a moment to exit, then force-kill survivors on our ports
+    sleep 1
+    for port in 5173 5000 1025 8025; do kill_port_owners "$port"; done
     info "Done."
 }
 trap cleanup EXIT INT TERM
