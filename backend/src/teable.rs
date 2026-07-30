@@ -758,25 +758,18 @@ pub async fn get_all_active_members(
                 ("skip", &skip.to_string()),
             ]);
 
-        // Build filter set: only active members (no Austrittsdatum)
-        let mut filter_set = vec![serde_json::json!({
-            "fieldId": "Austrittsdatum",
-            "operator": "isEmpty"
-        })];
-
+        // Add role filter as a query parameter
         if let Some(role) = role_filter {
-            filter_set.push(serde_json::json!({
-                "fieldId": "Rolle",
-                "operator": "contains",
-                "value": role
-            }));
+            let filter = serde_json::json!({
+                "conjunction": "and",
+                "filterSet": [{
+                    "fieldId": "Rolle",
+                    "operator": "contains",
+                    "value": role
+                }]
+            });
+            req = req.query(&[("filter", &filter.to_string())]);
         }
-
-        let filter = serde_json::json!({
-            "conjunction": "and",
-            "filterSet": filter_set
-        });
-        req = req.query(&[("filter", &filter.to_string())]);
 
         for field in ALL_MEMBERS_PROJECTION.iter() {
             req = req.query(&[("projection[]", *field)]);
@@ -811,6 +804,13 @@ pub async fn get_all_active_members(
     let mut members = Vec::with_capacity(all_records.len());
     for record in &all_records {
         let fields = &record["fields"];
+        // Skip members with an Austrittsdatum (exit date) — they are no longer active
+        let has_exit_date = fields["Austrittsdatum"]
+            .as_str()
+            .is_some_and(|s| !s.trim().is_empty());
+        if has_exit_date {
+            continue;
+        }
         if let Some(email) = fields["Email"].as_str() {
             if !email.trim().is_empty() {
                 let member = member_from_record(record);
