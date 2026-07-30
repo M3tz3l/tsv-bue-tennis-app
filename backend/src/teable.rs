@@ -288,17 +288,7 @@ pub async fn get_member_by_email_with_projection(
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
 
-    // If direct filter didn't work, do case-insensitive client-side filtering
-    let matching_record = records.iter().find(|record| {
-        let fields = &record["fields"];
-        if let Some(record_email) = fields["Email"].as_str() {
-            record_email.to_lowercase() == email_lowercase
-        } else {
-            false
-        }
-    });
-
-    if let Some(record) = matching_record {
+    if let Some(record) = records.first() {
         let member = member_from_record(record);
         info!(
             "Found member: {} {} ({}) - Birth Date: {}, Join Date: {:?}",
@@ -708,13 +698,12 @@ pub async fn get_members_by_email(
     client: &Client,
     email: &str,
 ) -> Result<Vec<Member>> {
-    let email_lowercase = email.to_lowercase();
     let filter = serde_json::json!({
         "conjunction": "and",
         "filterSet": [{
             "fieldId": "Email",
             "operator": "is",
-            "value": email_lowercase
+            "value": email
         }]
     });
     let url = format!(
@@ -737,13 +726,8 @@ pub async fn get_members_by_email(
         .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
     let mut members = Vec::with_capacity(records.len());
     for record in records {
-        let fields = &record["fields"];
-        if let Some(record_email) = fields["Email"].as_str() {
-            if record_email.to_lowercase() == email_lowercase {
-                let member = member_from_record(record);
-                members.push(member);
-            }
-        }
+        let member = member_from_record(record);
+        members.push(member);
     }
     Ok(members)
 }
@@ -774,18 +758,25 @@ pub async fn get_all_active_members(
                 ("skip", &skip.to_string()),
             ]);
 
-        // Add role filter as a query parameter
+        // Build filter set: only active members (no Austrittsdatum)
+        let mut filter_set = vec![serde_json::json!({
+            "fieldId": "Austrittsdatum",
+            "operator": "isEmpty"
+        })];
+
         if let Some(role) = role_filter {
-            let filter = serde_json::json!({
-                "conjunction": "and",
-                "filterSet": [{
-                    "fieldId": "Rolle",
-                    "operator": "contains",
-                    "value": role
-                }]
-            });
-            req = req.query(&[("filter", &filter.to_string())]);
+            filter_set.push(serde_json::json!({
+                "fieldId": "Rolle",
+                "operator": "contains",
+                "value": role
+            }));
         }
+
+        let filter = serde_json::json!({
+            "conjunction": "and",
+            "filterSet": filter_set
+        });
+        req = req.query(&[("filter", &filter.to_string())]);
 
         for field in ALL_MEMBERS_PROJECTION.iter() {
             req = req.query(&[("projection[]", *field)]);
@@ -820,13 +811,6 @@ pub async fn get_all_active_members(
     let mut members = Vec::with_capacity(all_records.len());
     for record in &all_records {
         let fields = &record["fields"];
-        // Skip members with an Austrittsdatum (exit date) — they are no longer active
-        let has_exit_date = fields["Austrittsdatum"]
-            .as_str()
-            .is_some_and(|s| !s.trim().is_empty());
-        if has_exit_date {
-            continue;
-        }
         if let Some(email) = fields["Email"].as_str() {
             if !email.trim().is_empty() {
                 let member = member_from_record(record);
