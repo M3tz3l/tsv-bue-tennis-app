@@ -38,6 +38,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const [countsLoaded, setCountsLoaded] = useState(false);
   const [activeJob, setActiveJob] = useState<MailJob | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // New state for redesigned UI
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -62,10 +63,11 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     fetchCounts();
   }, []);
 
-  // Clean up polling on unmount
+  // Clean up polling and reset timeout on unmount
   useEffect(() => {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
+      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
     };
   }, []);
 
@@ -93,7 +95,9 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           toast.warning(`Mail versandt an ${job.sent} von ${job.total_recipients} Empfängern (${job.failed} fehlgeschlagen)`);
         }
         // Reset form after a short delay so user can see the final status
-        setTimeout(() => {
+        if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+        resetTimeoutRef.current = setTimeout(() => {
+          resetTimeoutRef.current = null;
           setSubject('');
           setMessage('');
           setRecipientFilter('all');
@@ -121,6 +125,10 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
+    }
+    if (resetTimeoutRef.current) {
+      clearTimeout(resetTimeoutRef.current);
+      resetTimeoutRef.current = null;
     }
     setActiveJob(null);
     setIsLoading(false);
