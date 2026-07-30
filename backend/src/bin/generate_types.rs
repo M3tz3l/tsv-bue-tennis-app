@@ -10,7 +10,7 @@ use std::path::Path;
 use tsv_tennis_backend::member_selection::*;
 use tsv_tennis_backend::models::*;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> anyhow::Result<()> {
     println!("🔄 Generating TypeScript bindings...");
 
     // Create bindings directory

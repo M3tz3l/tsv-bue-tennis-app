@@ -1,3 +1,5 @@
+//! SQLite database layer for user authentication and password storage.
+
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -84,7 +86,6 @@ impl Database {
         }
     }
 
-    #[allow(dead_code)]
     pub async fn create_user(&self, request: CreateUserRequest) -> Result<i32, sqlx::Error> {
         let password_hash = hash(&request.password, DEFAULT_COST)
             .map_err(|e| sqlx::Error::Configuration(Box::new(e)))?;
@@ -117,7 +118,6 @@ impl Database {
         }
     }
 
-    #[allow(dead_code)]
     pub async fn update_password(
         &self,
         user_id: i32,
@@ -133,79 +133,5 @@ impl Database {
             .await?;
 
         Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub async fn create_reset_token(
-        &self,
-        user_id: i32,
-        token: &str,
-        expires_at: DateTime<Utc>,
-    ) -> Result<(), sqlx::Error> {
-        // Delete any existing tokens for this user
-        sqlx::query("DELETE FROM reset_tokens WHERE user_id = ?")
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
-
-        // Insert new token
-        sqlx::query("INSERT INTO reset_tokens (token, user_id, expires_at) VALUES (?, ?, ?)")
-            .bind(token)
-            .bind(user_id)
-            .bind(expires_at)
-            .execute(&self.pool)
-            .await?;
-
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub async fn get_reset_token(
-        &self,
-        token: &str,
-    ) -> Result<Option<(i32, DateTime<Utc>)>, sqlx::Error> {
-        let row = sqlx::query("SELECT user_id, expires_at FROM reset_tokens WHERE token = ?")
-            .bind(token)
-            .fetch_optional(&self.pool)
-            .await?;
-
-        if let Some(row) = row {
-            Ok(Some((row.get("user_id"), row.get("expires_at"))))
-        } else {
-            Ok(None)
-        }
-    }
-
-    #[allow(dead_code)]
-    pub async fn consume_reset_token(&self, token: &str) -> Result<Option<i32>, sqlx::Error> {
-        let mut tx = self.pool.begin().await?;
-
-        let row = sqlx::query("SELECT user_id, expires_at FROM reset_tokens WHERE token = ?")
-            .bind(token)
-            .fetch_optional(&mut *tx)
-            .await?;
-
-        if let Some(row) = row {
-            let user_id: i32 = row.get("user_id");
-            let expires_at: DateTime<Utc> = row.get("expires_at");
-
-            if expires_at > Utc::now() {
-                // Token is valid, delete it
-                sqlx::query("DELETE FROM reset_tokens WHERE token = ?")
-                    .bind(token)
-                    .execute(&mut *tx)
-                    .await?;
-
-                tx.commit().await?;
-                Ok(Some(user_id))
-            } else {
-                // Token expired
-                tx.rollback().await?;
-                Ok(None)
-            }
-        } else {
-            tx.rollback().await?;
-            Ok(None)
-        }
     }
 }

@@ -1,3 +1,5 @@
+//! In-memory password reset token storage with expiry management.
+
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

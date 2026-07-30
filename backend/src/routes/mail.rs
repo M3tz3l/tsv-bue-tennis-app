@@ -1,3 +1,5 @@
+//! Bulk mail routes: test send, bulk dispatch, job status, recipient counts.
+
 use axum::{
     extract::{Multipart, Path, State},
     http::{HeaderMap, StatusCode},
@@ -38,7 +40,7 @@ pub async fn send_test_mail(
     headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    let claims = extract_auth_claims_from_headers(&headers)?;
+    let claims = extract_auth_claims_from_headers(&state.jwt_secret, &headers)?;
 
     let user = teable::get_member_by_id_with_projection(
         &state.http_client,
@@ -181,7 +183,7 @@ pub async fn send_bulk_mail(
     headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    let claims = extract_auth_claims_from_headers(&headers)?;
+    let claims = extract_auth_claims_from_headers(&state.jwt_secret, &headers)?;
 
     // Check orga role from token claim
     let has_orga_claim = claims

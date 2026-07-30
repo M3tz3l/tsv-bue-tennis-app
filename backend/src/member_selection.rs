@@ -1,3 +1,5 @@
+//! Member selection types for handling multiple profiles per email.
+
 use crate::models::{LoginResponse, UserResponse};
 use serde::{Deserialize, Serialize};
 use specta::Type;

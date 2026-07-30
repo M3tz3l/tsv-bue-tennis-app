@@ -35,7 +35,7 @@ mod utils;
 pub use state::*;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn main() -> anyhow::Result<()> {
     // Load .env file
     dotenvy::dotenv().ok();
 
@@ -108,6 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         token_store,
         database,
         mail_jobs,
+        jwt_secret: config.jwt_secret.clone(),
     };
 
     let cors = CorsLayer::new()
@@ -132,7 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             .burst_size(3) // Allow small bursts for retry scenarios
             .key_extractor(state::PeerIpKeyExtractor) // Use TCP peer IP for auth rate limiting
             .finish()
-            .unwrap(),
+            .expect("Failed to build auth rate limiter config"),
     );
 
     // Health check route (no rate limiting)
@@ -153,9 +154,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         GovernorConfigBuilder::default()
             .per_second(5) // 5 read requests per second per user (generous for normal usage)
             .burst_size(10) // Allow bursts up to 10 requests for page loads
-            .key_extractor(state::UserKeyExtractor) // Use our custom user-based extractor
+            .key_extractor(state::UserKeyExtractor::new(&config.jwt_secret)) // Use our custom user-based extractor
             .finish()
-            .unwrap(),
+            .expect("Failed to build read rate limiter config"),
     );
 
     // More restrictive rate limiting for write operations
@@ -163,9 +164,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         GovernorConfigBuilder::default()
             .per_second(1) // 1 write request per second per user
             .burst_size(3) // Allow small bursts for quick operations
-            .key_extractor(state::UserKeyExtractor)
+            .key_extractor(state::UserKeyExtractor::new(&config.jwt_secret))
             .finish()
-            .unwrap(),
+            .expect("Failed to build write rate limiter config"),
     );
 
     // Read-only protected routes with generous rate limiting
@@ -199,7 +200,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let protected_routes = Router::new()
         .merge(read_routes)
         .merge(write_routes)
-        .route_layer(middleware::from_fn(state::auth_middleware));
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            state::auth_middleware,
+        ));
 
     let api_routes = Router::new().merge(public_routes).merge(protected_routes);
 
@@ -215,7 +219,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .with_state(state);
 
     let port = config.port;
-    let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await.unwrap();
+    let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await
+        .expect("Failed to bind TCP listener");
     info!("Server starting on port {}", port);
     axum::serve(
         listener,
@@ -237,7 +242,7 @@ async fn get_user(
     State(state): State<state::AppState>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let user_id = crate::utils::extract_user_id_from_headers(&headers)?;
+    let user_id = crate::utils::extract_user_id_from_headers(&state.jwt_secret, &headers)?;
 
     debug!("Get User: Looking for user with ID: {}", user_id);
 
@@ -330,6 +335,7 @@ mod tests {
             mail_jobs: std::sync::Arc::new(tokio::sync::RwLock::new(
                 std::collections::HashMap::new(),
             )),
+            jwt_secret: "test_jwt_secret_key_for_testing_purposes_only_123456789".to_string(),
         };
 
         let cors = CorsLayer::new()
@@ -367,7 +373,10 @@ mod tests {
             )
             .route("/mail/jobs/:job_id", get(routes::mail::get_mail_job_status))
             .nest("/arbeitsstunden", routes::work_hours::routes())
-            .route_layer(middleware::from_fn(state::auth_middleware));
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                state::auth_middleware,
+            ));
 
         let api_routes = Router::new().merge(public_routes).merge(protected_routes);
 
@@ -793,7 +802,11 @@ mod tests {
         let app = create_test_app_with_teable_url(&teable_server.url()).await;
         let server = TestServer::new(app).unwrap();
 
-        let token = auth::create_token("orga_user_1", Some("orga"))
+        let token = auth::create_token(
+            "test_jwt_secret_key_for_testing_purposes_only_123456789",
+            "orga_user_1",
+            Some("orga"),
+        )
             .expect("Failed to create orga test token");
 
         // Mail endpoints now expect multipart/form-data
@@ -841,7 +854,7 @@ mod tests {
         let server = TestServer::new(app).unwrap();
 
         let token =
-            auth::create_token("member_user_1", None).expect("Failed to create member token");
+            auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", "member_user_1", None).expect("Failed to create member token");
 
         // Mail endpoints now expect multipart/form-data
         let response = server
@@ -894,7 +907,7 @@ mod tests {
         // Create a valid JWT token for testing
         let test_user_id = "test_user_123";
         let valid_token =
-            auth::create_token(test_user_id, None).expect("Failed to create test token");
+            auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", test_user_id, None).expect("Failed to create test token");
 
         // Start mock Teable server
         let mut teable_server = Server::new_async().await;
@@ -958,7 +971,7 @@ mod tests {
         // Create a valid JWT token
         let test_user_id = "test_user_456";
         let valid_token =
-            auth::create_token(test_user_id, None).expect("Failed to create test token");
+            auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", test_user_id, None).expect("Failed to create test token");
 
         // Start mock Teable server
         let mut teable_server = Server::new_async().await;
@@ -1032,7 +1045,7 @@ mod tests {
         // Create a valid JWT token
         let test_user_id = "test_user_789";
         let valid_token =
-            auth::create_token(test_user_id, None).expect("Failed to create test token");
+            auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", test_user_id, None).expect("Failed to create test token");
 
         let work_hour_request = serde_json::json!({
             "date": "2025-01-15",
@@ -1066,7 +1079,7 @@ mod tests {
         // Create a valid JWT token
         let test_user_id = "dashboard_user_123";
         let valid_token =
-            auth::create_token(test_user_id, None).expect("Failed to create test token");
+            auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", test_user_id, None).expect("Failed to create test token");
 
         // Test dashboard endpoint with valid token
         let response = server
@@ -1354,7 +1367,7 @@ mod tests {
 
         // Create a valid JWT token for the test user
         let test_token =
-            auth::create_token("integration_user_123", None).expect("Failed to create test token");
+            auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", "integration_user_123", None).expect("Failed to create test token");
 
         // Test protected endpoint with valid token - now actually using the mock!
         let response = server
@@ -1400,7 +1413,7 @@ mod tests {
         tracing::debug!("JWT_SECRET env var: {:?}", std::env::var("JWT_SECRET"));
 
         // Create a token
-        let token = auth::create_token(test_user_id, None).expect("Failed to create token");
+        let token = auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", test_user_id, None).expect("Failed to create token");
         assert!(!token.is_empty());
 
         // Validate the token (this would require access to auth module internals)
@@ -1432,7 +1445,7 @@ mod tests {
 
         // Create a selection token
         let selection_token =
-            auth::create_selection_token(test_email).expect("Failed to create selection token");
+            auth::create_selection_token("test_jwt_secret_key_for_testing_purposes_only_123456789", test_email).expect("Failed to create selection token");
         assert!(!selection_token.is_empty());
 
         // Validate selection token format

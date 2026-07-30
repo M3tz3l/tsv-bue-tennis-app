@@ -1,3 +1,5 @@
+//! Work hour CRUD routes with date validation and ownership checks.
+
 use axum::{
     extract::{Json, Path, State},
     http::HeaderMap,
@@ -74,7 +76,7 @@ pub async fn get_work_hour_by_id(
     Path(work_hour_id): Path<String>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    let user_id = extract_user_id_from_headers(&headers)?;
+    let user_id = extract_user_id_from_headers(&state.jwt_secret, &headers)?;
 
     debug!(
         "Get Work Hour: Looking for work hour ID {} for user {}",
@@ -165,7 +167,7 @@ pub async fn create_work_hour(
     headers: HeaderMap,
     payload: Result<Json<CreateWorkHourRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    let user_id = match extract_user_id_from_headers(&headers) {
+    let user_id = match extract_user_id_from_headers(&state.jwt_secret, &headers) {
         Ok(id) => id,
         Err(e) => {
             error!("Create Work Hour: Auth error: {:?}", e);
@@ -304,7 +306,7 @@ pub async fn update_work_hour(
     headers: HeaderMap,
     payload: Result<Json<CreateWorkHourRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    let user_id = match extract_user_id_from_headers(&headers) {
+    let user_id = match extract_user_id_from_headers(&state.jwt_secret, &headers) {
         Ok(id) => id,
         Err(e) => {
             error!("Update Work Hour: Auth error: {:?}", e);
@@ -462,7 +464,7 @@ pub async fn delete_work_hour(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    let user_id = extract_user_id_from_headers(&headers)?;
+    let user_id = extract_user_id_from_headers(&state.jwt_secret, &headers)?;
 
     let existing = teable::get_work_hour_by_id(&state.http_client, &id)
         .await

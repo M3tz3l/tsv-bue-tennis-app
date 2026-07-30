@@ -1,3 +1,5 @@
+//! Shared request/response models and Teable API data structures.
+
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::HashMap;
@@ -300,6 +302,3 @@ pub struct WorkHourEntry {
     #[serde(rename = "Stunden")]
     pub duration_hours: f64, // Now represents hours with German field name
 }
-
-#[allow(unused_imports)] // These are used in main.rs via re-export
-pub use crate::member_selection::{MemberSelectionResponse, SelectMemberRequest};

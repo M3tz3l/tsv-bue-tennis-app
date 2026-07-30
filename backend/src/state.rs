@@ -1,5 +1,8 @@
+//! Application state, auth middleware, rate limiting, and SPA fallback.
+
 use crate::auth;
 use axum::{
+    extract::State,
     http::StatusCode,
     middleware::Next,
     response::{Html, IntoResponse, Response},
@@ -21,11 +24,22 @@ pub struct AppState {
     pub token_store: TokenStore,
     pub database: Database,
     pub mail_jobs: MailJobStore,
+    pub jwt_secret: String,
 }
 
 // Custom key extractor for user-based rate limiting (for authenticated endpoints)
 #[derive(Clone)]
-pub struct UserKeyExtractor;
+pub struct UserKeyExtractor {
+    jwt_secret: String,
+}
+
+impl UserKeyExtractor {
+    pub fn new(jwt_secret: &str) -> Self {
+        Self {
+            jwt_secret: jwt_secret.to_string(),
+        }
+    }
+}
 
 impl tower_governor::key_extractor::KeyExtractor for UserKeyExtractor {
     type Key = String;
@@ -43,7 +57,7 @@ impl tower_governor::key_extractor::KeyExtractor for UserKeyExtractor {
             .and_then(|header| header.strip_prefix("Bearer "));
 
         match auth_header {
-            Some(token) => match auth::verify_token(token) {
+            Some(token) => match auth::verify_token(&self.jwt_secret, token) {
                 Ok(claims) => Ok(claims.sub),
                 Err(_) => Err(GovernorError::UnableToExtractKey),
             },
@@ -72,17 +86,18 @@ pub async fn rewrite_429_to_json(req: axum::extract::Request, next: Next) -> Res
 }
 
 pub async fn auth_middleware(
-    headers: axum::http::HeaderMap,
+    State(state): State<AppState>,
     request: axum::extract::Request,
     next: Next,
 ) -> Response {
-    let auth_header = headers
+    let auth_header = request
+        .headers()
         .get("authorization")
         .and_then(|header| header.to_str().ok())
         .and_then(|header| header.strip_prefix("Bearer "));
 
     match auth_header {
-        Some(token) => match auth::verify_token(token) {
+        Some(token) => match auth::verify_token(&state.jwt_secret, token) {
             Ok(_) => next.run(request).await,
             Err(_) => StatusCode::UNAUTHORIZED.into_response(),
         },

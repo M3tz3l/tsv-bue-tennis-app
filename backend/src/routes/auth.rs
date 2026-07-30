@@ -1,3 +1,5 @@
+//! Authentication routes: login, register, password reset, member selection.
+
 use axum::{
     extract::{Json, State},
     response::IntoResponse,
@@ -75,7 +77,11 @@ pub async fn login(
     if teable_members.len() == 1 {
         // Only one member, proceed as before
         let teable_user = &teable_members[0];
-        let token = auth::create_token(&teable_user.id.to_string(), teable_user.role.as_deref())
+        let token = auth::create_token(
+            &state.jwt_secret,
+            &teable_user.id.to_string(),
+            teable_user.role.as_deref(),
+        )
             .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         return Ok(Json(LoginResponseVariant::SingleUser(LoginResponse {
             success: true,
@@ -91,7 +97,7 @@ pub async fn login(
 
     // Multiple members found, return list for selection (no token yet)
     // Issue a short-lived selection token for this email
-    let selection_token = auth::create_selection_token(&normalized_email)
+    let selection_token = auth::create_selection_token(&state.jwt_secret, &normalized_email)
         .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let users: Vec<UserResponse> = teable_members
@@ -131,7 +137,7 @@ pub async fn select_member(
     };
 
     // Validate selection token and extract email
-    let email = match auth::verify_selection_token(selection_token) {
+    let email = match auth::verify_selection_token(&state.jwt_secret, selection_token) {
         Ok(email) => email,
         Err(_) => {
             warn!("Invalid or expired selection_token");
@@ -153,7 +159,11 @@ pub async fn select_member(
         return Err(axum::http::StatusCode::UNAUTHORIZED);
     }
 
-    let token = auth::create_token(&teable_member.id.to_string(), teable_member.role.as_deref())
+    let token = auth::create_token(
+        &state.jwt_secret,
+        &teable_member.id.to_string(),
+        teable_member.role.as_deref(),
+    )
         .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(LoginResponse {

@@ -1,9 +1,61 @@
+//! Teable API client: member lookups, work hour CRUD, and paginated queries.
+
 use crate::config::Config;
 use crate::models::{Member, TeableResponse, WorkHour};
 use anyhow::Result;
 use reqwest::Client;
 use serde_json::Value;
 use tracing::{debug, error, info, warn};
+
+const MEMBER_PROJECTION: &[&str] = &[
+    "Vorname",
+    "Nachname",
+    "Email",
+    "Familie",
+    "Geburtsdatum",
+    "Eintrittsdatum",
+    "Rolle",
+];
+
+const ALL_MEMBERS_PROJECTION: &[&str] = &[
+    "Vorname",
+    "Nachname",
+    "Email",
+    "Familie",
+    "Geburtsdatum",
+    "Eintrittsdatum",
+    "Austrittsdatum",
+    "Rolle",
+];
+
+fn parse_date_berlin(s: &str) -> String {
+    use chrono::DateTime;
+    use chrono_tz::Europe::Berlin;
+    DateTime::parse_from_rfc3339(s)
+        .map(|dt| dt.with_timezone(&Berlin).date_naive().to_string())
+        .unwrap_or_else(|_| s.get(0..10).unwrap_or("").to_string())
+}
+
+fn extract_role(fields: &Value) -> Option<String> {
+    fields["Rolle"].as_str().map(|s| s.to_string())
+}
+
+fn member_from_record(record: &Value) -> Member {
+    let fields = &record["fields"];
+    Member {
+        id: record["id"].as_str().unwrap_or("").to_string(),
+        first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
+        last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
+        email: fields["Email"].as_str().unwrap_or("").to_string(),
+        family_id: fields["Familie"]
+            .as_str()
+            .map(|s| s.to_string())
+            .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
+        birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
+        join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
+        role: extract_role(fields),
+    }
+}
 
 struct TeableConfig {
     api_url: String,
@@ -12,7 +64,7 @@ struct TeableConfig {
     work_hours_table_id: String,
 }
 
-fn get_teable_config() -> Result<TeableConfig, Box<dyn std::error::Error + Send + Sync>> {
+fn get_teable_config() -> anyhow::Result<TeableConfig> {
     let config = Config::from_env()?;
     Ok(TeableConfig {
         api_url: config.teable_api_url,
@@ -57,10 +109,6 @@ pub async fn check_table_access(
         .unwrap_or(0);
 
     Ok(total)
-}
-
-fn extract_role(fields: &Value) -> Option<String> {
-    fields["Rolle"].as_str().map(|s| s.to_string())
 }
 
 /// Fetches all work hour records for a member at a specific date (exact date, Europe/Berlin timezone)
@@ -142,17 +190,7 @@ pub async fn get_member_by_id(client: &Client, id: &str) -> Result<Option<Member
     get_member_by_id_with_projection(
         client,
         id,
-        Some(
-            &[
-                "Vorname",
-                "Nachname",
-                "Email",
-                "Familie",
-                "Geburtsdatum",
-                "Eintrittsdatum",
-                "Rolle",
-            ][..],
-        ),
+        Some(MEMBER_PROJECTION),
     )
     .await
 }
@@ -196,20 +234,7 @@ pub async fn get_member_by_id_with_projection(
         warn!("No member found with id: {}", id);
         return Ok(None);
     }
-    let member = Member {
-        id: record["id"].as_str().unwrap_or("").to_string(),
-        first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
-        last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
-        email: fields["Email"].as_str().unwrap_or("").to_string(),
-        family_id: fields["Familie"]
-            .as_str()
-            .map(|s| s.to_string())
-            .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-        birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
-        join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
-
-        role: extract_role(fields),
-    };
+    let member = member_from_record(&record);
     info!(
         "Found member: {} {} ({}) - ID: {}, Birth Date: {}, Join Date: {:?}",
         member.first_name,
@@ -227,17 +252,7 @@ pub async fn get_member_by_email(client: &Client, email: &str) -> Result<Option<
     get_member_by_email_with_projection(
         client,
         email,
-        Some(
-            &[
-                "Vorname",
-                "Nachname",
-                "Email",
-                "Familie",
-                "Geburtsdatum",
-                "Eintrittsdatum",
-                "Rolle",
-            ][..],
-        ),
+        Some(MEMBER_PROJECTION),
     )
     .await
 }
@@ -295,20 +310,7 @@ pub async fn get_member_by_email_with_projection(
     });
 
     if let Some(record) = matching_record {
-        let fields = &record["fields"];
-        let member = Member {
-            id: record["id"].as_str().unwrap_or("").to_string(),
-            first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
-            last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
-            email: fields["Email"].as_str().unwrap_or("").to_string(),
-            family_id: fields["Familie"]
-                .as_str()
-                .map(|s| s.to_string())
-                .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-            birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
-            join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
-            role: extract_role(fields),
-        };
+        let member = member_from_record(record);
         info!(
             "Found member: {} {} ({}) - Birth Date: {}, Join Date: {:?}",
             member.first_name, member.last_name, member.email, member.birth_date, member.join_date
@@ -328,17 +330,7 @@ pub async fn get_family_members(
     get_family_members_with_projection(
         client,
         family_id,
-        Some(
-            &[
-                "Vorname",
-                "Nachname",
-                "Email",
-                "Familie",
-                "Geburtsdatum",
-                "Eintrittsdatum",
-                "Rolle",
-            ][..],
-        ),
+        Some(MEMBER_PROJECTION),
     )
     .await
 }
@@ -380,22 +372,9 @@ pub async fn get_family_members_with_projection(
     let records = teable_response["records"]
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
-    let mut members = Vec::new();
+    let mut members = Vec::with_capacity(records.len());
     for record in records {
-        let fields = &record["fields"];
-        let member = Member {
-            id: record["id"].as_str().unwrap_or("").to_string(),
-            first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
-            last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
-            email: fields["Email"].as_str().unwrap_or("").to_string(),
-            family_id: fields["Familie"]
-                .as_str()
-                .map(|s| s.to_string())
-                .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-            birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
-            join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
-            role: extract_role(fields),
-        };
+        let member = member_from_record(record);
         members.push(member);
     }
     info!(
@@ -436,13 +415,7 @@ pub async fn get_work_hour_by_id(client: &Client, work_hour_id: &str) -> Result<
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
         created_on: fields["Created on"].as_str().map(|s| s.to_string()),
-        date: fields["Datum"].as_str().map(|s| {
-            use chrono::DateTime;
-            use chrono_tz::Europe::Berlin;
-            DateTime::parse_from_rfc3339(s)
-                .map(|dt| dt.with_timezone(&Berlin).date_naive().to_string())
-                .unwrap_or_else(|_| s.get(0..10).unwrap_or("").to_string())
-        }),
+        date: fields["Datum"].as_str().map(parse_date_berlin),
         description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
         duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
     };
@@ -537,14 +510,8 @@ pub async fn get_work_hours_for_member_by_year(
             last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
             first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
             created_on: fields["Created on"].as_str().map(|s| s.to_string()),
-            date: fields["Datum"].as_str().map(|s| {
-                use chrono::DateTime;
-                use chrono_tz::Europe::Berlin;
-                DateTime::parse_from_rfc3339(s)
-                    .map(|dt| dt.with_timezone(&Berlin).date_naive().to_string())
-                    .unwrap_or_else(|_| s.get(0..10).unwrap_or("").to_string())
-            }),
-            description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
+            date: fields["Datum"].as_str().map(parse_date_berlin),
+        description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
             duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
         };
         work_hours.push(work_hour);
@@ -628,13 +595,7 @@ pub async fn create_work_hour(
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
         created_on: None,
-        date: fields["Datum"].as_str().map(|s| {
-            use chrono::DateTime;
-            use chrono_tz::Europe::Berlin;
-            DateTime::parse_from_rfc3339(s)
-                .map(|dt| dt.with_timezone(&Berlin).date_naive().to_string())
-                .unwrap_or_else(|_| s.get(0..10).unwrap_or("").to_string())
-        }),
+        date: fields["Datum"].as_str().map(parse_date_berlin),
         description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
         duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
     })
@@ -725,13 +686,7 @@ pub async fn update_work_hour(
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
         created_on: None,
-        date: fields["Datum"].as_str().map(|s| {
-            use chrono::DateTime;
-            use chrono_tz::Europe::Berlin;
-            DateTime::parse_from_rfc3339(s)
-                .map(|dt| dt.with_timezone(&Berlin).date_naive().to_string())
-                .unwrap_or_else(|_| s.get(0..10).unwrap_or("").to_string())
-        }),
+        date: fields["Datum"].as_str().map(parse_date_berlin),
         description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
         duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
     })
@@ -775,18 +730,7 @@ pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Me
         .header("Authorization", format!("Bearer {}", cfg.token))
         .header("Accept", "application/json")
         .query(&[("filter", &filter.to_string())]);
-    // Use default projection
-    for field in [
-        "Vorname",
-        "Nachname",
-        "Email",
-        "Familie",
-        "Geburtsdatum",
-        "Eintrittsdatum",
-        "Rolle",
-    ]
-    .iter()
-    {
+    for field in MEMBER_PROJECTION.iter() {
         req = req.query(&[("projection[]", *field)]);
     }
     let response = req.send().await?;
@@ -795,24 +739,12 @@ pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Me
     let records = teable_response["records"]
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
-    let mut members = Vec::new();
+    let mut members = Vec::with_capacity(records.len());
     for record in records {
         let fields = &record["fields"];
         if let Some(record_email) = fields["Email"].as_str() {
             if record_email.to_lowercase() == email_lowercase {
-                let member = Member {
-                    id: record["id"].as_str().unwrap_or("").to_string(),
-                    first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
-                    last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
-                    email: fields["Email"].as_str().unwrap_or("").to_string(),
-                    family_id: fields["Familie"]
-                        .as_str()
-                        .map(|s| s.to_string())
-                        .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-                    birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
-                    join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
-                    role: extract_role(fields),
-                };
+                let member = member_from_record(record);
                 members.push(member);
             }
         }
@@ -829,17 +761,6 @@ pub async fn get_all_active_members(
     let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
 
     let base_url = format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id);
-
-    let projection_fields = [
-        "Vorname",
-        "Nachname",
-        "Email",
-        "Familie",
-        "Geburtsdatum",
-        "Eintrittsdatum",
-        "Austrittsdatum",
-        "Rolle",
-    ];
 
     let page_size = 1000;
     let mut all_records: Vec<Value> = Vec::new();
@@ -868,7 +789,7 @@ pub async fn get_all_active_members(
             req = req.query(&[("filter", &filter.to_string())]);
         }
 
-        for field in projection_fields.iter() {
+        for field in ALL_MEMBERS_PROJECTION.iter() {
             req = req.query(&[("projection[]", *field)]);
         }
 
@@ -898,7 +819,7 @@ pub async fn get_all_active_members(
         }
     }
 
-    let mut members = Vec::new();
+    let mut members = Vec::with_capacity(all_records.len());
     for record in &all_records {
         let fields = &record["fields"];
         // Skip members with an Austrittsdatum (exit date) — they are no longer active
@@ -910,19 +831,7 @@ pub async fn get_all_active_members(
         }
         if let Some(email) = fields["Email"].as_str() {
             if !email.trim().is_empty() {
-                let member = Member {
-                    id: record["id"].as_str().unwrap_or("").to_string(),
-                    first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
-                    last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
-                    email: email.to_string(),
-                    family_id: fields["Familie"]
-                        .as_str()
-                        .map(|s| s.to_string())
-                        .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-                    birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
-                    join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
-                    role: extract_role(fields),
-                };
+                let member = member_from_record(record);
                 members.push(member);
             }
         }

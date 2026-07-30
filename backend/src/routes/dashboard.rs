@@ -24,7 +24,7 @@ pub async fn dashboard(
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
     debug!("Dashboard: Starting dashboard request for year: {}", year);
 
-    let user_id = extract_user_id_from_headers(&headers)?;
+    let user_id = extract_user_id_from_headers(&state.jwt_secret, &headers)?;
 
     debug!("Dashboard: User ID from token: {}", user_id);
 
