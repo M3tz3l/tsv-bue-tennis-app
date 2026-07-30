@@ -50,6 +50,6 @@
 		5000,
 		5173
 	],
-	"postCreateCommand": "mkdir -p /home/vscode/.local/state /home/vscode/.local/share/mimocode/log /home/vscode/.config/gh && chown -R vscode:vscode /home/vscode/.local /home/vscode/.config/gh && cd tsv-tennis-app && npm install",
+	"postCreateCommand": "sudo mkdir -p /home/vscode/.local/state /home/vscode/.local/share/mimocode/log /home/vscode/.config/gh && sudo chown -R vscode:vscode /home/vscode/.local /home/vscode/.config/gh && cd tsv-tennis-app && npm install",
 	"remoteUser": "vscode"
 }
