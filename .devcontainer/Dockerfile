@@ -35,7 +35,6 @@ RUN npx -y playwright install-deps chromium
 # Install MiMo-Code globally as the workspace user
 # Rebuild sqlite3 native module from source to link against the container's glibc
 USER vscode
-RUN mkdir -p /home/vscode/.local/state /home/vscode/.local/share/mimocode/log /home/vscode/.config/gh
 RUN npm install -g @mimo-ai/cli
 
 # Install OpenCode (terminal-based AI coding assistant)
