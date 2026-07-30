@@ -45,4 +45,20 @@ test.describe('Login', () => {
     expect(token).toBeTruthy();
     expect(token).toMatch(/^eyJ/);
   });
+
+  test('authenticated user visiting / is redirected to dashboard', async ({ page }) => {
+    const user = getOrgaUser();
+    expect(user).toBeTruthy();
+
+    await loginViaBrowser(page, user!.email, getFixtures().password);
+    await expect(page).toHaveURL(/dashboard/);
+
+    // Navigate to root while still authenticated
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // Should land on dashboard, not login
+    await expect(page).toHaveURL(/dashboard/);
+    await expect(page.locator('span:has-text("Willkommen,")')).toBeVisible({ timeout: 5_000 });
+  });
 });
