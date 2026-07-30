@@ -762,7 +762,7 @@ pub async fn get_all_active_members(
         let mut filter_set = vec![serde_json::json!({
             "fieldId": "Austrittsdatum",
             "operator": "isEmpty",
-            "value": true
+            "value": serde_json::Value::Null
         })];
 
         if let Some(role) = role_filter {
