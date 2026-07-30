@@ -42,21 +42,6 @@ impl Database {
         .execute(&pool)
         .await?;
 
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS reset_tokens (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                token TEXT NOT NULL,
-                user_id INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                expires_at DATETIME NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES details(id) ON DELETE CASCADE
-            )
-            "#,
-        )
-        .execute(&pool)
-        .await?;
-
         Ok(Database { pool })
     }
 

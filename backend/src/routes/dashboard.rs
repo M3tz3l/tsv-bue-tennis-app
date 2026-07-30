@@ -30,6 +30,7 @@ pub async fn dashboard(
 
     // Get current user by ID
     let current_user = teable::get_member_by_id_with_projection(
+        &state.teable_config,
         &state.http_client,
         &user_id,
         Some(
@@ -56,16 +57,20 @@ pub async fn dashboard(
     let year_int: i32 = year.parse().unwrap_or_else(|_| chrono::Utc::now().year());
 
     // Fetch user's work hours for the given year directly from Teable (API-level filtering)
-    let work_hours =
-        teable::get_work_hours_for_member_by_year(&state.http_client, &current_user.id, year_int)
-            .await
-            .map_err(|e| {
-                error!(
-                    "Dashboard: Failed to get work hours for user {} and year {}: {}",
-                    current_user.id, year_int, e
-                );
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+    let work_hours = teable::get_work_hours_for_member_by_year(
+        &state.teable_config,
+        &state.http_client,
+        &current_user.id,
+        year_int,
+    )
+    .await
+    .map_err(|e| {
+        error!(
+            "Dashboard: Failed to get work hours for user {} and year {}: {}",
+            current_user.id, year_int, e
+        );
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let user_work_hours_raw = work_hours.results;
     let user_work_hours = convert_work_hours_to_entries(&user_work_hours_raw, "Personal");
@@ -102,7 +107,7 @@ pub async fn dashboard(
 
             // Get family members using optimized query
             let family_members_response =
-                teable::get_family_members(&state.http_client, family_name)
+                teable::get_family_members(&state.teable_config, &state.http_client, family_name)
                     .await
                     .map_err(|e| {
                         error!("Dashboard: Failed to get family members: {}", e);
@@ -127,6 +132,7 @@ pub async fn dashboard(
                 );
                 // Fetch work hours for this member and year
                 let member_work_hours_raw = match teable::get_work_hours_for_member_by_year(
+                    &state.teable_config,
                     &state.http_client,
                     &member.id,
                     year_int,

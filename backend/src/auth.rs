@@ -45,10 +45,7 @@ pub fn create_token(
     )
 }
 
-pub fn verify_token(
-    secret: &str,
-    token: &str,
-) -> Result<AuthClaims, jsonwebtoken::errors::Error> {
+pub fn verify_token(secret: &str, token: &str) -> Result<AuthClaims, jsonwebtoken::errors::Error> {
     decode::<AuthClaims>(
         token,
         &DecodingKey::from_secret(secret.as_ref()),

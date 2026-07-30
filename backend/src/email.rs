@@ -8,7 +8,7 @@ use lettre::{
         authentication::Credentials,
         client::{Tls, TlsParameters},
     },
-    AsyncSmtpTransport, AsyncTransport, SmtpTransport, Tokio1Executor, Transport,
+    AsyncSmtpTransport, AsyncTransport, Tokio1Executor,
 };
 use tracing::{error, info, warn};
 
@@ -72,34 +72,8 @@ impl EmailService {
         Ok(builder.build()?)
     }
 
-    /// Creates a fresh SMTP transport connection for each send to avoid session limits
-    fn create_transport(&self) -> Result<SmtpTransport, anyhow::Error> {
-        let builder = if self.use_implicit_tls {
-            let tls = self.build_tls_params()?;
-            SmtpTransport::builder_dangerous(&self.smtp_host)
-                .port(self.smtp_port)
-                .tls(Tls::Wrapper(tls))
-        } else {
-            let tls = self.build_tls_params()?;
-            SmtpTransport::builder_dangerous(&self.smtp_host)
-                .port(self.smtp_port)
-                .tls(Tls::Required(tls))
-        };
-        let builder = if !self.smtp_user.is_empty() {
-            builder.credentials(Credentials::new(
-                self.smtp_user.clone(),
-                self.smtp_password.clone(),
-            ))
-        } else {
-            builder
-        };
-        Ok(builder.build())
-    }
-
     /// Creates an async SMTP transport for bulk operations (non-blocking)
-    fn create_async_transport(
-        &self,
-    ) -> Result<AsyncSmtpTransport<Tokio1Executor>, anyhow::Error> {
+    fn create_async_transport(&self) -> Result<AsyncSmtpTransport<Tokio1Executor>, anyhow::Error> {
         let builder = if self.use_implicit_tls {
             let tls = self.build_tls_params()?;
             AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&self.smtp_host)
@@ -125,6 +99,7 @@ impl EmailService {
     /// Send bulk mail in batches with bounded concurrency per batch.
     /// Each batch uses a fresh SMTP transport to avoid server-side connection limits.
     /// Returns (sent_count, failed_count, failed_recipients).
+    #[allow(clippy::too_many_arguments)]
     pub async fn send_bulk_mail_concurrent(
         &self,
         recipients: &[(String, String)], // (email, first_name)
@@ -194,7 +169,7 @@ impl EmailService {
             info!(
                 "Starting batch {}/{} ({} recipients)",
                 batch_idx + 1,
-                (recipients.len() + batch_size - 1) / batch_size,
+                recipients.len().div_ceil(batch_size),
                 chunk.len()
             );
 
@@ -347,9 +322,8 @@ impl EmailService {
                     ),
             )?;
 
-        // Create a fresh transport per send to avoid SMTP session limits
-        let transport = self.create_transport()?;
-        match transport.send(&email) {
+        let transport = self.create_async_transport()?;
+        match transport.send(email).await {
             Ok(response) => {
                 info!("Email sent successfully: {:?}", response);
                 Ok(())
@@ -391,18 +365,16 @@ impl EmailService {
                     .body(html_content.to_string()),
             );
 
-        // Create a fresh transport per send to avoid SMTP session limits
-        let transport = self.create_transport()?;
+        let transport = self.create_async_transport()?;
 
         if attachments.is_empty() {
-            // No attachments — send as multipart/alternative only
             let email = Message::builder()
                 .from(from_mailbox)
                 .to(to_mailbox)
                 .subject(subject)
                 .multipart(body)?;
 
-            match transport.send(&email) {
+            match transport.send(email).await {
                 Ok(response) => {
                     info!("Email sent successfully: {:?}", response);
                     Ok(())
@@ -450,7 +422,7 @@ impl EmailService {
                 .subject(subject)
                 .multipart(mixed)?;
 
-            match transport.send(&email) {
+            match transport.send(email).await {
                 Ok(response) => {
                     info!(
                         "Email with {} attachment(s) sent successfully: {:?}",

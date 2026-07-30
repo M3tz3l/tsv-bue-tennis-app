@@ -1,8 +1,7 @@
 //! Teable API client: member lookups, work hour CRUD, and paginated queries.
 
-use crate::config::Config;
 use crate::models::{Member, TeableResponse, WorkHour};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use reqwest::Client;
 use serde_json::Value;
 use tracing::{debug, error, info, warn};
@@ -57,53 +56,43 @@ fn member_from_record(record: &Value) -> Member {
     }
 }
 
-struct TeableConfig {
-    api_url: String,
-    token: String,
-    members_table_id: String,
-    work_hours_table_id: String,
-}
-
-fn get_teable_config() -> anyhow::Result<TeableConfig> {
-    let config = Config::from_env()?;
-    Ok(TeableConfig {
-        api_url: config.teable_api_url,
-        token: config.teable_token,
-        members_table_id: config.members_table_id,
-        work_hours_table_id: config.work_hours_table_id,
-    })
+#[derive(Clone)]
+pub struct TeableConfig {
+    pub api_url: String,
+    pub token: String,
+    pub members_table_id: String,
+    pub work_hours_table_id: String,
 }
 
 /// Verifies read access to a specific table by fetching 1 record.
 /// Returns Ok(record_count_hint) or Err with details.
 pub async fn check_table_access(
+    config: &TeableConfig,
     client: &Client,
     table_id: &str,
     table_name: &str,
-) -> Result<u64, String> {
-    let config = get_teable_config().map_err(|e| format!("Config error: {e}"))?;
+) -> anyhow::Result<u64> {
     let url = format!("{}/table/{}/record?take=1", config.api_url, table_id);
 
     let response = make_teable_request(client, &url, &config.token, &format!("check_{table_name}"))
         .await
-        .map_err(|e| format!("Request failed for table '{table_name}': {e}"))?;
+        .context(format!("Request failed for table '{table_name}'"))?;
 
     let status = response.status();
-    let text = response
-        .text()
-        .await
-        .map_err(|e| format!("Failed to read response body for table '{table_name}': {e}"))?;
+    let text = response.text().await.context(format!(
+        "Failed to read response body for table '{table_name}'"
+    ))?;
 
     if !status.is_success() {
-        return Err(format!(
-            "Table '{table_name}' ({table_id}): HTTP {status} — {text}"
-        ));
+        anyhow::bail!("Table '{table_name}' ({table_id}): HTTP {status} — {text}");
     }
 
     // Extract total record count; propagate JSON parse errors,
     // but keep the 0 fallback for valid JSON that lacks a numeric total
     let total = serde_json::from_str::<Value>(&text)
-        .map_err(|e| format!("Failed to parse response JSON for table '{table_name}': {e}"))?
+        .context(format!(
+            "Failed to parse response JSON for table '{table_name}'"
+        ))?
         .get("total")
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
@@ -111,12 +100,13 @@ pub async fn check_table_access(
     Ok(total)
 }
 
-/// Fetches all work hour records for a member at a specific date (exact date, Europe/Berlin timezone)
-pub async fn get_work_hours_for_member_at_date(
+/// Checks if a work hour record exists for a member at a specific date (exact date, Europe/Berlin timezone)
+pub async fn work_hour_exists_for_member_at_date(
+    config: &TeableConfig,
     http_client: &Client,
     member_id: &str,
     date: &str,
-) -> Result<Vec<serde_json::Value>, anyhow::Error> {
+) -> Result<bool> {
     let filter = serde_json::json!({
         "conjunction": "and",
         "filterSet": [
@@ -124,11 +114,13 @@ pub async fn get_work_hours_for_member_at_date(
             { "fieldId": "Datum", "operator": "is", "value": { "mode": "exactDate", "exactDate": format!("{}T00:00:00.000Z", date), "timeZone": "Europe/Berlin" } }
         ]
     });
-    let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-    let url = format!("{}/table/{}/record", cfg.api_url, cfg.work_hours_table_id);
+    let url = format!(
+        "{}/table/{}/record",
+        config.api_url, config.work_hours_table_id
+    );
     let response = http_client
         .get(&url)
-        .header("Authorization", format!("Bearer {}", cfg.token))
+        .header("Authorization", format!("Bearer {}", config.token))
         .header("Accept", "application/json")
         .query(&[("filter", &filter.to_string())])
         .send()
@@ -139,7 +131,7 @@ pub async fn get_work_hours_for_member_at_date(
         .as_array()
         .cloned()
         .unwrap_or_default();
-    Ok(records)
+    Ok(!records.is_empty())
 }
 
 /// Makes an authenticated GET request to Teable API
@@ -149,7 +141,7 @@ async fn make_teable_request(
     token: &str,
     operation: &str,
 ) -> Result<reqwest::Response> {
-    info!("Making Teable {} request to: {}", operation, url);
+    debug!("Making Teable {} request to: {}", operation, url);
 
     let response = client
         .get(url)
@@ -178,7 +170,7 @@ async fn handle_teable_response(response: reqwest::Response, operation: &str) ->
         ));
     }
 
-    info!(
+    debug!(
         "Teable {} response received ({} chars)",
         operation,
         response_text.len()
@@ -186,30 +178,28 @@ async fn handle_teable_response(response: reqwest::Response, operation: &str) ->
     Ok(response_text)
 }
 
-pub async fn get_member_by_id(client: &Client, id: &str) -> Result<Option<Member>> {
-    get_member_by_id_with_projection(
-        client,
-        id,
-        Some(MEMBER_PROJECTION),
-    )
-    .await
+pub async fn get_member_by_id(
+    config: &TeableConfig,
+    client: &Client,
+    id: &str,
+) -> Result<Option<Member>> {
+    get_member_by_id_with_projection(config, client, id, Some(MEMBER_PROJECTION)).await
 }
 
 pub async fn get_member_by_id_with_projection(
+    config: &TeableConfig,
     client: &Client,
     id: &str,
     projection: Option<&[&str]>,
 ) -> Result<Option<Member>> {
-    let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
     let url = format!(
         "{}/table/{}/record/{}",
-        cfg.api_url, cfg.members_table_id, id
+        config.api_url, config.members_table_id, id
     );
     let req = if let Some(proj) = projection {
-        // Pass as repeated projection[] params
         let mut req = client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", cfg.token))
+            .header("Authorization", format!("Bearer {}", config.token))
             .header("Accept", "application/json");
         for field in proj {
             req = req.query(&[("projection[]", *field)]);
@@ -218,7 +208,7 @@ pub async fn get_member_by_id_with_projection(
     } else {
         client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", cfg.token))
+            .header("Authorization", format!("Bearer {}", config.token))
             .header("Accept", "application/json")
     };
     info!(
@@ -248,26 +238,22 @@ pub async fn get_member_by_id_with_projection(
 }
 
 /// Get a specific member by email - optimized to filter at API level
-pub async fn get_member_by_email(client: &Client, email: &str) -> Result<Option<Member>> {
-    get_member_by_email_with_projection(
-        client,
-        email,
-        Some(MEMBER_PROJECTION),
-    )
-    .await
+pub async fn get_member_by_email(
+    config: &TeableConfig,
+    client: &Client,
+    email: &str,
+) -> Result<Option<Member>> {
+    get_member_by_email_with_projection(config, client, email, Some(MEMBER_PROJECTION)).await
 }
 
 pub async fn get_member_by_email_with_projection(
+    config: &TeableConfig,
     client: &Client,
     email: &str,
     projection: Option<&[&str]>,
 ) -> Result<Option<Member>> {
-    let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-
-    // Normalize email to lowercase for case-insensitive comparison
     let email_lowercase = email.to_lowercase();
 
-    // Use Teable API filtering to only fetch the specific user
     let filter = serde_json::json!({
         "conjunction": "and",
         "filterSet": [{
@@ -276,10 +262,13 @@ pub async fn get_member_by_email_with_projection(
             "value": email_lowercase
         }]
     });
-    let url = format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id);
+    let url = format!(
+        "{}/table/{}/record",
+        config.api_url, config.members_table_id
+    );
     let mut req = client
         .get(&url)
-        .header("Authorization", format!("Bearer {}", cfg.token))
+        .header("Authorization", format!("Bearer {}", config.token))
         .header("Accept", "application/json")
         .query(&[("filter", &filter.to_string())]);
     if let Some(proj) = projection {
@@ -324,24 +313,19 @@ pub async fn get_member_by_email_with_projection(
 
 /// Get family members by family ID - optimized to filter at API level
 pub async fn get_family_members(
+    config: &TeableConfig,
     client: &Client,
     family_id: &str,
 ) -> Result<TeableResponse<Member>> {
-    get_family_members_with_projection(
-        client,
-        family_id,
-        Some(MEMBER_PROJECTION),
-    )
-    .await
+    get_family_members_with_projection(config, client, family_id, Some(MEMBER_PROJECTION)).await
 }
 
 pub async fn get_family_members_with_projection(
+    config: &TeableConfig,
     client: &Client,
     family_id: &str,
     projection: Option<&[&str]>,
 ) -> Result<TeableResponse<Member>> {
-    let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-    // Use Teable API filtering to only fetch family members
     let filter = serde_json::json!({
         "conjunction": "and",
         "filterSet": [{
@@ -350,10 +334,13 @@ pub async fn get_family_members_with_projection(
             "value": family_id
         }]
     });
-    let url = format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id);
+    let url = format!(
+        "{}/table/{}/record",
+        config.api_url, config.members_table_id
+    );
     let mut req = client
         .get(&url)
-        .header("Authorization", format!("Bearer {}", cfg.token))
+        .header("Authorization", format!("Bearer {}", config.token))
         .header("Accept", "application/json")
         .query(&[("filter", &filter.to_string())]);
     if let Some(proj) = projection {
@@ -388,16 +375,18 @@ pub async fn get_family_members_with_projection(
     })
 }
 
-pub async fn get_work_hour_by_id(client: &Client, work_hour_id: &str) -> Result<Option<WorkHour>> {
-    let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-
+pub async fn get_work_hour_by_id(
+    config: &TeableConfig,
+    client: &Client,
+    work_hour_id: &str,
+) -> Result<Option<WorkHour>> {
     let url = format!(
         "{}/table/{}/record/{}",
-        cfg.api_url, cfg.work_hours_table_id, work_hour_id
+        config.api_url, config.work_hours_table_id, work_hour_id
     );
 
     info!("Fetching work hour by ID: {}", work_hour_id);
-    let response = make_teable_request(client, &url, &cfg.token, "work_hour_by_id").await?;
+    let response = make_teable_request(client, &url, &config.token, "work_hour_by_id").await?;
     let response_text = handle_teable_response(response, "work_hour_by_id").await?;
 
     // Parse Teable response (single record, not array)
@@ -411,7 +400,7 @@ pub async fn get_work_hour_by_id(client: &Client, work_hour_id: &str) -> Result<
 
     let work_hour = WorkHour {
         id: record["id"].as_str().unwrap_or("").to_string(),
-        member_id: Some(fields["Mitglied_id"].clone()),
+        member_id: serde_json::from_value(fields["Mitglied_id"].clone()).unwrap_or(None),
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
         created_on: fields["Created on"].as_str().map(|s| s.to_string()),
@@ -428,13 +417,15 @@ pub async fn get_work_hour_by_id(client: &Client, work_hour_id: &str) -> Result<
 }
 
 pub async fn get_work_hours_for_member_by_year(
+    config: &TeableConfig,
     client: &Client,
     member_record_id: &str,
     year: i32,
 ) -> Result<TeableResponse<WorkHour>> {
-    let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-
-    let url = format!("{}/table/{}/record", cfg.api_url, cfg.work_hours_table_id);
+    let url = format!(
+        "{}/table/{}/record",
+        config.api_url, config.work_hours_table_id
+    );
 
     // Build filter set
     let mut filter_set = vec![];
@@ -473,7 +464,7 @@ pub async fn get_work_hours_for_member_by_year(
 
     let response = client
         .get(&url)
-        .header("Authorization", format!("Bearer {}", cfg.token))
+        .header("Authorization", format!("Bearer {}", config.token))
         .header("Accept", "application/json")
         .query(&[("filter", &filter.to_string())])
         .send()
@@ -506,12 +497,12 @@ pub async fn get_work_hours_for_member_by_year(
 
         let work_hour = WorkHour {
             id: record["id"].as_str().unwrap_or("").to_string(),
-            member_id: Some(member_id_value), // Store the linked record field
+            member_id: serde_json::from_value(member_id_value).unwrap_or(None), // Store the linked record field
             last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
             first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
             created_on: fields["Created on"].as_str().map(|s| s.to_string()),
             date: fields["Datum"].as_str().map(parse_date_berlin),
-        description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
+            description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
             duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
         };
         work_hours.push(work_hour);
@@ -530,22 +521,22 @@ pub async fn get_work_hours_for_member_by_year(
 
 #[allow(dead_code)]
 pub async fn create_work_hour(
+    config: &TeableConfig,
     client: &Client,
     date: &str,
     description: &str,
     duration_hours: f64,
-    member_id: String, // This is the Teable member record ID
+    member_id: String,
 ) -> Result<WorkHour> {
-    let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-
-    let url = format!("{}/table/{}/record", cfg.api_url, cfg.work_hours_table_id);
+    let url = format!(
+        "{}/table/{}/record",
+        config.api_url, config.work_hours_table_id
+    );
 
     // Get the member's information for the payload using get_member_by_id
-    let member = get_member_by_id(client, &member_id)
+    let member = get_member_by_id(config, client, &member_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("Member with ID {} not found", member_id))?;
-
-    debug!("Teable: Creating work hour with proper member linkage");
     debug!("Datum: {}", date);
     debug!("Tätigkeit: {}", description);
     debug!("Stunden: {} hours", duration_hours);
@@ -574,7 +565,7 @@ pub async fn create_work_hour(
 
     let response = client
         .post(&url)
-        .header("Authorization", format!("Bearer {}", cfg.token))
+        .header("Authorization", format!("Bearer {}", config.token))
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
         .json(&payload)
@@ -591,7 +582,7 @@ pub async fn create_work_hour(
 
     Ok(WorkHour {
         id: record["id"].as_str().unwrap_or("").to_string(),
-        member_id: Some(fields["Mitglied_id"].clone()),
+        member_id: serde_json::from_value(fields["Mitglied_id"].clone()).unwrap_or(None),
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
         created_on: None,
@@ -603,23 +594,20 @@ pub async fn create_work_hour(
 
 #[allow(dead_code)]
 pub async fn update_work_hour(
+    config: &TeableConfig,
     client: &Client,
     work_hour_id: &str,
     date: &str,
     description: &str,
     duration_hours: f64,
-    member_id: String, // This is the Teable member record ID
+    member_id: String,
 ) -> Result<WorkHour> {
-    let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-
-    // Use the correct Teable API format: PATCH /api/table/{tableId}/record/{recordId}
     let url = format!(
         "{}/table/{}/record/{}",
-        cfg.api_url, cfg.work_hours_table_id, work_hour_id
+        config.api_url, config.work_hours_table_id, work_hour_id
     );
 
-    // Get the member's information for complete payload using get_member_by_id
-    let member = get_member_by_id(client, &member_id)
+    let member = get_member_by_id(config, client, &member_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("Member with ID {} not found", member_id))?;
 
@@ -654,7 +642,7 @@ pub async fn update_work_hour(
     // Use PATCH method with record ID in URL path (correct Teable API format)
     let response = client
         .patch(&url)
-        .header("Authorization", format!("Bearer {}", cfg.token))
+        .header("Authorization", format!("Bearer {}", config.token))
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
         .json(&payload)
@@ -682,7 +670,7 @@ pub async fn update_work_hour(
 
     Ok(WorkHour {
         id: record_id,
-        member_id: Some(fields["Mitglied_id"].clone()),
+        member_id: serde_json::from_value(fields["Mitglied_id"].clone()).unwrap_or(None),
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
         created_on: None,
@@ -692,17 +680,19 @@ pub async fn update_work_hour(
     })
 }
 
-pub async fn delete_work_hour(client: &Client, work_hour_id: &str) -> Result<()> {
-    let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-
+pub async fn delete_work_hour(
+    config: &TeableConfig,
+    client: &Client,
+    work_hour_id: &str,
+) -> Result<()> {
     let url = format!(
         "{}/table/{}/record/{}",
-        cfg.api_url, cfg.work_hours_table_id, work_hour_id
+        config.api_url, config.work_hours_table_id, work_hour_id
     );
 
     let response = client
         .delete(&url)
-        .header("Authorization", format!("Bearer {}", cfg.token))
+        .header("Authorization", format!("Bearer {}", config.token))
         .send()
         .await?;
 
@@ -713,8 +703,11 @@ pub async fn delete_work_hour(client: &Client, work_hour_id: &str) -> Result<()>
 }
 
 /// Get all members by email (case-insensitive, returns Vec<Member>)
-pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Member>> {
-    let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
+pub async fn get_members_by_email(
+    config: &TeableConfig,
+    client: &Client,
+    email: &str,
+) -> Result<Vec<Member>> {
     let email_lowercase = email.to_lowercase();
     let filter = serde_json::json!({
         "conjunction": "and",
@@ -724,10 +717,13 @@ pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Me
             "value": email_lowercase
         }]
     });
-    let url = format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id);
+    let url = format!(
+        "{}/table/{}/record",
+        config.api_url, config.members_table_id
+    );
     let mut req = client
         .get(&url)
-        .header("Authorization", format!("Bearer {}", cfg.token))
+        .header("Authorization", format!("Bearer {}", config.token))
         .header("Accept", "application/json")
         .query(&[("filter", &filter.to_string())]);
     for field in MEMBER_PROJECTION.iter() {
@@ -755,12 +751,14 @@ pub async fn get_members_by_email(client: &Client, email: &str) -> Result<Vec<Me
 /// Fetches all active members from Teable with optional role filter.
 /// Uses take/skip pagination (max take=1000 per Teable docs) to retrieve all records.
 pub async fn get_all_active_members(
+    config: &TeableConfig,
     client: &Client,
     role_filter: Option<&str>,
 ) -> Result<Vec<Member>> {
-    let cfg = get_teable_config().map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-
-    let base_url = format!("{}/table/{}/record", cfg.api_url, cfg.members_table_id);
+    let base_url = format!(
+        "{}/table/{}/record",
+        config.api_url, config.members_table_id
+    );
 
     let page_size = 1000;
     let mut all_records: Vec<Value> = Vec::new();
@@ -769,7 +767,7 @@ pub async fn get_all_active_members(
         let skip = all_records.len();
         let mut req = client
             .get(&base_url)
-            .header("Authorization", format!("Bearer {}", cfg.token))
+            .header("Authorization", format!("Bearer {}", config.token))
             .header("Accept", "application/json")
             .query(&[
                 ("take", &page_size.to_string()),
@@ -814,7 +812,7 @@ pub async fn get_all_active_members(
         );
 
         // Stop when this page returned fewer records than requested (last page)
-        if fetched < page_size as usize {
+        if fetched < page_size {
             break;
         }
     }
@@ -841,7 +839,7 @@ pub async fn get_all_active_members(
         "Fetched {} active members out of {} raw records ({} pages)",
         members.len(),
         all_records.len(),
-        (all_records.len() + page_size - 1) / page_size
+        all_records.len().div_ceil(page_size)
     );
     Ok(members)
 }

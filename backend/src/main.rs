@@ -1,7 +1,3 @@
-use crate::config::Config;
-use crate::database::Database;
-use crate::email::EmailService;
-use crate::token_store::TokenStore;
 use axum::{
     extract::{Json, State},
     http::{HeaderMap, Method, StatusCode},
@@ -18,21 +14,17 @@ use tower_governor::GovernorLayer;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 use tracing::{debug, error, info};
+use tsv_tennis_backend::config::Config;
+use tsv_tennis_backend::database::Database;
+use tsv_tennis_backend::email::EmailService;
+use tsv_tennis_backend::token_store::TokenStore;
 
-mod auth;
-mod config;
-mod database;
-mod email;
-mod member_selection;
-mod models;
-mod routes;
-mod state;
-mod teable;
-mod token_store;
-mod utils;
+use tsv_tennis_backend::{routes, state, teable};
+
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 // Re-export for tests (which use `use super::*`)
-pub use state::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -56,19 +48,39 @@ async fn main() -> anyhow::Result<()> {
     info!("  Members table:  {}", config.members_table_id);
     info!("  Work hours tbl: {}", config.work_hours_table_id);
 
-    let check_client = Client::new();
+    let http_client = Client::new();
+
+    let teable_config = teable::TeableConfig {
+        api_url: config.teable_api_url.clone(),
+        token: config.teable_token.clone(),
+        members_table_id: config.members_table_id.clone(),
+        work_hours_table_id: config.work_hours_table_id.clone(),
+    };
 
     // 1. Verify members table is accessible (also confirms API connectivity + auth)
-    match teable::check_table_access(&check_client, &config.members_table_id, "members").await {
-        Ok(count) => info!("✅ Members table accessible — {} records", count),
-        Err(e) => error!("❌ Members table error: {}", e),
+    match teable::check_table_access(
+        &teable_config,
+        &http_client,
+        &config.members_table_id,
+        "members",
+    )
+    .await
+    {
+        Ok(count) => info!(" Members table accessible — {} records", count),
+        Err(e) => error!(" Members table error: {}", e),
     }
 
     // 2. Verify work_hours table is accessible
-    match teable::check_table_access(&check_client, &config.work_hours_table_id, "work_hours").await
+    match teable::check_table_access(
+        &teable_config,
+        &http_client,
+        &config.work_hours_table_id,
+        "work_hours",
+    )
+    .await
     {
-        Ok(count) => info!("✅ Work hours table accessible — {} records", count),
-        Err(e) => error!("❌ Work hours table error: {}", e),
+        Ok(count) => info!(" Work hours table accessible — {} records", count),
+        Err(e) => error!(" Work hours table error: {}", e),
     }
 
     // 3. Verify SQLite database
@@ -103,7 +115,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let state = state::AppState {
-        http_client: Client::new(),
+        http_client,
+        teable_config,
         email_service,
         token_store,
         database,
@@ -219,7 +232,8 @@ async fn main() -> anyhow::Result<()> {
         .with_state(state);
 
     let port = config.port;
-    let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await
+    let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
+        .await
         .expect("Failed to bind TCP listener");
     info!("Server starting on port {}", port);
     axum::serve(
@@ -242,12 +256,14 @@ async fn get_user(
     State(state): State<state::AppState>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let user_id = crate::utils::extract_user_id_from_headers(&state.jwt_secret, &headers)?;
+    let user_id =
+        tsv_tennis_backend::utils::extract_user_id_from_headers(&state.jwt_secret, &headers)?;
 
     debug!("Get User: Looking for user with ID: {}", user_id);
 
     // Get user by ID
     let user = teable::get_member_by_id_with_projection(
+        &state.teable_config,
         &state.http_client,
         &user_id,
         Some(&["Vorname", "Nachname", "Email", "Rolle"][..]),
@@ -285,6 +301,27 @@ async fn get_user(
 mod tests {
     use super::*;
     use axum_test::TestServer;
+    use tsv_tennis_backend::auth;
+
+    fn set_test_env(teable_url: &str) {
+        std::env::set_var("EMAIL_USER", "test@example.com");
+        std::env::set_var("EMAIL_PASSWORD", "dummy_password");
+        std::env::set_var("EMAIL_HOST", "smtp.example.com");
+        std::env::set_var("EMAIL_PORT", "587");
+        std::env::set_var("EMAIL_FROM", "test@example.com");
+        std::env::set_var("EMAIL_DISABLE_SEND", "true");
+        std::env::set_var(
+            "JWT_SECRET",
+            "test_jwt_secret_key_for_testing_purposes_only_123456789",
+        );
+        std::env::set_var("DATABASE_URL", "sqlite::memory:");
+        std::env::set_var("FRONTEND_URL", "http://localhost:5173");
+        std::env::set_var("TEABLE_API_URL", teable_url);
+        std::env::set_var("TEABLE_TOKEN", "test_token");
+        std::env::set_var("TEABLE_BASE_ID", "test_base_id");
+        std::env::set_var("MEMBERS_TABLE_ID", "test_members_table");
+        std::env::set_var("WORK_HOURS_TABLE_ID", "test_work_hours_table");
+    }
 
     async fn create_test_app() -> Router {
         create_test_app_with_teable_url("https://test.teable.io").await
@@ -294,28 +331,7 @@ mod tests {
         use axum::http::Method;
         use tower_http::cors::{Any, CorsLayer};
 
-        // Set all required environment variables for testing
-        std::env::set_var("EMAIL_USER", "test@example.com");
-        std::env::set_var("EMAIL_PASSWORD", "dummy_password");
-        std::env::set_var("EMAIL_HOST", "smtp.example.com");
-        std::env::set_var("EMAIL_PORT", "587");
-        std::env::set_var("EMAIL_FROM", "test@example.com");
-        std::env::set_var("EMAIL_DISABLE_SEND", "true");
-
-        // Set JWT secret for token creation in tests
-        std::env::set_var(
-            "JWT_SECRET",
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-        );
-
-        // Set other required config variables for auth module
-        std::env::set_var("DATABASE_URL", "sqlite::memory:");
-        std::env::set_var("FRONTEND_URL", "http://localhost:5173");
-        std::env::set_var("TEABLE_API_URL", teable_url);
-        std::env::set_var("TEABLE_TOKEN", "test_token");
-        std::env::set_var("TEABLE_BASE_ID", "test_base_id");
-        std::env::set_var("MEMBERS_TABLE_ID", "test_members_table");
-        std::env::set_var("WORK_HOURS_TABLE_ID", "test_work_hours_table");
+        set_test_env(teable_url);
 
         // Create a test state with minimal setup
         let email_service =
@@ -327,8 +343,16 @@ mod tests {
             .await
             .expect("Failed to create test database");
 
+        let teable_config = tsv_tennis_backend::teable::TeableConfig {
+            api_url: teable_url.to_string(),
+            token: "test_token".to_string(),
+            members_table_id: "test_members_table".to_string(),
+            work_hours_table_id: "test_work_hours_table".to_string(),
+        };
+
         let state = state::AppState {
             http_client: Client::new(),
+            teable_config,
             email_service,
             token_store,
             database,
@@ -807,7 +831,7 @@ mod tests {
             "orga_user_1",
             Some("orga"),
         )
-            .expect("Failed to create orga test token");
+        .expect("Failed to create orga test token");
 
         // Mail endpoints now expect multipart/form-data
         let response = server
@@ -853,8 +877,12 @@ mod tests {
         let app = create_test_app_with_teable_url(&teable_server.url()).await;
         let server = TestServer::new(app).unwrap();
 
-        let token =
-            auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", "member_user_1", None).expect("Failed to create member token");
+        let token = auth::create_token(
+            "test_jwt_secret_key_for_testing_purposes_only_123456789",
+            "member_user_1",
+            None,
+        )
+        .expect("Failed to create member token");
 
         // Mail endpoints now expect multipart/form-data
         let response = server
@@ -891,23 +919,16 @@ mod tests {
     async fn test_protected_endpoint_with_valid_token() {
         use mockito::Server;
 
-        // Set ALL required environment variables for this specific test
-        std::env::set_var("DATABASE_URL", "sqlite::memory:");
-        std::env::set_var(
-            "JWT_SECRET",
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-        );
-        std::env::set_var("FRONTEND_URL", "http://localhost:5173");
-        std::env::set_var("TEABLE_API_URL", "https://test.teable.io"); // Will be overridden later
-        std::env::set_var("TEABLE_TOKEN", "test_token");
-        std::env::set_var("TEABLE_BASE_ID", "test_base_id");
-        std::env::set_var("MEMBERS_TABLE_ID", "test_members_table");
-        std::env::set_var("WORK_HOURS_TABLE_ID", "test_work_hours_table");
+        set_test_env("https://test.teable.io");
 
         // Create a valid JWT token for testing
         let test_user_id = "test_user_123";
-        let valid_token =
-            auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", test_user_id, None).expect("Failed to create test token");
+        let valid_token = auth::create_token(
+            "test_jwt_secret_key_for_testing_purposes_only_123456789",
+            test_user_id,
+            None,
+        )
+        .expect("Failed to create test token");
 
         // Start mock Teable server
         let mut teable_server = Server::new_async().await;
@@ -955,23 +976,16 @@ mod tests {
     async fn test_work_hour_by_id_with_valid_token_and_mock() {
         use mockito::Server;
 
-        // Set ALL required environment variables for this specific test
-        std::env::set_var("DATABASE_URL", "sqlite::memory:");
-        std::env::set_var(
-            "JWT_SECRET",
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-        );
-        std::env::set_var("FRONTEND_URL", "http://localhost:5173");
-        std::env::set_var("TEABLE_API_URL", "https://test.teable.io"); // Will be overridden later
-        std::env::set_var("TEABLE_TOKEN", "test_token");
-        std::env::set_var("TEABLE_BASE_ID", "test_base_id");
-        std::env::set_var("MEMBERS_TABLE_ID", "test_members_table");
-        std::env::set_var("WORK_HOURS_TABLE_ID", "test_work_hours_table");
+        set_test_env("https://test.teable.io");
 
         // Create a valid JWT token
         let test_user_id = "test_user_456";
-        let valid_token =
-            auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", test_user_id, None).expect("Failed to create test token");
+        let valid_token = auth::create_token(
+            "test_jwt_secret_key_for_testing_purposes_only_123456789",
+            test_user_id,
+            None,
+        )
+        .expect("Failed to create test token");
 
         // Start mock Teable server
         let mut teable_server = Server::new_async().await;
@@ -1044,8 +1058,12 @@ mod tests {
 
         // Create a valid JWT token
         let test_user_id = "test_user_789";
-        let valid_token =
-            auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", test_user_id, None).expect("Failed to create test token");
+        let valid_token = auth::create_token(
+            "test_jwt_secret_key_for_testing_purposes_only_123456789",
+            test_user_id,
+            None,
+        )
+        .expect("Failed to create test token");
 
         let work_hour_request = serde_json::json!({
             "date": "2025-01-15",
@@ -1078,8 +1096,12 @@ mod tests {
 
         // Create a valid JWT token
         let test_user_id = "dashboard_user_123";
-        let valid_token =
-            auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", test_user_id, None).expect("Failed to create test token");
+        let valid_token = auth::create_token(
+            "test_jwt_secret_key_for_testing_purposes_only_123456789",
+            test_user_id,
+            None,
+        )
+        .expect("Failed to create test token");
 
         // Test dashboard endpoint with valid token
         let response = server
@@ -1275,18 +1297,7 @@ mod tests {
     async fn test_full_integration_with_mocked_teable() {
         use mockito::Server;
 
-        // Set ALL required environment variables for this specific test
-        std::env::set_var("DATABASE_URL", "sqlite::memory:");
-        std::env::set_var(
-            "JWT_SECRET",
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-        );
-        std::env::set_var("FRONTEND_URL", "http://localhost:5173");
-        std::env::set_var("TEABLE_API_URL", "https://test.teable.io"); // Will be overridden later
-        std::env::set_var("TEABLE_TOKEN", "test_token");
-        std::env::set_var("TEABLE_BASE_ID", "test_base_id");
-        std::env::set_var("MEMBERS_TABLE_ID", "test_members_table");
-        std::env::set_var("WORK_HOURS_TABLE_ID", "test_work_hours_table");
+        set_test_env("https://test.teable.io");
 
         // Start mock Teable server
         let mut teable_server = Server::new_async().await;
@@ -1366,8 +1377,12 @@ mod tests {
             .await;
 
         // Create a valid JWT token for the test user
-        let test_token =
-            auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", "integration_user_123", None).expect("Failed to create test token");
+        let test_token = auth::create_token(
+            "test_jwt_secret_key_for_testing_purposes_only_123456789",
+            "integration_user_123",
+            None,
+        )
+        .expect("Failed to create test token");
 
         // Test protected endpoint with valid token - now actually using the mock!
         let response = server
@@ -1393,18 +1408,7 @@ mod tests {
     #[serial_test::serial]
     #[tokio::test]
     async fn test_jwt_token_creation_and_validation() {
-        // Ensure environment is set up for this specific test
-        std::env::set_var(
-            "JWT_SECRET",
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-        );
-        std::env::set_var("DATABASE_URL", "sqlite::memory:");
-        std::env::set_var("FRONTEND_URL", "http://localhost:5173");
-        std::env::set_var("TEABLE_API_URL", "https://test.teable.io");
-        std::env::set_var("TEABLE_TOKEN", "test_token");
-        std::env::set_var("TEABLE_BASE_ID", "test_base_id");
-        std::env::set_var("MEMBERS_TABLE_ID", "test_members_table");
-        std::env::set_var("WORK_HOURS_TABLE_ID", "test_work_hours_table");
+        set_test_env("https://test.teable.io");
 
         // Test that we can create and validate JWT tokens properly
         let test_user_id = "jwt_test_user_456";
@@ -1413,7 +1417,12 @@ mod tests {
         tracing::debug!("JWT_SECRET env var: {:?}", std::env::var("JWT_SECRET"));
 
         // Create a token
-        let token = auth::create_token("test_jwt_secret_key_for_testing_purposes_only_123456789", test_user_id, None).expect("Failed to create token");
+        let token = auth::create_token(
+            "test_jwt_secret_key_for_testing_purposes_only_123456789",
+            test_user_id,
+            None,
+        )
+        .expect("Failed to create token");
         assert!(!token.is_empty());
 
         // Validate the token (this would require access to auth module internals)
@@ -1427,25 +1436,17 @@ mod tests {
     #[serial_test::serial]
     #[tokio::test]
     async fn test_selection_token_flow() {
-        // Ensure environment is set up for this specific test
-        std::env::set_var(
-            "JWT_SECRET",
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-        );
-        std::env::set_var("DATABASE_URL", "sqlite::memory:");
-        std::env::set_var("FRONTEND_URL", "http://localhost:5173");
-        std::env::set_var("TEABLE_API_URL", "https://test.teable.io");
-        std::env::set_var("TEABLE_TOKEN", "test_token");
-        std::env::set_var("TEABLE_BASE_ID", "test_base_id");
-        std::env::set_var("MEMBERS_TABLE_ID", "test_members_table");
-        std::env::set_var("WORK_HOURS_TABLE_ID", "test_work_hours_table");
+        set_test_env("https://test.teable.io");
 
         // Test the selection token flow for multiple members with same email
         let test_email = "multi@example.com";
 
         // Create a selection token
-        let selection_token =
-            auth::create_selection_token("test_jwt_secret_key_for_testing_purposes_only_123456789", test_email).expect("Failed to create selection token");
+        let selection_token = auth::create_selection_token(
+            "test_jwt_secret_key_for_testing_purposes_only_123456789",
+            test_email,
+        )
+        .expect("Failed to create selection token");
         assert!(!selection_token.is_empty());
 
         // Validate selection token format

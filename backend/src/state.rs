@@ -13,6 +13,7 @@ use tower_governor::GovernorError;
 
 use crate::database::Database;
 use crate::email::EmailService;
+use crate::teable::TeableConfig;
 use crate::token_store::TokenStore;
 
 pub use crate::models::MailJobStore;
@@ -20,6 +21,7 @@ pub use crate::models::MailJobStore;
 #[derive(Clone)]
 pub struct AppState {
     pub http_client: Client,
+    pub teable_config: TeableConfig,
     pub email_service: Arc<EmailService>,
     pub token_store: TokenStore,
     pub database: Database,

@@ -53,7 +53,6 @@ fn main() -> anyhow::Result<()> {
     export_type!(WorkHourEntry);
     export_type!(RecipientFilter);
     export_type!(SendBulkMailRequest);
-    export_type!(SendTestMailRequest);
     export_type!(MailJob);
     export_type!(MailJobStatus);
 

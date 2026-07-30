@@ -68,8 +68,9 @@ pub fn extract_user_id_from_headers(
 ) -> Result<String, StatusCode> {
     let claims = extract_auth_claims_from_headers(secret, headers)?;
 
-    // Check for old numeric user IDs (should be Teable record IDs starting with "rec")
-    if claims.sub == "0" || claims.sub.parse::<u32>().is_ok() {
+    // Reject legacy numeric user IDs; Teable record IDs start with "rec"
+    let is_legacy_numeric = claims.sub.chars().all(|c| c.is_ascii_digit());
+    if is_legacy_numeric {
         warn!("Auth: Old token format detected (numeric user ID), rejecting");
         return Err(StatusCode::UNAUTHORIZED);
     }
@@ -90,11 +91,11 @@ pub fn extract_auth_claims_from_headers(
         .strip_prefix("Bearer ")
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    info!("Auth: Verifying token");
+    debug!("Auth: Verifying token");
 
     match auth::verify_token(secret, auth_header) {
         Ok(claims) => {
-            info!("Auth: Token valid, user ID: {}", claims.sub);
+            debug!("Auth: Token valid, user ID: {}", claims.sub);
             Ok(claims)
         }
         Err(e) => {
