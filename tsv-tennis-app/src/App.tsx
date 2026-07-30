@@ -1,12 +1,12 @@
 import {
     BrowserRouter,
-    Navigate,
     Route,
     Routes
 } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import HomeRedirect from "./components/HomeRedirect";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -48,7 +48,7 @@ const App = () => {
                         <div className="flex-1">
                             <Routes>
                                 <Route path="/"
-                                    element={<Navigate to="/login" />} />
+                                    element={<HomeRedirect />} />
                                 <Route path="/login" element={<Login />} />
                                 <Route path="/forgotPassword"
                                     element={<ForgotPassword />} />
