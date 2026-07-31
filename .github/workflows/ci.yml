@@ -49,7 +49,7 @@ jobs:
           name: generated-types
           path: tsv-tennis-app/src/types
       - name: Use Node.js 20
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
       - name: Install frontend dependencies
