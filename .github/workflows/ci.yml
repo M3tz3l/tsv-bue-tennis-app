@@ -61,3 +61,6 @@ jobs:
       - name: Run TypeScript typecheck
         working-directory: tsv-tennis-app
         run: npx tsc --noEmit
+      - name: Run unit tests
+        working-directory: tsv-tennis-app
+        run: npm test
