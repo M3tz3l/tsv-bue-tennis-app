@@ -2,8 +2,13 @@ import { test, expect, type Page } from '@playwright/test';
 import { getFixtures, getTestUser, loginViaBrowser } from '../helpers/auth-helper';
 import { createWorkHourViaApi, deleteAllWorkHoursFor } from '../helpers/work-hours-helper';
 
-const today = new Date().toISOString().split('T')[0];
-const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+function toLocalDateInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+const today = toLocalDateInput(new Date());
+const tomorrow = toLocalDateInput(new Date(Date.now() + 24 * 60 * 60 * 1000));
 
 async function openAddModal(page: Page) {
   // Empty state: "Arbeitsstunden eintragen"; table header: "Eintragen"
@@ -14,22 +19,36 @@ async function openAddModal(page: Page) {
 }
 
 test.describe('Work Hours', () => {
-  test('shows empty state with first-entry CTA when no entries exist', async ({ page }) => {
-    const user = getTestUser(10); // regular user
-    await deleteAllWorkHoursFor(user.email);
+  let activeUserEmail: string | undefined;
 
-    await loginViaBrowser(page, user.email, getFixtures().password);
+  async function startAs(page: Page, index: number) {
+    const user = getTestUser(index);
+    activeUserEmail = user.email;
+    await deleteAllWorkHoursFor(user.email);
+    return user;
+  }
+
+  async function loginAs(page: Page, email: string) {
+    await loginViaBrowser(page, email, getFixtures().password);
+  }
+
+  test.afterEach(async () => {
+    if (activeUserEmail) await deleteAllWorkHoursFor(activeUserEmail);
+    activeUserEmail = undefined;
+  });
+
+  test('shows empty state with first-entry CTA when no entries exist', async ({ page }) => {
+    const user = await startAs(page, 10); // regular user
+    await loginAs(page, user.email);
 
     await expect(page.locator('text=Keine Arbeitsstunden')).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('button:has-text("Arbeitsstunden eintragen")')).toBeVisible();
   });
 
   test('creates a work hour entry', async ({ page }) => {
-    const user = getTestUser(5); // regular user
+    const user = await startAs(page, 5); // regular user
+    await loginAs(page, user.email);
     const description = `E2E Eintrag ${Date.now()}`;
-    await deleteAllWorkHoursFor(user.email);
-
-    await loginViaBrowser(page, user.email, getFixtures().password);
 
     await openAddModal(page);
 
@@ -48,18 +67,15 @@ test.describe('Work Hours', () => {
     await expect(row).toHaveCount(1);
     await expect(row).toContainText(description);
     await expect(row).toContainText('2.5');
-
-    await deleteAllWorkHoursFor(user.email);
   });
 
   test('edits an existing work hour entry', async ({ page }) => {
-    const user = getTestUser(6); // regular user
+    const user = await startAs(page, 6); // regular user
     const originalDescription = `E2E Original ${Date.now()}`;
     const updatedDescription = `E2E Aktualisiert ${Date.now()}`;
-    await deleteAllWorkHoursFor(user.email);
     await createWorkHourViaApi(user.email, today, originalDescription, 2.0);
+    await loginAs(page, user.email);
 
-    await loginViaBrowser(page, user.email, getFixtures().password);
     await expect(page.locator('table').getByText(originalDescription)).toBeVisible({ timeout: 10_000 });
 
     // Open the edit modal (desktop table; the mobile block renders a hidden duplicate)
@@ -78,17 +94,14 @@ test.describe('Work Hours', () => {
     await expect(row).toContainText(updatedDescription);
     await expect(row).toContainText('3.75');
     await expect(page.locator('table').getByText(originalDescription)).toHaveCount(0);
-
-    await deleteAllWorkHoursFor(user.email);
   });
 
   test('deletes a work hour entry after confirmation', async ({ page }) => {
-    const user = getTestUser(7); // regular user
+    const user = await startAs(page, 7); // regular user
     const description = `E2E Löschen ${Date.now()}`;
-    await deleteAllWorkHoursFor(user.email);
     await createWorkHourViaApi(user.email, today, description, 1.5);
+    await loginAs(page, user.email);
 
-    await loginViaBrowser(page, user.email, getFixtures().password);
     await expect(page.locator('table').getByText(description)).toBeVisible({ timeout: 10_000 });
 
     // Open the edit modal and trigger the delete confirmation
@@ -105,12 +118,11 @@ test.describe('Work Hours', () => {
   });
 
   test('cancelling delete keeps the entry', async ({ page }) => {
-    const user = getTestUser(8); // regular user
+    const user = await startAs(page, 8); // regular user
     const description = `E2E Behalten ${Date.now()}`;
-    await deleteAllWorkHoursFor(user.email);
     await createWorkHourViaApi(user.email, today, description, 1.0);
+    await loginAs(page, user.email);
 
-    await loginViaBrowser(page, user.email, getFixtures().password);
     await expect(page.locator('table').getByText(description)).toBeVisible({ timeout: 10_000 });
 
     await page.locator('table button[aria-label="Bearbeiten"]').click();
@@ -126,17 +138,14 @@ test.describe('Work Hours', () => {
     const editDialog = page.getByRole('dialog').filter({ hasText: 'Arbeitsstunden bearbeiten' });
     await editDialog.locator('button:has-text("Abbrechen")').click();
     await expect(page.locator('table').getByText(description)).toBeVisible({ timeout: 10_000 });
-
-    await deleteAllWorkHoursFor(user.email);
   });
 
   test('rejects a second entry on the same date', async ({ page }) => {
-    const user = getTestUser(9); // regular user
+    const user = await startAs(page, 9); // regular user
     const description = `E2E Duplikat ${Date.now()}`;
-    await deleteAllWorkHoursFor(user.email);
     await createWorkHourViaApi(user.email, today, 'E2E Setup Duplikat', 1.0);
+    await loginAs(page, user.email);
 
-    await loginViaBrowser(page, user.email, getFixtures().password);
     await expect(page.locator('table').getByText('E2E Setup Duplikat')).toBeVisible({ timeout: 10_000 });
 
     await openAddModal(page);
@@ -155,20 +164,16 @@ test.describe('Work Hours', () => {
     await expect(row).toHaveCount(1);
     await expect(row).toContainText('E2E Setup Duplikat');
     await expect(row).not.toContainText(description);
-
-    await deleteAllWorkHoursFor(user.email);
   });
 
   test('blocks invalid submissions without creating an entry', async ({ page }) => {
-    const user = getTestUser(11); // regular user
-    await deleteAllWorkHoursFor(user.email);
-
-    await loginViaBrowser(page, user.email, getFixtures().password);
+    const user = await startAs(page, 11); // regular user
+    await loginAs(page, user.email);
     await openAddModal(page);
 
     // Count create requests; invalid inputs must never reach the API
     let createRequests = 0;
-    await page.route('**/api/arbeitsstunden', async (route) => {
+    await page.route('**/api/arbeitsstunden*', async (route) => {
       if (route.request().method() === 'POST') createRequests++;
       await route.continue();
     });
@@ -193,10 +198,10 @@ test.describe('Work Hours', () => {
 
         // Modal must remain open and no request may be sent
         await expect(page.locator('text=Neue Arbeitsstunden eintragen')).toBeVisible({ timeout: 3_000 });
-        expect(createRequests).toBe(0);
+        await expect
+          .poll(() => createRequests, { timeout: 1_000, intervals: [100, 200, 300] })
+          .toBe(0);
       });
     }
-
-    await deleteAllWorkHoursFor(user.email);
   });
 });
