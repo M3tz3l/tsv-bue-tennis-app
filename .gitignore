@@ -5,8 +5,12 @@
 
 # Rust/Cargo
 backend/target/
+target/
 backend/tennis_app.db
 backend/nohup.out
+
+# Local binaries
+bin/
 
 # TypeScript bindings - don't commit generated files
 # They should be regenerated during build/development
@@ -26,6 +30,9 @@ backend/logs/
 
 # OS generated files
 .DS_Store
+
+# Python virtual environment
+.venv/
 .DS_Store?
 ._*
 .Spotlight-V100
