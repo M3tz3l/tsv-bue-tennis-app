@@ -37,8 +37,8 @@ jobs:
           name: generated-types
           path: backend/bindings/types.ts
 
-  frontend-lint-typecheck:
-    name: Frontend — ESLint and TypeScript typecheck
+  frontend-checks:
+    name: Frontend — ESLint, typecheck and unit tests
     runs-on: ubuntu-latest
     needs: test
     steps:
