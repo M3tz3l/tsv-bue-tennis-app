@@ -1,3 +1,6 @@
+//! Application and email configuration loaded from environment variables.
+
+use anyhow::Context;
 use std::env;
 
 /// Configuration structure for environment variables
@@ -13,24 +16,24 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_env() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn from_env() -> anyhow::Result<Self> {
         let port = env::var("PORT")
             .unwrap_or_else(|_| "5000".to_string())
             .parse::<u16>()
-            .map_err(|_| "PORT must be a valid port number")?;
+            .context("PORT must be a valid port number")?;
 
         Ok(Config {
             port,
-            database_url: env::var("DATABASE_URL").map_err(|_| "DATABASE_URL must be set")?,
+            database_url: env::var("DATABASE_URL").context("DATABASE_URL must be set")?,
             jwt_secret: env::var("JWT_SECRET").unwrap_or_else(|_| "your-secret-key".to_string()),
             frontend_url: env::var("FRONTEND_URL")
                 .unwrap_or_else(|_| "http://localhost:5173".to_string()),
-            teable_api_url: env::var("TEABLE_API_URL").map_err(|_| "TEABLE_API_URL must be set")?,
-            teable_token: env::var("TEABLE_TOKEN").map_err(|_| "TEABLE_TOKEN must be set")?,
+            teable_api_url: env::var("TEABLE_API_URL").context("TEABLE_API_URL must be set")?,
+            teable_token: env::var("TEABLE_TOKEN").context("TEABLE_TOKEN must be set")?,
             members_table_id: env::var("MEMBERS_TABLE_ID")
-                .map_err(|_| "MEMBERS_TABLE_ID must be set")?,
+                .context("MEMBERS_TABLE_ID must be set")?,
             work_hours_table_id: env::var("WORK_HOURS_TABLE_ID")
-                .map_err(|_| "WORK_HOURS_TABLE_ID must be set")?,
+                .context("WORK_HOURS_TABLE_ID must be set")?,
         })
     }
 }
@@ -47,11 +50,11 @@ pub struct EmailConfig {
 }
 
 impl EmailConfig {
-    pub fn from_env() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn from_env() -> anyhow::Result<Self> {
         let port = env::var("EMAIL_PORT")
-            .map_err(|_| "EMAIL_PORT must be set")?
+            .context("EMAIL_PORT must be set")?
             .parse::<u16>()
-            .map_err(|_| "EMAIL_PORT must be a number")?;
+            .context("EMAIL_PORT must be a number")?;
 
         // Use implicit TLS for port 465, STARTTLS for other ports (like 587)
         let use_implicit_tls = port == 465;
@@ -62,11 +65,11 @@ impl EmailConfig {
             .unwrap_or(false);
 
         Ok(EmailConfig {
-            host: env::var("EMAIL_HOST").map_err(|_| "EMAIL_HOST must be set")?,
+            host: env::var("EMAIL_HOST").context("EMAIL_HOST must be set")?,
             port,
-            user: env::var("EMAIL_USER").map_err(|_| "EMAIL_USER must be set")?,
-            password: env::var("EMAIL_PASSWORD").map_err(|_| "EMAIL_PASSWORD must be set")?,
-            from_email: env::var("EMAIL_FROM").map_err(|_| "EMAIL_FROM must be set")?,
+            user: env::var("EMAIL_USER").context("EMAIL_USER must be set")?,
+            password: env::var("EMAIL_PASSWORD").context("EMAIL_PASSWORD must be set")?,
+            from_email: env::var("EMAIL_FROM").context("EMAIL_FROM must be set")?,
             use_implicit_tls,
             accept_invalid_certs,
         })

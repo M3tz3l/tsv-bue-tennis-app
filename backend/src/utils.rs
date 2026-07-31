@@ -1,3 +1,5 @@
+//! Shared utilities: auth extraction, work hour conversion, age eligibility.
+
 use crate::auth;
 use crate::models::{Member, WorkHour, WorkHourEntry};
 use axum::http::{HeaderMap, StatusCode};
@@ -60,11 +62,15 @@ pub fn log_work_entries(entries: &[WorkHourEntry], prefix: &str) {
 }
 
 /// Extracts and verifies user ID from Authorization header
-pub fn extract_user_id_from_headers(headers: &HeaderMap) -> Result<String, StatusCode> {
-    let claims = extract_auth_claims_from_headers(headers)?;
+pub fn extract_user_id_from_headers(
+    secret: &str,
+    headers: &HeaderMap,
+) -> Result<String, StatusCode> {
+    let claims = extract_auth_claims_from_headers(secret, headers)?;
 
-    // Check for old numeric user IDs (should be Teable record IDs starting with "rec")
-    if claims.sub == "0" || claims.sub.parse::<u32>().is_ok() {
+    // Reject legacy numeric user IDs; Teable record IDs start with "rec"
+    let is_legacy_numeric = claims.sub.chars().all(|c| c.is_ascii_digit());
+    if is_legacy_numeric {
         warn!("Auth: Old token format detected (numeric user ID), rejecting");
         return Err(StatusCode::UNAUTHORIZED);
     }
@@ -74,6 +80,7 @@ pub fn extract_user_id_from_headers(headers: &HeaderMap) -> Result<String, Statu
 
 /// Extracts and verifies full auth claims from Authorization header
 pub fn extract_auth_claims_from_headers(
+    secret: &str,
     headers: &HeaderMap,
 ) -> Result<auth::AuthClaims, StatusCode> {
     let auth_header = headers
@@ -84,11 +91,11 @@ pub fn extract_auth_claims_from_headers(
         .strip_prefix("Bearer ")
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    info!("Auth: Verifying token");
+    debug!("Auth: Verifying token");
 
-    match auth::verify_token(auth_header) {
+    match auth::verify_token(secret, auth_header) {
         Ok(claims) => {
-            info!("Auth: Token valid, user ID: {}", claims.sub);
+            debug!("Auth: Token valid, user ID: {}", claims.sub);
             Ok(claims)
         }
         Err(e) => {
@@ -167,7 +174,8 @@ pub fn get_member_work_hours_info(member: &Member, current_year: i32) -> (f64, O
                     .map(|dt| dt.date())
             })
         {
-            let july_first = chrono::NaiveDate::from_ymd_opt(current_year, 7, 1).unwrap();
+            let july_first = chrono::NaiveDate::from_ymd_opt(current_year, 7, 1)
+                .expect("July 1st should always be a valid date");
             debug!(
                 "Join date: {}, July 1st {}: {}",
                 join_date, current_year, july_first

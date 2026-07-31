@@ -1,3 +1,5 @@
+//! Shared request/response models and Teable API data structures.
+
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::HashMap;
@@ -19,7 +21,6 @@ pub struct LoginResponse {
 }
 
 #[derive(Debug, Deserialize, Type)]
-#[allow(dead_code)]
 pub struct RegisterRequest {
     pub name: String,
     pub email: String,
@@ -32,7 +33,6 @@ pub struct ForgotPasswordRequest {
 }
 
 #[derive(Debug, Deserialize, Type)]
-#[allow(dead_code)]
 pub struct ResetPasswordRequest {
     pub token: String,
     pub password: String,
@@ -47,13 +47,6 @@ pub struct UserResponse {
     pub role: Option<String>,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Deserialize, Type)]
-pub struct SendTestMailRequest {
-    pub subject: Option<String>,
-    pub message: Option<String>,
-}
-
 #[derive(Debug, Deserialize, Type)]
 #[serde(rename_all = "lowercase")]
 pub enum RecipientFilter {
@@ -62,7 +55,6 @@ pub enum RecipientFilter {
     Orga,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize, Type)]
 pub struct SendBulkMailRequest {
     pub subject: String,
@@ -201,12 +193,30 @@ impl Member {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum LinkedRecord {
+    Object { id: String },
+    Plain(String),
+    Many(Vec<LinkedRecord>),
+}
+
+impl LinkedRecord {
+    pub fn as_id(&self) -> &str {
+        match self {
+            LinkedRecord::Object { id } => id.as_str(),
+            LinkedRecord::Plain(id) => id.as_str(),
+            LinkedRecord::Many(records) => records.first().map_or("", |r| r.as_id()),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct WorkHour {
     pub id: String,
     // Linked record field that references member records
     #[serde(rename = "Mitglied_id")]
-    pub member_id: Option<serde_json::Value>, // Can be object with id or just string
+    pub member_id: Option<LinkedRecord>, // Can be object with id or just string
     #[serde(rename = "Nachname")]
     #[allow(dead_code)]
     pub last_name: Option<String>,
@@ -225,21 +235,8 @@ pub struct WorkHour {
 }
 
 impl WorkHour {
-    /// Extract the member ID from the linked record field
     pub fn get_member_id(&self) -> Option<String> {
-        match &self.member_id {
-            Some(value) => {
-                if let Some(obj) = value.as_object() {
-                    // Linked record format: {"id": "member_id"}
-                    obj.get("id")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string())
-                } else {
-                    value.as_str().map(|id_str| id_str.to_string())
-                }
-            }
-            None => None,
-        }
+        self.member_id.as_ref().map(|r| r.as_id().to_string())
     }
 }
 
@@ -300,6 +297,3 @@ pub struct WorkHourEntry {
     #[serde(rename = "Stunden")]
     pub duration_hours: f64, // Now represents hours with German field name
 }
-
-#[allow(unused_imports)] // These are used in main.rs via re-export
-pub use crate::member_selection::{MemberSelectionResponse, SelectMemberRequest};

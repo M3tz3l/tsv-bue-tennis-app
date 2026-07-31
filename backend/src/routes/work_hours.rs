@@ -1,3 +1,5 @@
+//! Work hour CRUD routes with date validation and ownership checks.
+
 use axum::{
     extract::{Json, Path, State},
     http::HeaderMap,
@@ -69,20 +71,73 @@ pub fn routes() -> Router<AppState> {
         .route("/:id", delete(delete_work_hour))
 }
 
+enum OwnershipError {
+    /// Upstream Teable request failed (network/HTTP error).
+    Upstream,
+    /// Work hour entry was not found or is not owned by the user.
+    Denied,
+}
+
+fn denied_response(verb: &str) -> axum::Json<serde_json::Value> {
+    axum::Json(serde_json::json!({
+        "success": false,
+        "message": format!("Work hour entry not found or you don't have permission to {} it", verb)
+    }))
+}
+
+async fn verify_work_hour_ownership(
+    state: &AppState,
+    work_hour_id: &str,
+    user_id: &str,
+    verb: &str,
+) -> Result<crate::models::WorkHour, OwnershipError> {
+    let existing =
+        teable::get_work_hour_by_id(&state.teable_config, &state.http_client, work_hour_id)
+            .await
+            .map_err(|e| {
+                error!("{verb} Work Hour: Failed to get work hour by id: {}", e);
+                OwnershipError::Upstream
+            })?;
+
+    let wh = existing.ok_or_else(|| {
+        error!("{verb} Work Hour: work hour {} not found", work_hour_id);
+        OwnershipError::Denied
+    })?;
+
+    let owned = wh
+        .get_member_id()
+        .is_some_and(|member_id| member_id == user_id);
+
+    if !owned {
+        error!(
+            "{verb} Work Hour: {} not owned by user {}",
+            work_hour_id, user_id
+        );
+        return Err(OwnershipError::Denied);
+    }
+
+    Ok(wh)
+}
+
 pub async fn get_work_hour_by_id(
     State(state): State<AppState>,
     Path(work_hour_id): Path<String>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    let user_id = extract_user_id_from_headers(&headers)?;
+    let user_id = extract_user_id_from_headers(&state.jwt_secret, &headers)?;
 
     debug!(
         "Get Work Hour: Looking for work hour ID {} for user {}",
         work_hour_id, user_id
     );
 
-    // Get current user by ID
-    let current_user = teable::get_member_by_id(&state.http_client, &user_id)
+    let wh = match verify_work_hour_ownership(&state, &work_hour_id, &user_id, "access").await {
+        Ok(wh) => wh,
+        Err(OwnershipError::Upstream) => return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+        Err(OwnershipError::Denied) => return Ok(denied_response("access")),
+    };
+
+    let current_user = teable::get_member_by_id(&state.teable_config, &state.http_client, &user_id)
         .await
         .map_err(|e| {
             error!("Get Work Hour: Failed to get member by id: {}", e);
@@ -93,68 +148,30 @@ pub async fn get_work_hour_by_id(
             axum::http::StatusCode::NOT_FOUND
         })?;
 
-    // Get the specific work hour directly by ID (most efficient)
-    let work_hour = teable::get_work_hour_by_id(&state.http_client, &work_hour_id)
-        .await
-        .map_err(|e| {
-            error!("Get Work Hour: Failed to get work hour by id: {}", e);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    match work_hour {
-        Some(wh) => {
-            // Verify that this work hour belongs to the current user
-            let belongs_to_user = if let Some(member_id) = wh.get_member_id() {
-                member_id == current_user.id
-            } else {
-                false
-            };
-
-            if !belongs_to_user {
-                error!(
-                    "Get Work Hour: Work hour {} does not belong to user {}",
-                    work_hour_id, user_id
-                );
-                return Ok(axum::Json(serde_json::json!({
-                    "success": false,
-                    "message": "Work hour entry not found or you don't have permission to access it"
-                })));
-            }
-
-            // Validate that all required fields are present
-            match (&wh.date, &wh.description, &wh.duration_hours) {
-                (Some(date), Some(description), Some(hours)) => {
-                    debug!(
-                        "Get Work Hour: Found work hour {} for user {}",
-                        work_hour_id,
-                        current_user.name()
-                    );
-                    Ok(axum::Json(serde_json::json!({
-                        "success": true,
-                        "data": {
-                            "id": wh.id,
-                            "Datum": date,
-                            "Tätigkeit": description,
-                            "Stunden": hours,
-                            "Vorname": current_user.first_name,
-                            "Nachname": current_user.last_name
-                        }
-                    })))
+    match (&wh.date, &wh.description, &wh.duration_hours) {
+        (Some(date), Some(description), Some(hours)) => {
+            debug!(
+                "Get Work Hour: Found work hour {} for user {}",
+                work_hour_id,
+                current_user.name()
+            );
+            Ok(axum::Json(serde_json::json!({
+                "success": true,
+                "data": {
+                    "id": wh.id,
+                    "Datum": date,
+                    "Tätigkeit": description,
+                    "Stunden": hours,
+                    "Vorname": current_user.first_name,
+                    "Nachname": current_user.last_name
                 }
-                _ => {
-                    error!("Get Work Hour: Work hour {} has missing data", work_hour_id);
-                    Ok(axum::Json(serde_json::json!({
-                        "success": false,
-                        "message": "Work hour entry has incomplete data"
-                    })))
-                }
-            }
+            })))
         }
-        None => {
-            error!("Get Work Hour: Work hour {} not found", work_hour_id);
+        _ => {
+            error!("Get Work Hour: Work hour {} has missing data", work_hour_id);
             Ok(axum::Json(serde_json::json!({
                 "success": false,
-                "message": "Work hour entry not found or you don't have permission to access it"
+                "message": "Work hour entry has incomplete data"
             })))
         }
     }
@@ -165,7 +182,7 @@ pub async fn create_work_hour(
     headers: HeaderMap,
     payload: Result<Json<CreateWorkHourRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    let user_id = match extract_user_id_from_headers(&headers) {
+    let user_id = match extract_user_id_from_headers(&state.jwt_secret, &headers) {
         Ok(id) => id,
         Err(e) => {
             error!("Create Work Hour: Auth error: {:?}", e);
@@ -212,6 +229,7 @@ pub async fn create_work_hour(
 
     // Use get_member_by_id for efficiency
     let current_user = teable::get_member_by_id_with_projection(
+        &state.teable_config,
         &state.http_client,
         &user_id,
         Some(&["Vorname", "Nachname", "Email"][..]), // Only fields needed for create_work_hour
@@ -231,14 +249,15 @@ pub async fn create_work_hour(
     debug!("Create Work Hour: Using {} hours directly", payload.hours);
 
     // Check for duplicate entry for this member and date using teable.rs helper
-    let work_hours_at_date = match teable::get_work_hours_for_member_at_date(
+    let work_hour_exists = match teable::work_hour_exists_for_member_at_date(
+        &state.teable_config,
         &state.http_client,
         &current_user.id,
         &payload.date,
     )
     .await
     {
-        Ok(records) => records,
+        Ok(exists) => exists,
         Err(e) => {
             error!(
                 "Create Work Hour: Error fetching work hours for date: {}",
@@ -248,7 +267,7 @@ pub async fn create_work_hour(
         }
     };
 
-    if !work_hours_at_date.is_empty() {
+    if work_hour_exists {
         error!(
             "Create Work Hour: Duplicate entry for member {} on date {}",
             current_user.id, payload.date
@@ -261,6 +280,7 @@ pub async fn create_work_hour(
 
     // Try to create the work hour in Teable
     match teable::create_work_hour(
+        &state.teable_config,
         &state.http_client,
         &payload.date,
         &payload.description,
@@ -304,7 +324,7 @@ pub async fn update_work_hour(
     headers: HeaderMap,
     payload: Result<Json<CreateWorkHourRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    let user_id = match extract_user_id_from_headers(&headers) {
+    let user_id = match extract_user_id_from_headers(&state.jwt_secret, &headers) {
         Ok(id) => id,
         Err(e) => {
             error!("Update Work Hour: Auth error: {:?}", e);
@@ -361,8 +381,15 @@ pub async fn update_work_hour(
         return Ok(json_err);
     }
 
+    let _wh = match verify_work_hour_ownership(&state, &work_hour_id, &user_id, "edit").await {
+        Ok(wh) => wh,
+        Err(OwnershipError::Upstream) => return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+        Err(OwnershipError::Denied) => return Ok(denied_response("edit")),
+    };
+
     // Use get_member_by_id for efficiency
     let current_user = teable::get_member_by_id_with_projection(
+        &state.teable_config,
         &state.http_client,
         &user_id,
         Some(&["Vorname", "Nachname", "Email"][..]), // Only fields needed for update_work_hour
@@ -379,47 +406,11 @@ pub async fn update_work_hour(
 
     debug!("Update Work Hour: Found user: {}", current_user.name());
 
-    // Verify the work hour exists and belongs to the current user (most efficient - direct fetch by ID)
-    let existing_work_hour = teable::get_work_hour_by_id(&state.http_client, &work_hour_id)
-        .await
-        .map_err(|e| {
-            error!("Update Work Hour: Failed to get work hour by id: {}", e);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    match existing_work_hour {
-        Some(wh) => {
-            // Verify that this work hour belongs to the current user
-            let belongs_to_user = if let Some(member_id) = wh.get_member_id() {
-                member_id == current_user.id
-            } else {
-                false
-            };
-
-            if !belongs_to_user {
-                error!(
-                    "Update Work Hour: Work hour {} does not belong to user {}",
-                    work_hour_id, user_id
-                );
-                return Ok(axum::Json(serde_json::json!({
-                    "success": false,
-                    "error": "Work hour entry not found or you don't have permission to edit it"
-                })));
-            }
-        }
-        None => {
-            error!("Update Work Hour: Work hour {} not found", work_hour_id);
-            return Ok(axum::Json(serde_json::json!({
-                "success": false,
-                "error": "Work hour entry not found or you don't have permission to edit it"
-            })));
-        }
-    }
-
     debug!("Update Work Hour: Using {} hours directly", payload.hours);
 
     // Try to update the work hour in Teable
     match teable::update_work_hour(
+        &state.teable_config,
         &state.http_client,
         &work_hour_id,
         &payload.date,
@@ -431,7 +422,7 @@ pub async fn update_work_hour(
     {
         Ok(updated_work_hour) => {
             info!(
-                "✅ Update Work Hour: Successfully updated work hour with ID: {}",
+                "Update Work Hour: Successfully updated work hour with ID: {}",
                 updated_work_hour.id
             );
             Ok(axum::Json(serde_json::json!({
@@ -462,29 +453,16 @@ pub async fn delete_work_hour(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    let user_id = extract_user_id_from_headers(&headers)?;
+    let user_id = extract_user_id_from_headers(&state.jwt_secret, &headers)?;
 
-    let existing = teable::get_work_hour_by_id(&state.http_client, &id)
-        .await
-        .map_err(|e| {
-            error!("Delete Work Hour: Failed to get work hour by id: {}", e);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    let owned = existing
-        .as_ref()
-        .and_then(|wh| wh.get_member_id())
-        .is_some_and(|member_id| member_id == user_id);
-
-    if !owned {
-        warn!("Delete Work Hour: {} not owned by user {}", id, user_id);
-        return Ok(axum::Json(serde_json::json!({
-            "success": false,
-            "message": "Work hour entry not found or you don't have permission to delete it"
-        })));
+    if let Err(err) = verify_work_hour_ownership(&state, &id, &user_id, "delete").await {
+        return match err {
+            OwnershipError::Upstream => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+            OwnershipError::Denied => Ok(denied_response("delete")),
+        };
     }
 
-    match teable::delete_work_hour(&state.http_client, &id).await {
+    match teable::delete_work_hour(&state.teable_config, &state.http_client, &id).await {
         Ok(_) => Ok(axum::Json(serde_json::json!({
             "success": true,
             "message": "Work hour deleted successfully"

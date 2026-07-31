@@ -1,3 +1,5 @@
+//! Email service using SMTP for transactional and bulk mail delivery.
+
 use crate::config::{Config, EmailConfig};
 use crate::models::MailJobStore;
 use lettre::{
@@ -6,7 +8,7 @@ use lettre::{
         authentication::Credentials,
         client::{Tls, TlsParameters},
     },
-    AsyncSmtpTransport, AsyncTransport, SmtpTransport, Tokio1Executor, Transport,
+    AsyncSmtpTransport, AsyncTransport, Tokio1Executor,
 };
 use tracing::{error, info, warn};
 
@@ -29,6 +31,19 @@ pub struct EmailAttachment {
     pub content_id: Option<String>, // For inline images
 }
 
+/// Options that tune how a bulk mail job is sent.
+pub struct BulkMailOptions {
+    pub subject: String,
+    pub message: String,
+    pub safe_message: String,
+    pub signature_html: String,
+    pub signature_text: String,
+    pub include_greeting: bool,
+    pub max_concurrency: usize,
+    pub batch_size: usize,
+    pub batch_delay: std::time::Duration,
+}
+
 pub struct EmailService {
     smtp_host: String,
     smtp_port: u16,
@@ -41,7 +56,7 @@ pub struct EmailService {
 }
 
 impl EmailService {
-    pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn new() -> Result<Self, anyhow::Error> {
         let email_config = EmailConfig::from_env()?;
 
         let disable_send = std::env::var("EMAIL_DISABLE_SEND")
@@ -62,7 +77,7 @@ impl EmailService {
     }
 
     /// Build TLS parameters, optionally accepting invalid certificates (for testing with self-signed certs).
-    fn build_tls_params(&self) -> Result<TlsParameters, Box<dyn std::error::Error + Send + Sync>> {
+    fn build_tls_params(&self) -> Result<TlsParameters, anyhow::Error> {
         let mut builder = TlsParameters::builder(self.smtp_host.clone());
         if self.accept_invalid_certs {
             builder = builder.dangerous_accept_invalid_certs(true);
@@ -70,34 +85,8 @@ impl EmailService {
         Ok(builder.build()?)
     }
 
-    /// Creates a fresh SMTP transport connection for each send to avoid session limits
-    fn create_transport(&self) -> Result<SmtpTransport, Box<dyn std::error::Error + Send + Sync>> {
-        let builder = if self.use_implicit_tls {
-            let tls = self.build_tls_params()?;
-            SmtpTransport::builder_dangerous(&self.smtp_host)
-                .port(self.smtp_port)
-                .tls(Tls::Wrapper(tls))
-        } else {
-            let tls = self.build_tls_params()?;
-            SmtpTransport::builder_dangerous(&self.smtp_host)
-                .port(self.smtp_port)
-                .tls(Tls::Required(tls))
-        };
-        let builder = if !self.smtp_user.is_empty() {
-            builder.credentials(Credentials::new(
-                self.smtp_user.clone(),
-                self.smtp_password.clone(),
-            ))
-        } else {
-            builder
-        };
-        Ok(builder.build())
-    }
-
     /// Creates an async SMTP transport for bulk operations (non-blocking)
-    fn create_async_transport(
-        &self,
-    ) -> Result<AsyncSmtpTransport<Tokio1Executor>, Box<dyn std::error::Error + Send + Sync>> {
+    fn create_async_transport(&self) -> Result<AsyncSmtpTransport<Tokio1Executor>, anyhow::Error> {
         let builder = if self.use_implicit_tls {
             let tls = self.build_tls_params()?;
             AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&self.smtp_host)
@@ -126,19 +115,38 @@ impl EmailService {
     pub async fn send_bulk_mail_concurrent(
         &self,
         recipients: &[(String, String)], // (email, first_name)
-        subject: &str,
-        message: &str,
-        safe_message: &str,
-        signature_html: &str,
-        signature_text: &str,
         attachments: &[EmailAttachment],
-        include_greeting: bool,
-        max_concurrency: usize,
-        batch_size: usize,
-        batch_delay: std::time::Duration,
+        options: BulkMailOptions,
         job_store: MailJobStore,
         job_id: String,
     ) -> (usize, usize, Vec<String>) {
+        let BulkMailOptions {
+            subject,
+            message,
+            safe_message,
+            signature_html,
+            signature_text,
+            include_greeting,
+            max_concurrency,
+            batch_size,
+            batch_delay,
+        } = options;
+
+        // A zero batch_size makes `chunks(0)` panic and a zero max_concurrency
+        // leaves semaphore acquisition waiting indefinitely, so reject invalid
+        // options before entering the send loop.
+        if batch_size == 0 || max_concurrency == 0 {
+            error!(
+                "Invalid bulk mail options: batch_size={}, max_concurrency={}",
+                batch_size, max_concurrency
+            );
+            return (
+                0,
+                recipients.len(),
+                recipients.iter().map(|(e, _)| e.clone()).collect(),
+            );
+        }
+
         if self.disable_send {
             info!(
                 "EMAIL_DISABLE_SEND=true - skipping bulk send to {} recipients",
@@ -148,11 +156,6 @@ impl EmailService {
         }
 
         let from_address = format!("TSV BÜ Tennis App <{}>", self.from_email);
-        let subject = subject.to_string();
-        let message = message.to_string();
-        let safe_message = safe_message.to_string();
-        let signature_html = signature_html.to_string();
-        let signature_text = signature_text.to_string();
         let attachments: Vec<_> = attachments
             .iter()
             .map(|a| EmailAttachment {
@@ -192,7 +195,7 @@ impl EmailService {
             info!(
                 "Starting batch {}/{} ({} recipients)",
                 batch_idx + 1,
-                (recipients.len() + batch_size - 1) / batch_size,
+                recipients.len().div_ceil(batch_size),
                 chunk.len()
             );
 
@@ -318,7 +321,7 @@ impl EmailService {
         subject: &str,
         html_content: &str,
         text_content: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(), anyhow::Error> {
         if self.disable_send {
             info!("EMAIL_DISABLE_SEND=true - skipping SMTP send to {}", to);
             return Ok(());
@@ -345,16 +348,15 @@ impl EmailService {
                     ),
             )?;
 
-        // Create a fresh transport per send to avoid SMTP session limits
-        let transport = self.create_transport()?;
-        match transport.send(&email) {
+        let transport = self.create_async_transport()?;
+        match transport.send(email).await {
             Ok(response) => {
                 info!("Email sent successfully: {:?}", response);
                 Ok(())
             }
             Err(e) => {
                 error!("Failed to send email: {}", e);
-                Err(Box::new(e))
+                Err(e.into())
             }
         }
     }
@@ -367,7 +369,7 @@ impl EmailService {
         html_content: &str,
         text_content: &str,
         attachments: &[EmailAttachment],
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(), anyhow::Error> {
         if self.disable_send {
             info!("EMAIL_DISABLE_SEND=true - skipping SMTP send to {}", to);
             return Ok(());
@@ -389,25 +391,23 @@ impl EmailService {
                     .body(html_content.to_string()),
             );
 
-        // Create a fresh transport per send to avoid SMTP session limits
-        let transport = self.create_transport()?;
+        let transport = self.create_async_transport()?;
 
         if attachments.is_empty() {
-            // No attachments — send as multipart/alternative only
             let email = Message::builder()
                 .from(from_mailbox)
                 .to(to_mailbox)
                 .subject(subject)
                 .multipart(body)?;
 
-            match transport.send(&email) {
+            match transport.send(email).await {
                 Ok(response) => {
                     info!("Email sent successfully: {:?}", response);
                     Ok(())
                 }
                 Err(e) => {
                     error!("Failed to send email: {}", e);
-                    Err(Box::new(e))
+                    Err(e.into())
                 }
             }
         } else {
@@ -448,7 +448,7 @@ impl EmailService {
                 .subject(subject)
                 .multipart(mixed)?;
 
-            match transport.send(&email) {
+            match transport.send(email).await {
                 Ok(response) => {
                     info!(
                         "Email with {} attachment(s) sent successfully: {:?}",
@@ -459,7 +459,7 @@ impl EmailService {
                 }
                 Err(e) => {
                     error!("Failed to send email with attachments: {}", e);
-                    Err(Box::new(e))
+                    Err(e.into())
                 }
             }
         }
@@ -470,7 +470,7 @@ impl EmailService {
         email: &str,
         reset_token: &str,
         user_id: String, // Changed from u32 to String
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(), anyhow::Error> {
         let config = Config::from_env()?;
         let reset_url = format!(
             "{}/resetPassword?token={}&id={}",
@@ -524,7 +524,7 @@ fn build_message(
     html_content: &str,
     text_content: &str,
     attachments: &[EmailAttachment],
-) -> Result<Message, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Message, anyhow::Error> {
     let body = MultiPart::alternative()
         .singlepart(
             SinglePart::builder()

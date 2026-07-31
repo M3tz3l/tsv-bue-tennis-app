@@ -1,3 +1,5 @@
+//! Authentication routes: login, register, password reset, member selection.
+
 use axum::{
     extract::{Json, State},
     response::IntoResponse,
@@ -60,12 +62,13 @@ pub async fn login(
     };
 
     // Get all members with this email
-    let teable_members = teable::get_members_by_email(&state.http_client, &normalized_email)
-        .await
-        .map_err(|e| {
-            error!("Teable error: {}", e);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let teable_members =
+        teable::get_members_by_email(&state.teable_config, &state.http_client, &normalized_email)
+            .await
+            .map_err(|e| {
+                error!("Teable error: {}", e);
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
     if teable_members.is_empty() {
         error!("No members found in Teable for email: {}", normalized_email);
@@ -75,8 +78,12 @@ pub async fn login(
     if teable_members.len() == 1 {
         // Only one member, proceed as before
         let teable_user = &teable_members[0];
-        let token = auth::create_token(&teable_user.id.to_string(), teable_user.role.as_deref())
-            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        let token = auth::create_token(
+            &state.jwt_secret,
+            &teable_user.id.to_string(),
+            teable_user.role.as_deref(),
+        )
+        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         return Ok(Json(LoginResponseVariant::SingleUser(LoginResponse {
             success: true,
             token,
@@ -91,7 +98,7 @@ pub async fn login(
 
     // Multiple members found, return list for selection (no token yet)
     // Issue a short-lived selection token for this email
-    let selection_token = auth::create_selection_token(&normalized_email)
+    let selection_token = auth::create_selection_token(&state.jwt_secret, &normalized_email)
         .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let users: Vec<UserResponse> = teable_members
@@ -131,7 +138,7 @@ pub async fn select_member(
     };
 
     // Validate selection token and extract email
-    let email = match auth::verify_selection_token(selection_token) {
+    let email = match auth::verify_selection_token(&state.jwt_secret, selection_token) {
         Ok(email) => email,
         Err(_) => {
             warn!("Invalid or expired selection_token");
@@ -140,21 +147,26 @@ pub async fn select_member(
     };
 
     // Check that the member_id belongs to the email
-    let teable_member = teable::get_member_by_id(&state.http_client, &payload.member_id)
-        .await
-        .map_err(|e| {
-            error!("Teable error: {}", e);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+    let teable_member =
+        teable::get_member_by_id(&state.teable_config, &state.http_client, &payload.member_id)
+            .await
+            .map_err(|e| {
+                error!("Teable error: {}", e);
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
 
     if teable_member.email.to_lowercase() != email.to_lowercase() {
         error!("Member ID does not belong to the email in selection_token");
         return Err(axum::http::StatusCode::UNAUTHORIZED);
     }
 
-    let token = auth::create_token(&teable_member.id.to_string(), teable_member.role.as_deref())
-        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+    let token = auth::create_token(
+        &state.jwt_secret,
+        &teable_member.id.to_string(),
+        teable_member.role.as_deref(),
+    )
+    .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(LoginResponse {
         success: true,
@@ -172,11 +184,13 @@ pub async fn register(
     State(_state): State<AppState>,
     Json(_payload): Json<RegisterRequest>,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    // In a real implementation, you would create the user in Teable
-    // For now, return a simple success response
-    Ok(axum::Json(serde_json::json!({
-        "message": "Registrierung erfolgreich"
-    })))
+    Ok((
+        axum::http::StatusCode::NOT_IMPLEMENTED,
+        axum::Json(serde_json::json!({
+            "success": false,
+            "message": "Self-registration is not available. Account creation is managed externally."
+        })),
+    ))
 }
 
 pub async fn forgot_password(
@@ -191,7 +205,13 @@ pub async fn forgot_password(
     );
 
     // Get user from Teable - optimized to fetch only the specific user
-    let user = match teable::get_member_by_email(&state.http_client, &normalized_email).await {
+    let user = match teable::get_member_by_email(
+        &state.teable_config,
+        &state.http_client,
+        &normalized_email,
+    )
+    .await
+    {
         Ok(Some(user)) => {
             info!("Found user in Teable: {} (ID: {})", user.email, user.id);
             user
@@ -249,16 +269,7 @@ pub async fn reset_password(
     debug!("Password reset attempt for token: {}", payload.token);
     debug!("Reset password payload: {:?}", payload);
 
-    // Verify token is valid and not expired
-    if !state.token_store.is_token_valid(&payload.token).await {
-        warn!("Invalid or expired reset token: {}", payload.token);
-        return Ok(axum::Json(serde_json::json!({
-            "success": false,
-            "message": "Invalid or expired reset token"
-        })));
-    }
-
-    // Get the user ID associated with this token
+    // Atomically consume and validate the reset token (single lock + expiry check)
     let reset_token_info = state.token_store.consume_reset_token(&payload.token).await;
 
     let reset_token_info = match reset_token_info {
@@ -277,6 +288,7 @@ pub async fn reset_password(
 
     // Find the user in the database by Teable ID to get their email
     let teable_user = match teable::get_member_by_id_with_projection(
+        &state.teable_config,
         &state.http_client,
         &reset_token_info.user_id,
         Some(&["Vorname", "Nachname", "Email"][..]), // Only fields needed for password reset

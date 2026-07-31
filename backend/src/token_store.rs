@@ -1,3 +1,5 @@
+//! In-memory password reset token storage with expiry management.
+
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -70,8 +72,9 @@ impl TokenStore {
         let mut tokens = self.tokens.write().await;
         let mut user_tokens = self.user_tokens.write().await;
 
-        if let Some(reset_token) = tokens.remove(token) {
-            user_tokens.remove(&reset_token.user_id);
+        let reset_token = tokens.remove(token)?;
+        user_tokens.remove(&reset_token.user_id);
+        if reset_token.expires_at > Utc::now() {
             Some(reset_token)
         } else {
             None

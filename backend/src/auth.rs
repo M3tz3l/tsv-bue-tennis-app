@@ -1,4 +1,5 @@
-use crate::config::Config;
+//! JWT authentication: token creation, verification, and selection tokens.
+
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
@@ -21,12 +22,10 @@ pub struct SelectionTokenClaims {
 }
 
 pub fn create_token(
+    secret: &str,
     user_id: &str,
     role: Option<&str>,
 ) -> Result<String, jsonwebtoken::errors::Error> {
-    let config = Config::from_env().map_err(|_| {
-        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat)
-    })?;
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -35,33 +34,30 @@ pub fn create_token(
     let claims = AuthClaims {
         sub: user_id.to_string(),
         role: role.map(|r| r.to_string()),
-        exp: now + 24 * 60 * 60, // 24 hours
+        exp: now + 24 * 60 * 60,
         iat: now,
     };
 
     encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(config.jwt_secret.as_ref()),
+        &EncodingKey::from_secret(secret.as_ref()),
     )
 }
 
-pub fn verify_token(token: &str) -> Result<AuthClaims, jsonwebtoken::errors::Error> {
-    let config = Config::from_env().map_err(|_| {
-        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat)
-    })?;
+pub fn verify_token(secret: &str, token: &str) -> Result<AuthClaims, jsonwebtoken::errors::Error> {
     decode::<AuthClaims>(
         token,
-        &DecodingKey::from_secret(config.jwt_secret.as_ref()),
+        &DecodingKey::from_secret(secret.as_ref()),
         &Validation::default(),
     )
     .map(|data| data.claims)
 }
 
-pub fn create_selection_token(email: &str) -> Result<String, jsonwebtoken::errors::Error> {
-    let config = Config::from_env().map_err(|_| {
-        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat)
-    })?;
+pub fn create_selection_token(
+    secret: &str,
+    email: &str,
+) -> Result<String, jsonwebtoken::errors::Error> {
     let expiration = Utc::now() + Duration::minutes(5);
     let claims = SelectionTokenClaims {
         sub: email.to_string(),
@@ -71,17 +67,17 @@ pub fn create_selection_token(email: &str) -> Result<String, jsonwebtoken::error
     encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(config.jwt_secret.as_ref()),
+        &EncodingKey::from_secret(secret.as_ref()),
     )
 }
 
-pub fn verify_selection_token(token: &str) -> Result<String, jsonwebtoken::errors::Error> {
-    let config = Config::from_env().map_err(|_| {
-        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat)
-    })?;
+pub fn verify_selection_token(
+    secret: &str,
+    token: &str,
+) -> Result<String, jsonwebtoken::errors::Error> {
     let token_data: jsonwebtoken::TokenData<SelectionTokenClaims> = decode::<SelectionTokenClaims>(
         token,
-        &DecodingKey::from_secret(config.jwt_secret.as_ref()),
+        &DecodingKey::from_secret(secret.as_ref()),
         &Validation::default(),
     )?;
     if token_data.claims.typ != "selection" {

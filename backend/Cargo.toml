@@ -33,6 +33,7 @@ sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite", "chr
 chrono-tz = "0.8"
 specta = { version = "1.0.5", features = ["chrono", "uuid", "export"] }
 specta-typescript = "0.0.7"
+mimalloc = "0.1"
 
 [dev-dependencies]
 axum-test = "15.0"
