@@ -198,6 +198,7 @@ impl Member {
 pub enum LinkedRecord {
     Object { id: String },
     Plain(String),
+    Many(Vec<LinkedRecord>),
 }
 
 impl LinkedRecord {
@@ -205,6 +206,7 @@ impl LinkedRecord {
         match self {
             LinkedRecord::Object { id } => id.as_str(),
             LinkedRecord::Plain(id) => id.as_str(),
+            LinkedRecord::Many(records) => records.first().map_or("", |r| r.as_id()),
         }
     }
 }

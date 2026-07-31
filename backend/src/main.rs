@@ -303,6 +303,8 @@ mod tests {
     use axum_test::TestServer;
     use tsv_tennis_backend::auth;
 
+    const TEST_JWT_SECRET: &str = "test_jwt_secret_key_for_testing_purposes_only_123456789";
+
     fn set_test_env(teable_url: &str) {
         std::env::set_var("EMAIL_USER", "test@example.com");
         std::env::set_var("EMAIL_PASSWORD", "dummy_password");
@@ -310,10 +312,7 @@ mod tests {
         std::env::set_var("EMAIL_PORT", "587");
         std::env::set_var("EMAIL_FROM", "test@example.com");
         std::env::set_var("EMAIL_DISABLE_SEND", "true");
-        std::env::set_var(
-            "JWT_SECRET",
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-        );
+        std::env::set_var("JWT_SECRET", TEST_JWT_SECRET);
         std::env::set_var("DATABASE_URL", "sqlite::memory:");
         std::env::set_var("FRONTEND_URL", "http://localhost:5173");
         std::env::set_var("TEABLE_API_URL", teable_url);
@@ -359,7 +358,7 @@ mod tests {
             mail_jobs: std::sync::Arc::new(tokio::sync::RwLock::new(
                 std::collections::HashMap::new(),
             )),
-            jwt_secret: "test_jwt_secret_key_for_testing_purposes_only_123456789".to_string(),
+            jwt_secret: TEST_JWT_SECRET.to_string(),
         };
 
         let cors = CorsLayer::new()
@@ -826,12 +825,8 @@ mod tests {
         let app = create_test_app_with_teable_url(&teable_server.url()).await;
         let server = TestServer::new(app).unwrap();
 
-        let token = auth::create_token(
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-            "orga_user_1",
-            Some("orga"),
-        )
-        .expect("Failed to create orga test token");
+        let token = auth::create_token(TEST_JWT_SECRET, "orga_user_1", Some("orga"))
+            .expect("Failed to create orga test token");
 
         // Mail endpoints now expect multipart/form-data
         let response = server
@@ -877,12 +872,8 @@ mod tests {
         let app = create_test_app_with_teable_url(&teable_server.url()).await;
         let server = TestServer::new(app).unwrap();
 
-        let token = auth::create_token(
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-            "member_user_1",
-            None,
-        )
-        .expect("Failed to create member token");
+        let token = auth::create_token(TEST_JWT_SECRET, "member_user_1", None)
+            .expect("Failed to create member token");
 
         // Mail endpoints now expect multipart/form-data
         let response = server
@@ -923,12 +914,8 @@ mod tests {
 
         // Create a valid JWT token for testing
         let test_user_id = "test_user_123";
-        let valid_token = auth::create_token(
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-            test_user_id,
-            None,
-        )
-        .expect("Failed to create test token");
+        let valid_token = auth::create_token(TEST_JWT_SECRET, test_user_id, None)
+            .expect("Failed to create test token");
 
         // Start mock Teable server
         let mut teable_server = Server::new_async().await;
@@ -980,12 +967,8 @@ mod tests {
 
         // Create a valid JWT token
         let test_user_id = "test_user_456";
-        let valid_token = auth::create_token(
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-            test_user_id,
-            None,
-        )
-        .expect("Failed to create test token");
+        let valid_token = auth::create_token(TEST_JWT_SECRET, test_user_id, None)
+            .expect("Failed to create test token");
 
         // Start mock Teable server
         let mut teable_server = Server::new_async().await;
@@ -1058,12 +1041,8 @@ mod tests {
 
         // Create a valid JWT token
         let test_user_id = "test_user_789";
-        let valid_token = auth::create_token(
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-            test_user_id,
-            None,
-        )
-        .expect("Failed to create test token");
+        let valid_token = auth::create_token(TEST_JWT_SECRET, test_user_id, None)
+            .expect("Failed to create test token");
 
         let work_hour_request = serde_json::json!({
             "date": "2025-01-15",
@@ -1096,12 +1075,8 @@ mod tests {
 
         // Create a valid JWT token
         let test_user_id = "dashboard_user_123";
-        let valid_token = auth::create_token(
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-            test_user_id,
-            None,
-        )
-        .expect("Failed to create test token");
+        let valid_token = auth::create_token(TEST_JWT_SECRET, test_user_id, None)
+            .expect("Failed to create test token");
 
         // Test dashboard endpoint with valid token
         let response = server
@@ -1377,12 +1352,8 @@ mod tests {
             .await;
 
         // Create a valid JWT token for the test user
-        let test_token = auth::create_token(
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-            "integration_user_123",
-            None,
-        )
-        .expect("Failed to create test token");
+        let test_token = auth::create_token(TEST_JWT_SECRET, "integration_user_123", None)
+            .expect("Failed to create test token");
 
         // Test protected endpoint with valid token - now actually using the mock!
         let response = server
@@ -1417,12 +1388,8 @@ mod tests {
         tracing::debug!("JWT_SECRET env var: {:?}", std::env::var("JWT_SECRET"));
 
         // Create a token
-        let token = auth::create_token(
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-            test_user_id,
-            None,
-        )
-        .expect("Failed to create token");
+        let token = auth::create_token(TEST_JWT_SECRET, test_user_id, None)
+            .expect("Failed to create token");
         assert!(!token.is_empty());
 
         // Validate the token (this would require access to auth module internals)
@@ -1442,11 +1409,8 @@ mod tests {
         let test_email = "multi@example.com";
 
         // Create a selection token
-        let selection_token = auth::create_selection_token(
-            "test_jwt_secret_key_for_testing_purposes_only_123456789",
-            test_email,
-        )
-        .expect("Failed to create selection token");
+        let selection_token = auth::create_selection_token(TEST_JWT_SECRET, test_email)
+            .expect("Failed to create selection token");
         assert!(!selection_token.is_empty());
 
         // Validate selection token format

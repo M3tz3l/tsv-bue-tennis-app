@@ -31,6 +31,19 @@ pub struct EmailAttachment {
     pub content_id: Option<String>, // For inline images
 }
 
+/// Options that tune how a bulk mail job is sent.
+pub struct BulkMailOptions {
+    pub subject: String,
+    pub message: String,
+    pub safe_message: String,
+    pub signature_html: String,
+    pub signature_text: String,
+    pub include_greeting: bool,
+    pub max_concurrency: usize,
+    pub batch_size: usize,
+    pub batch_delay: std::time::Duration,
+}
+
 pub struct EmailService {
     smtp_host: String,
     smtp_port: u16,
@@ -99,23 +112,26 @@ impl EmailService {
     /// Send bulk mail in batches with bounded concurrency per batch.
     /// Each batch uses a fresh SMTP transport to avoid server-side connection limits.
     /// Returns (sent_count, failed_count, failed_recipients).
-    #[allow(clippy::too_many_arguments)]
     pub async fn send_bulk_mail_concurrent(
         &self,
         recipients: &[(String, String)], // (email, first_name)
-        subject: &str,
-        message: &str,
-        safe_message: &str,
-        signature_html: &str,
-        signature_text: &str,
         attachments: &[EmailAttachment],
-        include_greeting: bool,
-        max_concurrency: usize,
-        batch_size: usize,
-        batch_delay: std::time::Duration,
+        options: BulkMailOptions,
         job_store: MailJobStore,
         job_id: String,
     ) -> (usize, usize, Vec<String>) {
+        let BulkMailOptions {
+            subject,
+            message,
+            safe_message,
+            signature_html,
+            signature_text,
+            include_greeting,
+            max_concurrency,
+            batch_size,
+            batch_delay,
+        } = options;
+
         if self.disable_send {
             info!(
                 "EMAIL_DISABLE_SEND=true - skipping bulk send to {} recipients",
@@ -125,11 +141,6 @@ impl EmailService {
         }
 
         let from_address = format!("TSV BÜ Tennis App <{}>", self.from_email);
-        let subject = subject.to_string();
-        let message = message.to_string();
-        let safe_message = safe_message.to_string();
-        let signature_html = signature_html.to_string();
-        let signature_text = signature_text.to_string();
         let attachments: Vec<_> = attachments
             .iter()
             .map(|a| EmailAttachment {

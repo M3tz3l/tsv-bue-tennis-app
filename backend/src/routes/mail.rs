@@ -339,19 +339,22 @@ pub async fn send_bulk_mail(
         let job_store_inner = job_store.clone();
         let jid_inner = jid.clone();
         let send_handle = tokio::spawn(async move {
+            let options = email::BulkMailOptions {
+                subject,
+                message,
+                safe_message,
+                signature_html,
+                signature_text,
+                include_greeting,
+                max_concurrency: BULK_MAIL_CONCURRENCY,
+                batch_size: BULK_MAIL_BATCH_SIZE,
+                batch_delay: std::time::Duration::from_secs(BULK_MAIL_BATCH_DELAY_SECS),
+            };
             email_service
                 .send_bulk_mail_concurrent(
                     &recipient_data,
-                    &subject,
-                    &message,
-                    &safe_message,
-                    &signature_html,
-                    &signature_text,
                     &attachments,
-                    include_greeting,
-                    BULK_MAIL_CONCURRENCY,
-                    BULK_MAIL_BATCH_SIZE,
-                    std::time::Duration::from_secs(BULK_MAIL_BATCH_DELAY_SECS),
+                    options,
                     job_store_inner,
                     jid_inner,
                 )

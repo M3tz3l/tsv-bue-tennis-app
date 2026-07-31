@@ -39,6 +39,16 @@ fn extract_role(fields: &Value) -> Option<String> {
     fields["Rolle"].as_str().map(|s| s.to_string())
 }
 
+fn parse_member_id(value: Value) -> Option<crate::models::LinkedRecord> {
+    match serde_json::from_value(value) {
+        Ok(linked) => Some(linked),
+        Err(e) => {
+            warn!("Teable: Failed to parse linked 'Mitglied_id' field: {}", e);
+            None
+        }
+    }
+}
+
 fn member_from_record(record: &Value) -> Member {
     let fields = &record["fields"];
     Member {
@@ -123,6 +133,7 @@ pub async fn work_hour_exists_for_member_at_date(
         .header("Authorization", format!("Bearer {}", config.token))
         .header("Accept", "application/json")
         .query(&[("filter", &filter.to_string())])
+        .query(&[("take", "1")])
         .send()
         .await?;
     let response_text = handle_teable_response(response, "work_hours_for_date").await?;
@@ -390,7 +401,7 @@ pub async fn get_work_hour_by_id(
 
     let work_hour = WorkHour {
         id: record["id"].as_str().unwrap_or("").to_string(),
-        member_id: serde_json::from_value(fields["Mitglied_id"].clone()).unwrap_or(None),
+        member_id: parse_member_id(fields["Mitglied_id"].clone()),
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
         created_on: fields["Created on"].as_str().map(|s| s.to_string()),
@@ -487,7 +498,7 @@ pub async fn get_work_hours_for_member_by_year(
 
         let work_hour = WorkHour {
             id: record["id"].as_str().unwrap_or("").to_string(),
-            member_id: serde_json::from_value(member_id_value).unwrap_or(None), // Store the linked record field
+            member_id: parse_member_id(member_id_value), // Store the linked record field
             last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
             first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
             created_on: fields["Created on"].as_str().map(|s| s.to_string()),
@@ -572,7 +583,7 @@ pub async fn create_work_hour(
 
     Ok(WorkHour {
         id: record["id"].as_str().unwrap_or("").to_string(),
-        member_id: serde_json::from_value(fields["Mitglied_id"].clone()).unwrap_or(None),
+        member_id: parse_member_id(fields["Mitglied_id"].clone()),
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
         created_on: None,
@@ -660,7 +671,7 @@ pub async fn update_work_hour(
 
     Ok(WorkHour {
         id: record_id,
-        member_id: serde_json::from_value(fields["Mitglied_id"].clone()).unwrap_or(None),
+        member_id: parse_member_id(fields["Mitglied_id"].clone()),
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
         created_on: None,

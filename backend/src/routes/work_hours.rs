@@ -71,27 +71,37 @@ pub fn routes() -> Router<AppState> {
         .route("/:id", delete(delete_work_hour))
 }
 
+enum OwnershipError {
+    /// Upstream Teable request failed (network/HTTP error).
+    Upstream,
+    /// Work hour entry was not found or is not owned by the user.
+    Denied,
+}
+
+fn denied_response(verb: &str) -> axum::Json<serde_json::Value> {
+    axum::Json(serde_json::json!({
+        "success": false,
+        "message": format!("Work hour entry not found or you don't have permission to {} it", verb)
+    }))
+}
+
 async fn verify_work_hour_ownership(
     state: &AppState,
     work_hour_id: &str,
     user_id: &str,
     verb: &str,
-) -> Result<crate::models::WorkHour, axum::Json<serde_json::Value>> {
-    let existing = teable::get_work_hour_by_id(&state.teable_config, &state.http_client, work_hour_id)
-        .await
-        .map_err(|e| {
-            error!("{verb} Work Hour: Failed to get work hour by id: {}", e);
-            axum::Json(serde_json::json!({
-                "success": false,
-                "message": format!("Work hour entry not found or you don't have permission to {} it", verb)
-            }))
-        })?;
+) -> Result<crate::models::WorkHour, OwnershipError> {
+    let existing =
+        teable::get_work_hour_by_id(&state.teable_config, &state.http_client, work_hour_id)
+            .await
+            .map_err(|e| {
+                error!("{verb} Work Hour: Failed to get work hour by id: {}", e);
+                OwnershipError::Upstream
+            })?;
 
     let wh = existing.ok_or_else(|| {
-        axum::Json(serde_json::json!({
-            "success": false,
-            "message": format!("Work hour entry not found or you don't have permission to {} it", verb)
-        }))
+        error!("{verb} Work Hour: work hour {} not found", work_hour_id);
+        OwnershipError::Denied
     })?;
 
     let owned = wh
@@ -103,10 +113,7 @@ async fn verify_work_hour_ownership(
             "{verb} Work Hour: {} not owned by user {}",
             work_hour_id, user_id
         );
-        return Err(axum::Json(serde_json::json!({
-            "success": false,
-            "message": format!("Work hour entry not found or you don't have permission to {} it", verb)
-        })));
+        return Err(OwnershipError::Denied);
     }
 
     Ok(wh)
@@ -124,6 +131,12 @@ pub async fn get_work_hour_by_id(
         work_hour_id, user_id
     );
 
+    let wh = match verify_work_hour_ownership(&state, &work_hour_id, &user_id, "access").await {
+        Ok(wh) => wh,
+        Err(OwnershipError::Upstream) => return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+        Err(OwnershipError::Denied) => return Ok(denied_response("access")),
+    };
+
     let current_user = teable::get_member_by_id(&state.teable_config, &state.http_client, &user_id)
         .await
         .map_err(|e| {
@@ -134,11 +147,6 @@ pub async fn get_work_hour_by_id(
             error!("Get Work Hour: User not found with ID: {}", user_id);
             axum::http::StatusCode::NOT_FOUND
         })?;
-
-    let wh = match verify_work_hour_ownership(&state, &work_hour_id, &user_id, "access").await {
-        Ok(wh) => wh,
-        Err(json) => return Ok(json),
-    };
 
     match (&wh.date, &wh.description, &wh.duration_hours) {
         (Some(date), Some(description), Some(hours)) => {
@@ -373,6 +381,12 @@ pub async fn update_work_hour(
         return Ok(json_err);
     }
 
+    let _wh = match verify_work_hour_ownership(&state, &work_hour_id, &user_id, "edit").await {
+        Ok(wh) => wh,
+        Err(OwnershipError::Upstream) => return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+        Err(OwnershipError::Denied) => return Ok(denied_response("edit")),
+    };
+
     // Use get_member_by_id for efficiency
     let current_user = teable::get_member_by_id_with_projection(
         &state.teable_config,
@@ -391,11 +405,6 @@ pub async fn update_work_hour(
     })?;
 
     debug!("Update Work Hour: Found user: {}", current_user.name());
-
-    let _wh = match verify_work_hour_ownership(&state, &work_hour_id, &user_id, "edit").await {
-        Ok(wh) => wh,
-        Err(json) => return Ok(json),
-    };
 
     debug!("Update Work Hour: Using {} hours directly", payload.hours);
 
@@ -446,8 +455,11 @@ pub async fn delete_work_hour(
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
     let user_id = extract_user_id_from_headers(&state.jwt_secret, &headers)?;
 
-    if let Err(json) = verify_work_hour_ownership(&state, &id, &user_id, "delete").await {
-        return Ok(json);
+    if let Err(err) = verify_work_hour_ownership(&state, &id, &user_id, "delete").await {
+        return match err {
+            OwnershipError::Upstream => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+            OwnershipError::Denied => Ok(denied_response("delete")),
+        };
     }
 
     match teable::delete_work_hour(&state.teable_config, &state.http_client, &id).await {
