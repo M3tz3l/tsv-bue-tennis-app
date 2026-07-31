@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import path from 'path'
@@ -23,6 +24,11 @@ export default defineConfig({
       '@/services': path.resolve(__dirname, './src/services'),
       '@/components': path.resolve(__dirname, './src/components')
     }
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    css: false,
   },
   // GitHub Pages configuration
   base: '/',

@@ -37,10 +37,12 @@ jobs:
           name: generated-types
           path: backend/bindings/types.ts
 
-  frontend-lint-typecheck:
-    name: Frontend — ESLint and TypeScript typecheck
+  frontend-checks:
+    name: Frontend — ESLint, typecheck and unit tests
     runs-on: ubuntu-latest
     needs: test
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
       - name: Download generated frontend types
@@ -61,3 +63,6 @@ jobs:
       - name: Run TypeScript typecheck
         working-directory: tsv-tennis-app
         run: npx tsc --noEmit
+      - name: Run unit tests
+        working-directory: tsv-tennis-app
+        run: npm test
