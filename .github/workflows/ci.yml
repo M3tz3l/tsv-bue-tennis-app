@@ -32,7 +32,7 @@ jobs:
         working-directory: backend
         run: cargo run --bin generate-types
       - name: Upload generated frontend types
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: generated-types
           path: backend/bindings/types.ts
