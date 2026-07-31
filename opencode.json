@@ -16,6 +16,18 @@
     "playwright": {
       "type": "local",
       "command": ["npx", "-y", "@playwright/mcp@latest"]
+    },
+    "sqlite": {
+      "type": "local",
+      "command": ["npx", "-y", "mcp-server-sqlite", "--db", "backend/tennis_app.db"]
+    },
+    "teable": {
+      "type": "local",
+      "command": ["npx", "-y", "teable-mcp"],
+      "env": {
+        "TEABLE_API_KEY": "{env:TEABLE_TOKEN}",
+        "TEABLE_BASE_URL": "{env:TEABLE_API_URL}"
+      }
     }
   }
 }
