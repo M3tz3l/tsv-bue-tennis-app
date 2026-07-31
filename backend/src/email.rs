@@ -132,6 +132,21 @@ impl EmailService {
             batch_delay,
         } = options;
 
+        // A zero batch_size makes `chunks(0)` panic and a zero max_concurrency
+        // leaves semaphore acquisition waiting indefinitely, so reject invalid
+        // options before entering the send loop.
+        if batch_size == 0 || max_concurrency == 0 {
+            error!(
+                "Invalid bulk mail options: batch_size={}, max_concurrency={}",
+                batch_size, max_concurrency
+            );
+            return (
+                0,
+                recipients.len(),
+                recipients.iter().map(|(e, _)| e.clone()).collect(),
+            );
+        }
+
         if self.disable_send {
             info!(
                 "EMAIL_DISABLE_SEND=true - skipping bulk send to {} recipients",
