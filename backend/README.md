@@ -55,7 +55,7 @@ Copy `.env.example` to `.env` and configure:
 
 ```env
 # Database Configuration
-DATABASE_URL=mysql://username:password@localhost:3306/database_name
+DATABASE_URL=sqlite://e2e_test.db
 
 # Teable Configuration  
 TEABLE_TOKEN=your-teable-token-here
@@ -72,16 +72,12 @@ FRONTEND_URL=http://localhost:3000
 
 ### Database Setup
 
-The application requires a MySQL database for secure password storage:
+The application uses a SQLite database for secure password storage:
 
-```sql
--- Create database
-CREATE DATABASE tsv_tennis;
-
--- Tables are created automatically on first run
--- - details: User authentication (email, hashed password)
--- - reset_tokens: Password reset tokens
-```
+- No setup required — the DB file is created automatically at the path in `DATABASE_URL` on first run
+- Tables are created automatically on first run
+  - `details`: User authentication (email, hashed password)
+  - `reset_tokens`: Password reset tokens
 
 ### Email Setup (Gmail)
 
