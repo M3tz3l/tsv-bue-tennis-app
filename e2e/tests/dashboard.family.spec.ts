@@ -11,18 +11,27 @@ const today = toLocalDateInput(new Date());
 const currentYear = new Date().getFullYear();
 
 test.describe('Dashboard Family View', () => {
-  let activeUserEmail: string | undefined;
+  const emailsToCleanUp = new Set<string>();
 
   async function startAs(page: Page, index: number) {
     const user = getTestUser(index);
-    activeUserEmail = user.email;
+    const partner = getTestUser(index + 1);
+    expect(partner.familyId).toBe(user.familyId);
+
+    // Clear work hours for both family members so progress totals are
+    // deterministic regardless of leftover state from previous runs.
+    emailsToCleanUp.add(user.email);
+    emailsToCleanUp.add(partner.email);
     await deleteAllWorkHoursFor(user.email);
+    await deleteAllWorkHoursFor(partner.email);
     return user;
   }
 
   test.afterEach(async () => {
-    if (activeUserEmail) await deleteAllWorkHoursFor(activeUserEmail);
-    activeUserEmail = undefined;
+    for (const email of emailsToCleanUp) {
+      await deleteAllWorkHoursFor(email);
+    }
+    emailsToCleanUp.clear();
   });
 
   test('shows family progress and all family members', async ({ page }) => {
