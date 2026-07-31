@@ -62,24 +62,29 @@ test.describe('Dashboard Navigation', () => {
 
     await deleteAllWorkHoursFor(user!.email);
     const description = `E2E Jahr ${Date.now()}`;
-    await createWorkHourViaApi(user!.email, today, description, 2.0);
+    try {
+      await createWorkHourViaApi(user!.email, today, description, 2.0);
 
-    // Dashboard loads after seeding so the current-year entry is visible
-    await loginViaBrowser(page, user!.email, getFixtures().password);
-    await expect(page.locator('table').getByText(description)).toBeVisible({ timeout: 10_000 });
+      // Dashboard loads after seeding so the current-year entry is visible
+      await loginViaBrowser(page, user!.email, getFixtures().password);
+      await expect(page.locator('table').getByText(description)).toBeVisible({ timeout: 10_000 });
 
-    const yearSelect = page.locator('select');
-    await expect(yearSelect).toBeVisible({ timeout: 10_000 });
+      const yearSelect = page.locator('select');
+      await expect(yearSelect).toBeVisible({ timeout: 10_000 });
 
-    // Previous year has no entries
-    await yearSelect.selectOption(String(previousYear));
-    await expect(
-      page.locator(`text=Keine Arbeitsstunden für ${previousYear} gefunden`),
-    ).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('table').getByText(description)).not.toBeVisible();
+      // Previous year has no entries
+      await yearSelect.selectOption(String(previousYear));
+      await expect(
+        page.locator(`text=Keine Arbeitsstunden für ${previousYear} gefunden`),
+      ).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator('table').getByText(description)).not.toBeVisible();
 
-    // Switch back to the current year: the entry reappears
-    await yearSelect.selectOption(String(currentYear));
-    await expect(page.locator('table').getByText(description)).toBeVisible({ timeout: 10_000 });
+      // Switch back to the current year: the entry reappears
+      await yearSelect.selectOption(String(currentYear));
+      await expect(page.locator('table').getByText(description)).toBeVisible({ timeout: 10_000 });
+    } finally {
+      // Clean up the seeded entry even if an assertion fails
+      await deleteAllWorkHoursFor(user!.email);
+    }
   });
 });
