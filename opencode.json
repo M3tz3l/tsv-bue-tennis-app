@@ -19,12 +19,12 @@
     },
     "sqlite": {
       "type": "local",
-      "command": ["npx", "-y", "mcp-server-sqlite", "--db", "backend/tennis_app.db"]
+      "command": ["npx", "-y", "mcp-server-sqlite", "--db", "backend/e2e_test.db"]
     },
     "teable": {
       "type": "local",
       "command": ["npx", "-y", "teable-mcp"],
-      "env": {
+      "environment": {
         "TEABLE_API_KEY": "{env:TEABLE_TOKEN}",
         "TEABLE_BASE_URL": "{env:TEABLE_API_URL}"
       }
