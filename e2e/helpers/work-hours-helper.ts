@@ -37,7 +37,11 @@ export async function getWorkHoursToken(email: string): Promise<string> {
     throw new Error(`Login failed for ${email}: ${res.status} ${await res.text()}`);
   }
   const data = await res.json();
-  return data.token;
+  const token = data?.token;
+  if (typeof token !== 'string' || token.length === 0) {
+    throw new Error(`Login returned no token for ${email}`);
+  }
+  return token;
 }
 
 export async function createWorkHourViaApi(
