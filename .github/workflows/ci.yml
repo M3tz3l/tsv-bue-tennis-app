@@ -78,29 +78,3 @@ jobs:
         uses: docker://rhysd/actionlint:latest
         with:
           args: -color
-
-  all-checks:
-    name: All checks passed
-    if: always()
-    needs:
-      - test
-      - frontend-checks
-      - workflow-lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Verify required checks
-        env:
-          BACKEND_RESULT: ${{ needs.test.result }}
-          FRONTEND_RESULT: ${{ needs.frontend-checks.result }}
-          WORKFLOW_RESULT: ${{ needs.workflow-lint.result }}
-        run: |
-          if [ "$BACKEND_RESULT" != "success" ] || \
-             [ "$FRONTEND_RESULT" != "success" ] || \
-             [ "$WORKFLOW_RESULT" != "success" ]; then
-            echo "Required checks did not all pass:"
-            echo "  backend: $BACKEND_RESULT"
-            echo "  frontend: $FRONTEND_RESULT"
-            echo "  workflows: $WORKFLOW_RESULT"
-            exit 1
-          fi
-          echo "All required checks passed."
