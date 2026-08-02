@@ -49,3 +49,15 @@
 ### Remaining Concern
 
 - Event IDs remain exported as TypeScript `number`; retained from the original Task 2 concern because no project requirement mandates changing the existing `i64` API model.
+
+## Transaction Error-Path Fix
+
+- `create_signup` now explicitly attempts `ROLLBACK` before returning event-fetch errors and commit errors.
+- `update_signup` now explicitly attempts `ROLLBACK` before returning commit errors; its fetch, update, and lookup error paths also preserve the original error after rollback attempts.
+
+### Exact Verification
+
+- `cargo test --test events_routes -- --nocapture --test-threads=1`: passed, 7 tests.
+- `cargo test --workspace --all-targets -- --nocapture --test-threads=1`: passed, 54 tests (39 main, 8 repository, 7 route).
+- `cargo fmt --all -- --check`: passed.
+- `git diff --check`: passed.
