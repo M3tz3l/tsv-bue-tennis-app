@@ -36,7 +36,6 @@
 				"rust-lang.rust-analyzer",
 				"tamasfe.even-better-toml",
 				"serayuzgur.crates",
-				"dbaeumer.vscode-eslint",
 				"esbenp.prettier-vscode",
 				"bradlc.vscode-tailwindcss",
 				"saoudrizwan.claude-dev"

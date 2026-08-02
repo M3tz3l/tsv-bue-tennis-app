@@ -18,8 +18,10 @@ const ResetPassword = () => {
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const data = new FormData(e.currentTarget);
-        const newpassword = String(data.get("newpassword") ?? "");
-        const confirmpassword = String(data.get("confirmpassword") ?? "");
+        const newPasswordValue = data.get("newpassword");
+        const confirmPasswordValue = data.get("confirmpassword");
+        const newpassword = typeof newPasswordValue === 'string' ? newPasswordValue : '';
+        const confirmpassword = typeof confirmPasswordValue === 'string' ? confirmPasswordValue : '';
         if (newpassword !== confirmpassword) {
             toast.error(`Neues Passwort und Passwort bestätigen stimmen nicht überein!`, {
                 autoClose: 5000,
@@ -38,7 +40,7 @@ const ResetPassword = () => {
                     position: "top-right",
                 });
                 setTimeout(() => {
-                    navigate("/login");
+                    void navigate("/login");
                 }, 2000);
             }
         }

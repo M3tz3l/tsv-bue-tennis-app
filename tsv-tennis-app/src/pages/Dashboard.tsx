@@ -84,7 +84,7 @@ const Dashboard = () => {
                 toast.success(editingRow ? 'Eintrag erfolgreich aktualisiert' : 'Eintrag erfolgreich erstellt');
                 if (editingRow) setEditingRow(null);
                 else setShowAddForm(false);
-                queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
+                void queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
             } else {
                 const backendMsg = response.message;
                 toast.error(backendMsg || (editingRow ? 'Fehler beim Aktualisieren' : 'Fehler beim Erstellen'));
@@ -249,10 +249,10 @@ const Dashboard = () => {
                                             <td key={fieldKey} className="px-3 lg:px-6 py-4 text-sm text-gray-900">
                                                 <div className="max-w-xs break-words" title={fieldKey === 'Stunden' ?
                                                     formatHours(value) :
-                                                    String(value ?? '-')}>
+                                                    typeof value === 'string' || typeof value === 'number' ? String(value) : '-'}>
                                                     {fieldKey === 'Stunden' ?
                                                         formatHours(value) :
-                                                        String(value ?? '-')
+                                                        typeof value === 'string' || typeof value === 'number' ? String(value) : '-'
                                                     }
                                                 </div>
                                             </td>

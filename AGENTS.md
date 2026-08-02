@@ -45,7 +45,7 @@ E2E tests require backend compiled in release mode: `cargo build --release` befo
 2. `cargo build --workspace --all-targets` (backend)
 3. `cargo test` (backend, serial)
 4. `cargo run --bin generate-types` (upload artifact)
-5. Frontend: `npm ci` → `npm run lint` → `npx tsc --noEmit`
+5. Frontend: `npm ci` → `npm run lint` (Oxlint) → `npx tsc --noEmit`
 
 ## Architecture Notes
 - Backend: SQLite for passwords, Teable API for profiles/work hours

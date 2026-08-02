@@ -1,0 +1,10 @@
+{
+  "plugins": ["react", "typescript"],
+  "options": {
+    "typeAware": true
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn"
+  }
+}

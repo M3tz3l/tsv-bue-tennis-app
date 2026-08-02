@@ -33,7 +33,7 @@ const Login = () => {
         if (typeof window !== 'undefined' && 'matchMedia' in window) {
             try {
                 setHoverEnabled(window.matchMedia('(hover: hover)').matches);
-            } catch (e) {
+            } catch {
                 setHoverEnabled(false);
             }
         }
@@ -61,12 +61,12 @@ const Login = () => {
                 } else {
                     // Single user login successful
                     toast.success("Anmeldung erfolgreich! Willkommen zurück.");
-                    navigate("/dashboard");
+                    void navigate("/dashboard");
                 }
             } else {
                 toast.error(result.message || "Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.");
             }
-        } catch (error) {
+        } catch {
             toast.error("Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.");
         } finally {
             if (!showMemberSelection) {
@@ -78,7 +78,7 @@ const Login = () => {
     const handleMemberSelectionComplete = () => {
         setShowMemberSelection(false);
         toast.success("Anmeldung erfolgreich! Willkommen zurück.");
-        navigate("/dashboard");
+        void navigate("/dashboard");
     };
 
     const handleMemberSelectionCancel = () => {

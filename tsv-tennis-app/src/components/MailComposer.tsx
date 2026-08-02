@@ -60,7 +60,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       }
     };
 
-    fetchCounts();
+    void fetchCounts();
   }, []);
 
   // Clean up polling and reset timeout on unmount
@@ -242,8 +242,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           return;
         }
         toast.info(`Mail-Versand gestartet für ${total} Empfänger...`);
-        pollingRef.current = setInterval(() => pollJobStatus(jobId), 1500);
-        pollJobStatus(jobId);
+        pollingRef.current = setInterval(() => void pollJobStatus(jobId), 1500);
+        void pollJobStatus(jobId);
       } else {
         toast.error(response.message || 'Fehler beim Versenden der Mail');
         setIsLoading(false);

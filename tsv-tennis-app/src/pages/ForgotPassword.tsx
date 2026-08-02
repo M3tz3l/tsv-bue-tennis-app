@@ -9,7 +9,8 @@ const ForgotPassword = () => {
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const data = new FormData(e.currentTarget);
-        const email = String(data.get("email") ?? "");
+        const emailValue = data.get("email");
+        const email = typeof emailValue === 'string' ? emailValue : '';
         const res = await backendService.forgotPassword(email);
         if (res.success === false) {
             toast.error(res.message, {

@@ -51,7 +51,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     useEffect(() => {
         if (token) {
             // Verify token and get user data
-            verifyToken();
+            void verifyToken();
         } else {
             setLoading(false);
         }
