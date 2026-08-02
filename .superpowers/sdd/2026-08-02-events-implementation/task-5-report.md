@@ -31,3 +31,9 @@ Implemented Orga event management UI without changing navigation.
 - Client validation: form submission rejects end-before-start, deadline-after-event-date, and non-positive/non-integer capacity before mutation. Backend validation remains authoritative.
 - Mutation safety: tests cover create/update errors, pending controls, outer-dialog dismissal prevention, signup quantities, and query invalidation. Existing member and Orga event/detail prop coverage remains green.
 - Verification: `cargo fmt --all -- --check`; full backend workspace tests passed (39 unit/integration, 9 repository, 8 route tests). Frontend focused tests passed (20 tests in 4 files); `npx tsc --noEmit` passed. `npm run lint` passed with five pre-existing warnings in `AuthContext.tsx` and `useDashboard.test.tsx`.
+
+## Final Review Fix Evidence
+
+- Fixed `backend/src/routes/events.rs` so each Teable member-name lookup is best-effort. Lookup errors are logged and converted to `member_name: None`; the signup row and repository-provided aggregates are preserved, and the route no longer returns 502 for an individual lookup failure.
+- Added `signup_listing_preserves_rows_when_a_member_lookup_fails` with one successful and one failing Teable lookup. It proves HTTP 200, both signup rows, `total_people: 2`, the resolved successful name, and `member_name: null` for the failed lookup.
+- Verification: focused backend `events` and `events_routes` tests passed (18 total); full `cargo test --workspace --all-targets -- --nocapture --test-threads=1` passed (39 unit/integration, 9 repository, 9 route tests); frontend focused tests passed (20 tests in 4 files); `npx tsc --noEmit` passed.

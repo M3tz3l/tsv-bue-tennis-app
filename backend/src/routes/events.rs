@@ -301,7 +301,10 @@ pub async fn list_signups(
         signup.member_name =
             teable::get_member_by_id(&state.teable_config, &state.http_client, &signup.member_id)
                 .await
-                .map_err(|_| StatusCode::BAD_GATEWAY)?
+                .unwrap_or_else(|error| {
+                    tracing::warn!(member_id = %signup.member_id, %error, "Could not resolve signup member name");
+                    None
+                })
                 .map(|member| member.name());
 >>>>>>> 51c04a2 (fix: address Orga event review findings)
     }
