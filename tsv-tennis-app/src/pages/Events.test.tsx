@@ -67,11 +67,29 @@ describe('Events', () => {
     expect(screen.getByRole('dialog')).toHaveTextContent('Signup modal for 1');
   });
 
+  it('shows the own signup status on the card before it is opened', () => {
+    render(<Events />);
+
+    expect(screen.getByText(/Ihre Anmeldung: 2 Personen/)).toBeInTheDocument();
+    expect(mocks.useEvent).toHaveBeenCalledWith('member-1', 1);
+  });
+
   it('keeps full events visible but does not offer an action', () => {
     mocks.useEvents.mockReturnValue({ data: [event({ capacity: 3, signup_people_count: 3 })], isLoading: false, error: null });
+    mocks.useEvent.mockReturnValue({ data: { event: event({ capacity: 3, signup_people_count: 3 }), own_signup: null }, isLoading: false, error: null });
     render(<Events />);
 
     expect(screen.getByText(/Ausgebucht/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Anmelden/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps edit and cancel available for an own signup on a full event', async () => {
+    const user = userEvent.setup();
+    mocks.useEvents.mockReturnValue({ data: [event({ capacity: 3, signup_people_count: 3 })], isLoading: false, error: null });
+    mocks.useEvent.mockReturnValue({ data: { event: event({ capacity: 3, signup_people_count: 3 }), own_signup: { people_count: 1 } }, isLoading: false, error: null });
+    render(<Events />);
+
+    await user.click(screen.getByRole('button', { name: /Anmeldung bearbeiten/i }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Signup modal for 1');
   });
 });

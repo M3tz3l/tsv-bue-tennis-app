@@ -10,14 +10,15 @@ const mocks = vi.hoisted(() => ({
   remove: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
+  pending: false,
 }));
 
 vi.mock('../context/AuthContext', () => ({ useAuth: mocks.useAuth }));
 vi.mock('../hooks/useEvents', () => ({
   useEvent: mocks.useEvent,
-  useCreateEventSignup: () => ({ mutateAsync: mocks.create, isPending: false }),
-  useUpdateEventSignup: () => ({ mutateAsync: mocks.update, isPending: false }),
-  useDeleteEventSignup: () => ({ mutateAsync: mocks.remove, isPending: false }),
+  useCreateEventSignup: () => ({ mutateAsync: mocks.create, isPending: mocks.pending }),
+  useUpdateEventSignup: () => ({ mutateAsync: mocks.update, isPending: mocks.pending }),
+  useDeleteEventSignup: () => ({ mutateAsync: mocks.remove, isPending: mocks.pending }),
 }));
 vi.mock('react-toastify', () => ({ toast: { success: mocks.toastSuccess, error: mocks.toastError } }));
 
@@ -37,6 +38,7 @@ const detail = (overrides: Record<string, unknown> = {}) => ({
 describe('EventSignupModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.pending = false;
     mocks.useAuth.mockReturnValue({ user: { id: 'member-1' } });
     mocks.useEvent.mockReturnValue({ data: detail(), isLoading: false, error: null });
     mocks.create.mockResolvedValue({});
@@ -64,6 +66,17 @@ describe('EventSignupModal', () => {
     expect(mocks.toastError).toHaveBeenCalledWith(expect.stringMatching(/mindestens 1/i));
   });
 
+  it('rejects negative contribution quantities', async () => {
+    const user = userEvent.setup();
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+    await user.clear(screen.getByLabelText(/Salat/i));
+    await user.type(screen.getByLabelText(/Salat/i), '-1');
+    await user.click(screen.getByRole('button', { name: /Anmelden/i }));
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringMatching(/nicht negativ/i));
+  });
+
   it('creates a signup with the form values', async () => {
     const user = userEvent.setup();
     render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
@@ -85,5 +98,28 @@ describe('EventSignupModal', () => {
     expect(mocks.update).toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: /Abmelden/i }));
     expect(mocks.remove).toHaveBeenCalledWith(1);
+  });
+
+  it('keeps all close controls disabled while a mutation is pending', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    mocks.pending = true;
+    render(<EventSignupModal eventId={1} isOpen onClose={onClose} />);
+
+    expect(screen.getByRole('button', { name: /Abbrechen/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Schließen/i })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: /Abbrechen/i }));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('shows API errors through a toast and keeps the modal open', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    mocks.create.mockRejectedValue(new Error('Serverfehler'));
+    render(<EventSignupModal eventId={1} isOpen onClose={onClose} />);
+    await user.click(screen.getByRole('button', { name: /Anmelden/i }));
+
+    expect(mocks.toastError).toHaveBeenCalledWith('Serverfehler');
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
