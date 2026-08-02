@@ -36,3 +36,26 @@ The initial focused run failed because the new routes and dashboard links were n
 ## Commit
 
 Implementation commit: `9d378fb feat: integrate events into dashboard navigation`.
+
+## Review Fixes
+
+- Extracted shared `DashboardNavigation` and rendered it on both `Dashboard` and `Events`.
+- Added active-tab coverage for work hours and events routes.
+- Added narrow-layout assumptions coverage: navigation uses `flex-wrap` and both links remain present with direct route targets.
+- Added unauthenticated direct `/dashboard/veranstaltungen` protection coverage.
+- Preserved `/dashboard` and existing work-hours content.
+
+## Review-Fix Verification Evidence
+
+- Command: `npm test -- --run src/pages/Events.test.tsx src/pages/Dashboard.test.tsx src/App.test.tsx`
+  Result: PASS, 3 test files and 14 tests.
+- Command: `npm test`
+  Result: PASS, 9 test files and 60 tests.
+- Command: `npm run lint`
+  Result: PASS with 5 warnings, all pre-existing in `src/context/AuthContext.tsx` and `src/hooks/useDashboard.test.tsx`.
+- Command: `npx tsc --noEmit`
+  Result: PASS with no output.
+- Command: `git diff --check`
+  Result: PASS with no output.
+
+Review-fix commit: `0db430d fix: complete dashboard navigation review findings`.
