@@ -302,6 +302,13 @@ describe('BackendService', () => {
       expect(mockInstance.get).toHaveBeenCalledWith('/events/42/signups');
     });
 
+    it('normalizes event and signup delete 204 responses to success results', async () => {
+      mockInstance.delete.mockResolvedValue({ status: 204, data: undefined });
+
+      await expect(BackendService.deleteEvent(42)).resolves.toEqual({ success: true });
+      await expect(BackendService.deleteEventSignup(42)).resolves.toEqual({ success: true });
+    });
+
     it('returns German fallback messages for event request failures', async () => {
       mockInstance.get.mockRejectedValue({ response: {} });
 

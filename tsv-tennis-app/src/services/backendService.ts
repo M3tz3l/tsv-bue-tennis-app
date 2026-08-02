@@ -398,7 +398,7 @@ class BackendService {
   async deleteEvent(id: number): Promise<ApiResult | ApiError> {
     try {
       const response = await this.api.delete<ApiResult>(`/events/${id}`);
-      return response.data;
+      return response.data ?? { success: true };
     } catch (error: unknown) {
       logApiError('Error deleting event:', error);
       return { success: false, message: getApiErrorMessage(error, 'Veranstaltung konnte nicht gelöscht werden') };
@@ -428,7 +428,7 @@ class BackendService {
   async deleteEventSignup(id: number): Promise<ApiResult | ApiError> {
     try {
       const response = await this.api.delete<ApiResult>(`/events/${id}/signup`);
-      return response.data;
+      return response.data ?? { success: true };
     } catch (error: unknown) {
       logApiError('Error deleting event signup:', error);
       return { success: false, message: getApiErrorMessage(error, 'Anmeldung konnte nicht gelöscht werden') };
