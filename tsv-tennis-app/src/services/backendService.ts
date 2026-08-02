@@ -8,6 +8,13 @@ import type {
   SendBulkMailRequest,
   MailJob,
   UserResponse,
+  CreateEventRequest,
+  UpdateEventRequest,
+  SignupRequest,
+  EventSummary,
+  EventDetail,
+  EventSignup,
+  SignupSummary,
 } from '@/types';
 
 // Generic API result type with optional data payload
@@ -345,6 +352,96 @@ class BackendService {
         success: false,
         message: getApiErrorMessage(error, 'Job-Status konnte nicht abgerufen werden')
       };
+    }
+  }
+
+  async getEvents(): Promise<EventSummary[] | ApiError> {
+    try {
+      const response = await this.api.get<EventSummary[]>('/events');
+      return response.data;
+    } catch (error: unknown) {
+      logApiError('Error fetching events:', error);
+      return { success: false, message: getApiErrorMessage(error, 'Veranstaltungen konnten nicht geladen werden') };
+    }
+  }
+
+  async getEvent(id: number): Promise<EventDetail | ApiError> {
+    try {
+      const response = await this.api.get<EventDetail>(`/events/${id}`);
+      return response.data;
+    } catch (error: unknown) {
+      logApiError('Error fetching event:', error);
+      return { success: false, message: getApiErrorMessage(error, 'Veranstaltung konnte nicht geladen werden') };
+    }
+  }
+
+  async createEvent(payload: CreateEventRequest): Promise<EventSummary | ApiError> {
+    try {
+      const response = await this.api.post<EventSummary>('/events', payload);
+      return response.data;
+    } catch (error: unknown) {
+      logApiError('Error creating event:', error);
+      return { success: false, message: getApiErrorMessage(error, 'Veranstaltung konnte nicht erstellt werden') };
+    }
+  }
+
+  async updateEvent(id: number, payload: UpdateEventRequest): Promise<EventSummary | ApiError> {
+    try {
+      const response = await this.api.put<EventSummary>(`/events/${id}`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      logApiError('Error updating event:', error);
+      return { success: false, message: getApiErrorMessage(error, 'Veranstaltung konnte nicht aktualisiert werden') };
+    }
+  }
+
+  async deleteEvent(id: number): Promise<ApiResult | ApiError> {
+    try {
+      const response = await this.api.delete<ApiResult>(`/events/${id}`);
+      return response.data;
+    } catch (error: unknown) {
+      logApiError('Error deleting event:', error);
+      return { success: false, message: getApiErrorMessage(error, 'Veranstaltung konnte nicht gelöscht werden') };
+    }
+  }
+
+  async createEventSignup(id: number, payload: SignupRequest): Promise<EventSignup | ApiError> {
+    try {
+      const response = await this.api.post<EventSignup>(`/events/${id}/signup`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      logApiError('Error creating event signup:', error);
+      return { success: false, message: getApiErrorMessage(error, 'Anmeldung konnte nicht erstellt werden') };
+    }
+  }
+
+  async updateEventSignup(id: number, payload: SignupRequest): Promise<EventSignup | ApiError> {
+    try {
+      const response = await this.api.put<EventSignup>(`/events/${id}/signup`, payload);
+      return response.data;
+    } catch (error: unknown) {
+      logApiError('Error updating event signup:', error);
+      return { success: false, message: getApiErrorMessage(error, 'Anmeldung konnte nicht aktualisiert werden') };
+    }
+  }
+
+  async deleteEventSignup(id: number): Promise<ApiResult | ApiError> {
+    try {
+      const response = await this.api.delete<ApiResult>(`/events/${id}/signup`);
+      return response.data;
+    } catch (error: unknown) {
+      logApiError('Error deleting event signup:', error);
+      return { success: false, message: getApiErrorMessage(error, 'Anmeldung konnte nicht gelöscht werden') };
+    }
+  }
+
+  async getEventSignups(id: number): Promise<SignupSummary | ApiError> {
+    try {
+      const response = await this.api.get<SignupSummary>(`/events/${id}/signups`);
+      return response.data;
+    } catch (error: unknown) {
+      logApiError('Error fetching event signups:', error);
+      return { success: false, message: getApiErrorMessage(error, 'Anmeldungen konnten nicht geladen werden') };
     }
   }
 }

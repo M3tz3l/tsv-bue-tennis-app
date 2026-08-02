@@ -233,4 +233,82 @@ describe('BackendService', () => {
       expect(mockInstance.delete).toHaveBeenCalledWith('/arbeitsstunden/wh-1');
     });
   });
+
+  describe('event endpoints', () => {
+    const eventPayload = {
+      type: 'event' as const,
+      title: 'Sommerfest',
+      description: null,
+      event_date: '2026-08-15',
+      start_time: '10:00',
+      end_time: '12:00',
+      location: 'Clubhaus',
+      signup_deadline: null,
+      capacity: 20,
+      allow_salad: true,
+      allow_cake: false,
+      status: 'published' as const,
+    };
+    const updatePayload = {
+      title: 'Neues Sommerfest', description: null, event_date: null, start_time: null,
+      end_time: null, location: null, signup_deadline: null, capacity: null,
+      clear_fields: [], allow_salad: null, allow_cake: null, status: null,
+    };
+    const signupPayload = {
+      people_count: 2,
+      salad_count: 1,
+      cake_count: 0,
+      comment: 'Wir bringen Salat.',
+    };
+
+    it('uses the event list and detail endpoints', async () => {
+      mockInstance.get.mockResolvedValue({ data: { success: true } });
+
+      await BackendService.getEvents();
+      await BackendService.getEvent(42);
+
+      expect(mockInstance.get).toHaveBeenNthCalledWith(1, '/events');
+      expect(mockInstance.get).toHaveBeenNthCalledWith(2, '/events/42');
+    });
+
+    it('uses the event CRUD methods and payloads', async () => {
+      mockInstance.post.mockResolvedValue({ data: { success: true } });
+      mockInstance.put.mockResolvedValue({ data: { success: true } });
+      mockInstance.delete.mockResolvedValue({ data: { success: true } });
+
+      await BackendService.createEvent(eventPayload);
+      await BackendService.updateEvent(42, updatePayload);
+      await BackendService.deleteEvent(42);
+
+      expect(mockInstance.post).toHaveBeenCalledWith('/events', eventPayload);
+      expect(mockInstance.put).toHaveBeenCalledWith('/events/42', updatePayload);
+      expect(mockInstance.delete).toHaveBeenCalledWith('/events/42');
+    });
+
+    it('uses the signup CRUD and list endpoints', async () => {
+      mockInstance.get.mockResolvedValue({ data: { success: true } });
+      mockInstance.post.mockResolvedValue({ data: { success: true } });
+      mockInstance.put.mockResolvedValue({ data: { success: true } });
+      mockInstance.delete.mockResolvedValue({ data: { success: true } });
+
+      await BackendService.createEventSignup(42, signupPayload);
+      await BackendService.updateEventSignup(42, signupPayload);
+      await BackendService.deleteEventSignup(42);
+      await BackendService.getEventSignups(42);
+
+      expect(mockInstance.post).toHaveBeenCalledWith('/events/42/signup', signupPayload);
+      expect(mockInstance.put).toHaveBeenCalledWith('/events/42/signup', signupPayload);
+      expect(mockInstance.delete).toHaveBeenCalledWith('/events/42/signup');
+      expect(mockInstance.get).toHaveBeenCalledWith('/events/42/signups');
+    });
+
+    it('returns German fallback messages for event request failures', async () => {
+      mockInstance.get.mockRejectedValue({ response: {} });
+
+      await expect(BackendService.getEvents()).resolves.toEqual({
+        success: false,
+        message: 'Veranstaltungen konnten nicht geladen werden',
+      });
+    });
+  });
 });
