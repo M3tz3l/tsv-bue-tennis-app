@@ -15,6 +15,7 @@ export const getMemberEntries = (
 
 export const sortEntriesByDate = (entries: WorkHourEntry[]): WorkHourEntry[] =>
     [...entries].sort((a, b) => {
+        if (!a.Datum && !b.Datum) return 0;
         if (!a.Datum) return 1;
         if (!b.Datum) return -1;
         return b.Datum.localeCompare(a.Datum);

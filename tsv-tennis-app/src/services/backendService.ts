@@ -28,10 +28,10 @@ export type MailSendResponse = ApiResult & { job_id?: string; total_recipients?:
 type SendTestMailPayload = { subject?: string; message?: string };
 
 type ApiErrorShape = {
-  message?: string;
+  message?: unknown;
   response?: {
-    status?: number;
-    data?: { message?: string };
+    status?: unknown;
+    data?: { message?: unknown };
   };
 };
 
@@ -40,10 +40,24 @@ const asApiError = (error: unknown): ApiErrorShape =>
 
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   const apiError = asApiError(error);
-  return apiError.response?.data?.message || apiError.message || fallback;
+  const responseMessage = apiError.response?.data?.message;
+  if (typeof responseMessage === 'string' && responseMessage.length > 0) {
+    return responseMessage;
+  }
+  if (typeof apiError.message === 'string' && apiError.message.length > 0) {
+    return apiError.message;
+  }
+  return fallback;
 }
 
-const getApiErrorStatus = (error: unknown): number | undefined => asApiError(error).response?.status;
+const getApiErrorStatus = (error: unknown): number | undefined => {
+  const status = asApiError(error).response?.status;
+  return typeof status === 'number' ? status : undefined;
+};
+
+const logApiError = (label: string, error: unknown): void => {
+  console.error(label, { status: getApiErrorStatus(error) });
+};
 
 class BackendService {
   private api: AxiosInstance;
@@ -87,7 +101,7 @@ class BackendService {
       const response = await this.api.post<LoginResponseVariant>('/login', { email: normalizedEmail, password });
       return response.data;
     } catch (error: unknown) {
-      console.error('Login error:', error);
+      logApiError('Login error:', error);
       return {
         success: false,
         message: getApiErrorMessage(error, 'Anmeldung fehlgeschlagen')
@@ -103,7 +117,7 @@ class BackendService {
       });
       return response.data;
     } catch (error: unknown) {
-      console.error('Member selection error:', error);
+      logApiError('Member selection error:', error);
       return {
         success: false,
         message: getApiErrorMessage(error, 'Mitgliederauswahl fehlgeschlagen')
@@ -116,7 +130,7 @@ class BackendService {
       const response = await this.api.get<VerifyTokenResponse>('/verify-token');
       return response.data;
     } catch (error: unknown) {
-      console.error('Token verification error:', error);
+      logApiError('Token verification error:', error);
       return {
         success: false,
         message: getApiErrorMessage(error, 'Token-Überprüfung fehlgeschlagen')
@@ -131,7 +145,7 @@ class BackendService {
       const response = await this.api.post<ApiResult>('/forgotPassword', { email: normalizedEmail });
       return response.data;
     } catch (error: unknown) {
-      console.error('Forgot password error:', error);
+      logApiError('Forgot password error:', error);
       return {
         success: false,
         message: getApiErrorMessage(error, 'E-Mail konnte nicht gesendet werden')
@@ -148,7 +162,7 @@ class BackendService {
       });
       return response.data;
     } catch (error: unknown) {
-      console.error('Reset password error:', error);
+      logApiError('Reset password error:', error);
       return {
         success: false,
         message: getApiErrorMessage(error, 'Passwort-Zurücksetzung fehlgeschlagen')
@@ -162,7 +176,7 @@ class BackendService {
       const response = await this.api.get<DashboardResponse>(`/dashboard/${year}`);
       return response.data;
     } catch (error: unknown) {
-      console.error('Dashboard error:', error);
+      logApiError('Dashboard error:', error);
       return {
         success: false,
         message: getApiErrorMessage(error, 'Dashboard-Daten konnten nicht geladen werden')
@@ -175,7 +189,7 @@ class BackendService {
       const response = await this.api.post<ApiResult>('/arbeitsstunden', data);
       return response.data;
     } catch (error: unknown) {
-      console.error('Error creating work hours:', error);
+      logApiError('Error creating work hours:', error);
       return {
         success: false,
         message: getApiErrorMessage(error, 'Arbeitsstunden konnten nicht erstellt werden')
@@ -188,7 +202,7 @@ class BackendService {
       const response = await this.api.put<ApiResult>(`/arbeitsstunden/${id}`, data);
       return response.data;
     } catch (error: unknown) {
-      console.error('Error updating work hours:', error);
+      logApiError('Error updating work hours:', error);
       return {
         success: false,
         message: getApiErrorMessage(error, 'Arbeitsstunden konnten nicht aktualisiert werden')
@@ -201,7 +215,7 @@ class BackendService {
       const response = await this.api.delete<ApiResult>(`/arbeitsstunden/${id}`);
       return response.data;
     } catch (error: unknown) {
-      console.error('Error deleting work hours:', error);
+      logApiError('Error deleting work hours:', error);
       return {
         success: false,
         message: getApiErrorMessage(error, 'Arbeitsstunden konnten nicht gelöscht werden')
@@ -214,7 +228,7 @@ class BackendService {
       const response = await this.api.get<ApiResult<WorkHourEntry>>(`/arbeitsstunden/${id}`);
       return response.data;
     } catch (error: unknown) {
-      console.error('Error fetching work hour:', error);
+      logApiError('Error fetching work hour:', error);
       return {
         success: false,
         message: getApiErrorMessage(error, 'Arbeitsstunde konnte nicht geladen werden')
@@ -236,7 +250,7 @@ class BackendService {
       const response = await this.api.post<ApiResult>('/mail/test-send', formData);
       return response.data;
     } catch (error: unknown) {
-      console.error('Error sending test mail:', error);
+      logApiError('Error sending test mail:', error);
 
       const status = getApiErrorStatus(error);
       if (status === 403) {
@@ -282,7 +296,7 @@ class BackendService {
       const response = await this.api.post<MailSendResponse>('/mail/send', formData);
       return response.data;
     } catch (error: unknown) {
-      console.error('Error sending bulk mail:', error);
+      logApiError('Error sending bulk mail:', error);
 
       const status = getApiErrorStatus(error);
       if (status === 403) {
@@ -311,7 +325,7 @@ class BackendService {
       const response = await this.api.get<ApiResult<MemberCountResponse>>('/mail/recipient-counts');
       return response.data;
     } catch (error: unknown) {
-      console.error('Error fetching member counts:', error);
+      logApiError('Error fetching member counts:', error);
       return {
         success: false,
         message: getApiErrorMessage(error, 'Empfängerzahlen konnten nicht abgerufen werden')
@@ -324,7 +338,7 @@ class BackendService {
       const response = await this.api.get(`/mail/jobs/${jobId}`);
       return response.data;
     } catch (error: unknown) {
-      console.error('Error fetching mail job status:', error);
+      logApiError('Error fetching mail job status:', error);
       return {
         success: false,
         message: getApiErrorMessage(error, 'Job-Status konnte nicht abgerufen werden')

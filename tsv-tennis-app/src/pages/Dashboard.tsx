@@ -114,7 +114,7 @@ const Dashboard = () => {
                     <div className="bg-red-50 border border-red-200 rounded-lg p-6">
                         <h3 className="text-lg font-medium text-red-800 mb-2">Fehler beim Laden der Daten</h3>
                         <p className="text-red-600">
-                            {error instanceof Error ? error.message : 'Fehler beim Laden der Dashboard-Daten'}
+                            {getApiErrorMessage(error, 'Fehler beim Laden der Dashboard-Daten')}
                         </p>
                         <p className="text-sm text-red-500 mt-2">
                             Bitte überprüfen Sie Ihre Konfiguration.
