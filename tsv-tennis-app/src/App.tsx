@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
+import Events from "./pages/Events";
 import Impressum from "./pages/Impressum";
 import Datenschutz from "./pages/Datenschutz";
 import 'react-toastify/dist/ReactToastify.css';
@@ -58,6 +59,18 @@ const App = () => {
                                     element={
                                         <ProtectedRoute>
                                             <Dashboard />
+                                        </ProtectedRoute>
+                                    } />
+                                <Route path="/dashboard/arbeitsstunden"
+                                    element={
+                                        <ProtectedRoute>
+                                            <Dashboard />
+                                        </ProtectedRoute>
+                                    } />
+                                <Route path="/dashboard/veranstaltungen"
+                                    element={
+                                        <ProtectedRoute>
+                                            <Events />
                                         </ProtectedRoute>
                                     } />
                                 <Route path="/impressum" element={<Impressum />} />

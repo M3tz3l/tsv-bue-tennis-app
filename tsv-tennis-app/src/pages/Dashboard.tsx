@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import BackendService, { getApiErrorMessage } from '../services/backendService.ts';
@@ -330,6 +331,20 @@ const Dashboard = () => {
 
             {/* Main Content */}
             <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
+                <nav aria-label="Dashboard-Bereiche" className="mb-6 flex flex-wrap gap-2">
+                    <NavLink
+                        to="/dashboard/arbeitsstunden"
+                        className={({ isActive }) => `rounded-md px-4 py-2 text-sm font-medium ${isActive ? 'bg-green-600 text-white' : 'bg-white text-gray-700 shadow-sm hover:bg-green-50'}`}
+                    >
+                        Arbeitsstunden
+                    </NavLink>
+                    <NavLink
+                        to="/dashboard/veranstaltungen"
+                        className={({ isActive }) => `rounded-md px-4 py-2 text-sm font-medium ${isActive ? 'bg-green-600 text-white' : 'bg-white text-gray-700 shadow-sm hover:bg-green-50'}`}
+                    >
+                        Veranstaltungen
+                    </NavLink>
+                </nav>
                 {/* Year Selector */}
                 <div className="mb-4 sm:mb-6">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Jahr auswählen:</label>
