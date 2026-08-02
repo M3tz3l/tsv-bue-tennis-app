@@ -38,6 +38,13 @@ describe('BackendService', () => {
         .toBe('Fallback');
     });
 
+    it('uses the generic error message when the server message is not usable', () => {
+      expect(getApiErrorMessage({
+        message: 'Network error',
+        response: { data: { message: { detail: 'bad' } } },
+      }, 'Fallback')).toBe('Network error');
+    });
+
     it('prefers a string server message over the generic error message', () => {
       expect(getApiErrorMessage({
         message: 'Network error',
