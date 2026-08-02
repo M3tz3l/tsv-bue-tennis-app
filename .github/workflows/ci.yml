@@ -59,7 +59,7 @@ jobs:
         run: npm ci
       - name: Run Oxlint
         working-directory: tsv-tennis-app
-        run: npm run lint --if-present
+         run: npm run lint
       - name: Run TypeScript typecheck
         working-directory: tsv-tennis-app
         run: npx tsc --noEmit

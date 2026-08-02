@@ -37,7 +37,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const [memberCounts, setMemberCounts] = useState({ all: 0, orga: 0 });
   const [countsLoaded, setCountsLoaded] = useState(false);
   const [activeJob, setActiveJob] = useState<MailJob | null>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // New state for redesigned UI
@@ -66,7 +66,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   // Clean up polling and reset timeout on unmount
   useEffect(() => {
     return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (pollingRef.current) clearTimeout(pollingRef.current);
       if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
     };
   }, []);
@@ -82,7 +82,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       setActiveJob(response.job);
       if (response.job.status === 'completed' || response.job.status === 'failed') {
         if (pollingRef.current) {
-          clearInterval(pollingRef.current);
+          clearTimeout(pollingRef.current);
           pollingRef.current = null;
         }
         setIsLoading(false);
@@ -107,9 +107,12 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           onClose();
         }, 2000);
       }
+      if (response.job.status !== 'completed' && response.job.status !== 'failed') {
+        pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
+      }
     } else {
       if (pollingRef.current) {
-        clearInterval(pollingRef.current);
+        clearTimeout(pollingRef.current);
         pollingRef.current = null;
       }
       setIsLoading(false);
@@ -123,7 +126,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const handleClose = () => {
     if (isBusy) return;
     if (pollingRef.current) {
-      clearInterval(pollingRef.current);
+      clearTimeout(pollingRef.current);
       pollingRef.current = null;
     }
     if (resetTimeoutRef.current) {
@@ -242,7 +245,6 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           return;
         }
         toast.info(`Mail-Versand gestartet für ${total} Empfänger...`);
-        pollingRef.current = setInterval(() => void pollJobStatus(jobId), 1500);
         void pollJobStatus(jobId);
       } else {
         toast.error(response.message || 'Fehler beim Versenden der Mail');

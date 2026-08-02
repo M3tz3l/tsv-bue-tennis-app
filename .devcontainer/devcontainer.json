@@ -37,6 +37,7 @@
 				"tamasfe.even-better-toml",
 				"serayuzgur.crates",
 				"esbenp.prettier-vscode",
+				"oxc.oxc-vscode",
 				"bradlc.vscode-tailwindcss",
 				"saoudrizwan.claude-dev"
 			]
