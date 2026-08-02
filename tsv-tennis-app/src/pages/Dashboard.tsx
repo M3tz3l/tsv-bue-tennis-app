@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
-import BackendService from '../services/backendService.ts';
+import BackendService, { getApiErrorMessage } from '../services/backendService.ts';
 import { PencilIcon, PlusIcon, ArrowRightOnRectangleIcon, ClockIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 import TSV_Logo from '../assets/TSV_Tennis.svg';
@@ -9,14 +9,22 @@ import type { WorkHourEntry, CreateWorkHourRequest, MemberContribution } from '.
 import useDashboard, { DASHBOARD_QUERY_KEY } from '../hooks/useDashboard';
 import ArbeitsstundenFormModal from '../components/ArbeitsstundenFormModal';
 import MailComposer from '../components/MailComposer';
-import { hasDuplicateEntry, formatHours } from '../utils/utils';
+import {
+    getCurrentYear,
+    getMemberEntries,
+    getProgressColor,
+    getProgressPercentage,
+    hasDuplicateEntry,
+    formatHours,
+    sortEntriesByDate,
+} from '../utils/utils';
 
 const Dashboard = () => {
     const { user, logout, token } = useAuth();
     const queryClient = useQueryClient();
     const [editingRow, setEditingRow] = useState<WorkHourEntry | null>(null);
     const [showAddForm, setShowAddForm] = useState(false);
-    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    const [selectedYear, setSelectedYear] = useState(getCurrentYear());
     const [showMailComposer, setShowMailComposer] = useState(false);
     const isOrga = user?.role?.trim().toLowerCase() === 'orga';
 
@@ -31,25 +39,19 @@ const Dashboard = () => {
         try {
             const response = await BackendService.getArbeitsstundenById(String(row.id));
 
-            if (response && (response as any).success) {
-                setEditingRow(((response as any).data as WorkHourEntry) ?? null);
+            if (response.success) {
+                setEditingRow(response.data ?? null);
                 setShowAddForm(false);
             } else {
                 toast.error('Fehler beim Laden der Daten zum Bearbeiten');
             }
-        } catch (error) {
-            toast.error((error as any)?.message || 'Fehler beim Laden der Daten zum Bearbeiten');
+        } catch (error: unknown) {
+            toast.error(getApiErrorMessage(error, 'Fehler beim Laden der Daten zum Bearbeiten'));
         }
     };
 
     // Consolidate current user's entries from personal + family data
-    const getMyEntries = (): WorkHourEntry[] => {
-        const personal = dashboardData?.personal?.entries || [];
-        const family = (dashboardData?.family?.memberContributions ?? [])
-            .filter((m: MemberContribution) => m.id === user?.id)
-            .flatMap((m: MemberContribution) => m.entries || []);
-        return [...personal, ...family];
-    };
+    const getMyEntries = (): WorkHourEntry[] => getMemberEntries(dashboardData, user?.id);
 
     const handleSave = async (formData: Partial<CreateWorkHourRequest> & { [key: string]: unknown }) => {
         try {
@@ -84,11 +86,11 @@ const Dashboard = () => {
                 else setShowAddForm(false);
                 queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
             } else {
-                const backendMsg = (response as any)?.error || (response as any)?.message;
+                const backendMsg = response.message;
                 toast.error(backendMsg || (editingRow ? 'Fehler beim Aktualisieren' : 'Fehler beim Erstellen'));
             }
-        } catch (error: any) {
-            const msg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Ein Fehler ist aufgetreten';
+        } catch (error: unknown) {
+            const msg = getApiErrorMessage(error, 'Ein Fehler ist aufgetreten');
             if (typeof msg === 'string' && /duplicate|bereits (vorhanden|ein Eintrag)/i.test(msg)) {
                 toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
             } else {
@@ -112,7 +114,7 @@ const Dashboard = () => {
                     <div className="bg-red-50 border border-red-200 rounded-lg p-6">
                         <h3 className="text-lg font-medium text-red-800 mb-2">Fehler beim Laden der Daten</h3>
                         <p className="text-red-600">
-                            {(error as any)?.message || 'Fehler beim Laden der Dashboard-Daten'}
+                            {error instanceof Error ? error.message : 'Fehler beim Laden der Dashboard-Daten'}
                         </p>
                         <p className="text-sm text-red-500 mt-2">
                             Bitte überprüfen Sie Ihre Konfiguration.
@@ -128,16 +130,9 @@ const Dashboard = () => {
             ?.filter((m: MemberContribution) => m.id === user?.id)
             .flatMap((m: MemberContribution) => m.entries || []) || [];
 
-        let data = dashboardData?.personal?.entries || currentMemberEntries;
-
-        // Sort entries by Datum descending (most recent first)
-        data = [...data].sort((a, b) => {
-            // Fallback if Datum is missing
-            if (!a.Datum) return 1;
-            if (!b.Datum) return -1;
-            // Compare as ISO date strings
-            return b.Datum.localeCompare(a.Datum);
-        });
+        const data = sortEntriesByDate(
+            dashboardData?.personal?.entries?.length ? dashboardData.personal.entries : currentMemberEntries,
+        );
 
         if (data.length === 0) {
             return (
@@ -367,9 +362,7 @@ const Dashboard = () => {
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-3">
                                         <div
-                                            className={`h-3 rounded-full transition-all duration-300 ${dashboardData.family.percentage >= 100 ? 'bg-green-500' :
-                                                dashboardData.family.percentage >= 75 ? 'bg-yellow-500' : 'bg-red-500'
-                                                }`}
+                                        className={`h-3 rounded-full transition-all duration-300 ${getProgressColor(dashboardData.family.percentage)}`}
                                             style={{ width: `${Math.min(100, dashboardData.family.percentage)}%` }}
                                         ></div>
                                     </div>
@@ -381,7 +374,7 @@ const Dashboard = () => {
                                 {/* Family Members Contributions */}
                                 <div className="space-y-3">
                                     <h3 className="font-medium text-gray-800">Familienmitglieder:</h3>
-                                    {dashboardData.family.memberContributions
+                                        {[...dashboardData.family.memberContributions]
                                         .sort((a: MemberContribution, b: MemberContribution) => a.name.localeCompare(b.name, 'de'))
                                         .map((member: MemberContribution, index: number) => {
                                             const isCurrentUser = user?.name === member.name;
@@ -457,20 +450,14 @@ const Dashboard = () => {
                                         </div>
                                         <div className="w-full bg-gray-200 rounded-full h-3">
                                             <div
-                                                className={`h-3 rounded-full ${(() => {
-                                                    const personalHours = dashboardData?.personal?.hours || 0;
-                                                    const requiredHours = dashboardData?.personal?.required || 8;
-                                                    const percentage = (personalHours / requiredHours) * 100;
-                                                    return percentage >= 100 ? 'bg-green-500' :
-                                                        percentage >= 75 ? 'bg-yellow-500' : 'bg-red-500';
-                                                })()}`}
+                                                    className={`h-3 rounded-full ${getProgressColor(getProgressPercentage(dashboardData.personal?.hours || 0, dashboardData.personal?.required || 8))}`}
                                                 style={{
-                                                    width: `${Math.min(100, ((dashboardData?.personal?.hours || 0) / (dashboardData?.personal?.required || 8)) * 100)}%`
+                                                    width: `${getProgressPercentage(dashboardData.personal?.hours || 0, dashboardData.personal?.required || 8)}%`
                                                 }}
                                             ></div>
                                         </div>
                                         <div className="text-right text-sm text-gray-600 mt-1">
-                                            {Math.round(Math.min(100, (((dashboardData?.personal?.hours || 0) / (dashboardData?.personal?.required || 8)) * 100)))}% abgeschlossen
+                                            {Math.round(getProgressPercentage(dashboardData.personal?.hours || 0, dashboardData.personal?.required || 8))}% abgeschlossen
                                         </div>
                                     </div>
                                 )}
