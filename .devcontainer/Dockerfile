@@ -19,14 +19,17 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 24 LTS (system-wide, works on both amd64 and arm64)
+# Install Node.js 24.18.1 (system-wide, works on both amd64 and arm64)
 ARG NODE_VERSION=24.18.1
 RUN ARCH=$(dpkg --print-architecture) && \
-    if [ "$ARCH" = "amd64" ]; then NODE_ARCH="x64"; \
-    elif [ "$ARCH" = "arm64" ]; then NODE_ARCH="arm64"; \
+    if [ "$ARCH" = "amd64" ]; then NODE_ARCH="x64"; NODE_SHA256="d6c664df3f3f61458e8c277585571328522d705166723a7c7823a9253a4d15a0"; \
+    elif [ "$ARCH" = "arm64" ]; then NODE_ARCH="arm64"; NODE_SHA256="7201e3a09dc825bac57867c81913e2b8f0ef87d04cb9082af4cda82f6ff3d88c"; \
     else echo "Unsupported architecture: $ARCH" && exit 1; fi && \
-    curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" \
-    | tar -xJ -C /usr/local --strip-components=1 && \
+    NODE_TARBALL="node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" && \
+    curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_TARBALL}" && \
+    printf '%s  %s\n' "$NODE_SHA256" "$NODE_TARBALL" | sha256sum --check --strict && \
+    tar -xJf "$NODE_TARBALL" -C /usr/local --strip-components=1 && \
+    rm "$NODE_TARBALL" && \
     node --version && npm --version
 
 # Install Playwright browser dependencies (for MCP server)
