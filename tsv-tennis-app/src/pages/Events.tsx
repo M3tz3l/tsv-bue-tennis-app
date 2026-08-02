@@ -6,6 +6,7 @@ import type { EventSummary } from '../types';
 import EventSignupModal from '../components/EventSignupModal';
 import EventFormModal from '../components/EventFormModal';
 import EventSignupsModal from '../components/EventSignupsModal';
+import DashboardNavigation from '../components/DashboardNavigation';
 
 const formatDate = (value: string) => new Intl.DateTimeFormat('de-DE', { dateStyle: 'long' }).format(new Date(`${value}T00:00:00`));
 const isPast = (value: string) => new Date(`${value}T23:59:59`).getTime() < Date.now();
@@ -55,6 +56,7 @@ const Events = () => {
   return (
     <main className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
+        <DashboardNavigation />
         <div className="mb-6 flex items-center justify-between"><h1 className="text-2xl font-bold text-gray-900">Veranstaltungen</h1>{isOrga && <button onClick={() => setEditingEvent(null)} className="rounded-md bg-green-600 px-4 py-2 font-medium text-white">Veranstaltung erstellen</button>}</div>
         {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-gray-600 shadow-lg">Keine anstehenden Veranstaltungen</div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((event) => <EventCard key={event.id} event={event} userId={user?.id} isOrga={isOrga} onSelect={setSelectedId} onEdit={setEditingEvent} onSignups={setSignupsId} />)}</div>}
       </div>

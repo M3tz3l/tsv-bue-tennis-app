@@ -34,16 +34,32 @@ describe('Dashboard navigation', () => {
     });
   });
 
-  it('renders links for work hours and events routes', () => {
+  it('marks work hours as active on the work-hours route', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/dashboard/arbeitsstunden']}>
           <Dashboard />
         </MemoryRouter>
       </QueryClientProvider>,
     );
 
+    expect(screen.getByRole('link', { name: /arbeitsstunden/i })).toHaveClass('bg-green-600');
+    expect(screen.getByRole('link', { name: /veranstaltungen/i })).toHaveClass('bg-white');
+  });
+
+  it('keeps both navigation controls usable on narrow layouts', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/dashboard/arbeitsstunden']}>
+          <Dashboard />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const navigation = screen.getByRole('navigation', { name: 'Dashboard-Bereiche' });
+    expect(navigation).toHaveClass('flex-wrap');
     expect(screen.getByRole('link', { name: /arbeitsstunden/i })).toHaveAttribute('href', '/dashboard/arbeitsstunden');
     expect(screen.getByRole('link', { name: /veranstaltungen/i })).toHaveAttribute('href', '/dashboard/veranstaltungen');
   });

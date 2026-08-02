@@ -28,6 +28,16 @@ describe('dashboard routes', () => {
     expect(await screen.findByText('Events page')).toBeInTheDocument();
   });
 
+  it('protects the direct events link for unauthenticated users', async () => {
+    mocks.useAuth.mockReturnValue({ user: null, loading: false });
+    window.history.pushState({}, '', '/dashboard/veranstaltungen');
+
+    render(<App />);
+
+    expect(await screen.findByText('Login page')).toBeInTheDocument();
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
+  });
+
   it('keeps the existing dashboard entry for authenticated users', async () => {
     window.history.pushState({}, '', '/dashboard');
 

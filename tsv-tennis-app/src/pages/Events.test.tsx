@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -42,6 +43,8 @@ const event = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const renderEvents = () => render(<MemoryRouter><Events /></MemoryRouter>);
+
 describe('Events', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -51,7 +54,7 @@ describe('Events', () => {
   });
 
   it('renders only future published events and required metadata', () => {
-    render(<Events />);
+    renderEvents();
 
     expect(screen.getByText('Sommerfest')).toBeInTheDocument();
     expect(screen.getByText(/Clubheim/)).toBeInTheDocument();
@@ -63,7 +66,7 @@ describe('Events', () => {
 
   it('shows only the current member signup status and opens the modal', async () => {
     const user = userEvent.setup();
-    render(<Events />);
+    renderEvents();
 
     expect(screen.getByText(/Ihre Anmeldung: 2 Personen/)).toBeInTheDocument();
     expect(screen.queryByText(/member-2|Andere Mitglieder|fremde Anmeldung/i)).not.toBeInTheDocument();
@@ -72,7 +75,7 @@ describe('Events', () => {
   });
 
   it('shows the own signup status on the card before it is opened', () => {
-    render(<Events />);
+    renderEvents();
 
     expect(screen.getByText(/Ihre Anmeldung: 2 Personen/)).toBeInTheDocument();
     expect(mocks.useEvent).toHaveBeenCalledWith('member-1', 1);
@@ -81,7 +84,7 @@ describe('Events', () => {
   it('keeps full events visible but does not offer an action', () => {
     mocks.useEvents.mockReturnValue({ data: [event({ capacity: 3, signup_people_count: 3 })], isLoading: false, error: null });
     mocks.useEvent.mockReturnValue({ data: { event: event({ capacity: 3, signup_people_count: 3 }), own_signup: null }, isLoading: false, error: null });
-    render(<Events />);
+    renderEvents();
 
     expect(screen.getByText(/Ausgebucht/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Anmelden/i })).not.toBeInTheDocument();
@@ -91,22 +94,33 @@ describe('Events', () => {
     const user = userEvent.setup();
     mocks.useEvents.mockReturnValue({ data: [event({ capacity: 3, signup_people_count: 3 })], isLoading: false, error: null });
     mocks.useEvent.mockReturnValue({ data: { event: event({ capacity: 3, signup_people_count: 3 }), own_signup: { people_count: 1 } }, isLoading: false, error: null });
-    render(<Events />);
+    renderEvents();
 
     await user.click(screen.getByRole('button', { name: /Anmeldung bearbeiten/i }));
     expect(screen.getByRole('dialog')).toHaveTextContent('Signup modal for 1');
   });
 
   it('does not show management controls to regular members', () => {
-    render(<Events />);
+    renderEvents();
     expect(screen.queryByRole('button', { name: /Veranstaltung erstellen/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Anmeldungen anzeigen/i })).not.toBeInTheDocument();
   });
 
   it('shows management controls to Orga', () => {
     mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
-    render(<Events />);
+    renderEvents();
     expect(screen.getByRole('button', { name: /Veranstaltung erstellen/i })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Anmeldungen anzeigen/i })).not.toHaveLength(0);
+  });
+
+  it('marks events as active and keeps the work-hours tab available', () => {
+    render(
+      <MemoryRouter initialEntries={['/dashboard/veranstaltungen']}>
+        <Events />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('link', { name: /veranstaltungen/i })).toHaveClass('bg-green-600');
+    expect(screen.getByRole('link', { name: /arbeitsstunden/i })).toHaveAttribute('href', '/dashboard/arbeitsstunden');
   });
 });
