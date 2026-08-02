@@ -22,8 +22,8 @@ type MemberCountResponse = {
   orga: number;
 };
 
-export type ApiError = { success: false; message: string };
-export type VerifyTokenResponse = ApiResult & { user?: UserResponse };
+export type ApiError = { success: false; message: string; status?: number };
+export type VerifyTokenResponse = ApiResult & { user?: UserResponse; status?: number };
 export type MailSendResponse = ApiResult & { job_id?: string; total_recipients?: number };
 type SendTestMailPayload = { subject?: string; message?: string };
 
@@ -131,9 +131,11 @@ class BackendService {
       return response.data;
     } catch (error: unknown) {
       logApiError('Token verification error:', error);
+      const status = getApiErrorStatus(error);
       return {
         success: false,
-        message: getApiErrorMessage(error, 'Token-Überprüfung fehlgeschlagen')
+        message: getApiErrorMessage(error, 'Token-Überprüfung fehlgeschlagen'),
+        ...(status === undefined ? {} : { status }),
       };
     }
   }

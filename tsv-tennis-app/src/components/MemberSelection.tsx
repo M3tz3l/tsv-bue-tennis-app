@@ -25,7 +25,7 @@ export const MemberSelection = ({ users, selectionToken, onComplete, onCancel }:
             } else {
                 setError(result.message || 'Mitgliederauswahl fehlgeschlagen');
             }
-        } catch (err) {
+        } catch {
             setError('Ein unerwarteter Fehler ist aufgetreten');
         } finally {
             setLoading(false);

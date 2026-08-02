@@ -1,4 +1,4 @@
-name: Rust CI
+name: CI
 
 on:
   pull_request:
@@ -6,8 +6,12 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   test:
+    name: Backend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -38,7 +42,7 @@ jobs:
           path: backend/bindings/types.ts
 
   frontend-checks:
-    name: Frontend — ESLint, typecheck and unit tests
+    name: Frontend
     runs-on: ubuntu-latest
     needs: test
     permissions:
@@ -57,12 +61,42 @@ jobs:
       - name: Install frontend dependencies
         working-directory: tsv-tennis-app
         run: npm ci
-      - name: Run ESLint
+      - name: Run Oxlint
         working-directory: tsv-tennis-app
-        run: npm run lint --if-present
+        run: npm run lint
       - name: Run TypeScript typecheck
         working-directory: tsv-tennis-app
         run: npx tsc --noEmit
       - name: Run unit tests
         working-directory: tsv-tennis-app
         run: npm test
+
+  workflow-lint:
+    name: Workflow lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check workflow files
+        uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+        with:
+          args: -color
+
+  status-check:
+    name: Status check
+    if: always()
+    needs:
+      - test
+      - frontend-checks
+      - workflow-lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: suzuki-shunsuke/required-status-check-action@2b5a46064846b09381852c2c4217e898f639e768 # v0.1.3
+        with:
+          needs: ${{ toJson(needs) }}

@@ -43,15 +43,26 @@ interface AuthProviderProps {
     children: ReactNode;
 }
 
+const AUTH_USER_KEY = 'authUser';
+
+function getStoredUser(): UserResponse | null {
+    try {
+        const storedUser = localStorage.getItem(AUTH_USER_KEY);
+        return storedUser ? JSON.parse(storedUser) as UserResponse : null;
+    } catch {
+        return null;
+    }
+}
+
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-    const [user, setUser] = useState<UserResponse | null>(null);
+    const [user, setUser] = useState<UserResponse | null>(getStoredUser);
     const [loading, setLoading] = useState<boolean>(true);
     const [token, setToken] = useState<string | null>(localStorage.getItem('authToken'));
 
     useEffect(() => {
         if (token) {
             // Verify token and get user data
-            verifyToken();
+            void verifyToken();
         } else {
             setLoading(false);
         }
@@ -64,6 +75,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             console.log('🔍 AuthContext: Token verification response:', response);
             if (response.success && response.user) {
                 setUser(response.user);
+                localStorage.setItem(AUTH_USER_KEY, JSON.stringify(response.user));
+            } else if (response.status !== 401) {
+                // Keep the cached session during transient backend/Teable failures.
+                console.error('🚨 AuthContext: Token verification temporarily unavailable');
             } else {
                 throw new Error(response.message || 'Token-Überprüfung fehlgeschlagen');
             }
@@ -112,6 +127,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 setToken(newToken);
                 setUser(userData);
                 localStorage.setItem('authToken', newToken);
+                localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData));
                 return { success: true };
             }
 
@@ -142,6 +158,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 setToken(newToken);
                 setUser(userData);
                 localStorage.setItem('authToken', newToken);
+                localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData));
                 return { success: true };
             } else {
                 const errorMessage = 'message' in response ? response.message : 'Mitgliederauswahl fehlgeschlagen';
@@ -160,6 +177,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUser(null);
         setToken(null);
         localStorage.removeItem('authToken');
+        localStorage.removeItem(AUTH_USER_KEY);
     };
 
     const value = {

@@ -121,7 +121,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
             if (response?.success) {
                 toast.success('Eintrag erfolgreich gelöscht');
                 onClose();
-                queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
+                void queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
             } else {
                 toast.error(response?.message || 'Fehler beim Löschen');
             }
