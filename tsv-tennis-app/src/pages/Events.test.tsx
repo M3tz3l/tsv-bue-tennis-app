@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   useEvents: vi.fn(),
   useEvent: vi.fn(),
   modal: vi.fn(),
+  formModal: vi.fn(),
+  signupsModal: vi.fn(),
 }));
 
 vi.mock('../context/AuthContext', () => ({ useAuth: mocks.useAuth }));
@@ -17,6 +19,8 @@ vi.mock('../components/EventSignupModal', () => ({
     return <div role="dialog">Signup modal for {props.eventId}<button onClick={props.onClose}>close</button></div>;
   },
 }));
+vi.mock('../components/EventFormModal', () => ({ default: () => <div>Event form</div> }));
+vi.mock('../components/EventSignupsModal', () => ({ default: () => <div>Event signups</div> }));
 
 import Events from './Events';
 
@@ -91,5 +95,18 @@ describe('Events', () => {
 
     await user.click(screen.getByRole('button', { name: /Anmeldung bearbeiten/i }));
     expect(screen.getByRole('dialog')).toHaveTextContent('Signup modal for 1');
+  });
+
+  it('does not show management controls to regular members', () => {
+    render(<Events />);
+    expect(screen.queryByRole('button', { name: /Veranstaltung erstellen/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Anmeldungen anzeigen/i })).not.toBeInTheDocument();
+  });
+
+  it('shows management controls to Orga', () => {
+    mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
+    render(<Events />);
+    expect(screen.getByRole('button', { name: /Veranstaltung erstellen/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Anmeldungen anzeigen/i })).not.toHaveLength(0);
   });
 });

@@ -4,11 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import { useEvent, useEvents } from '../hooks/useEvents';
 import type { EventSummary } from '../types';
 import EventSignupModal from '../components/EventSignupModal';
+import EventFormModal from '../components/EventFormModal';
+import EventSignupsModal from '../components/EventSignupsModal';
 
 const formatDate = (value: string) => new Intl.DateTimeFormat('de-DE', { dateStyle: 'long' }).format(new Date(`${value}T00:00:00`));
 const isPast = (value: string) => new Date(`${value}T23:59:59`).getTime() < Date.now();
 
-const EventCard = ({ event, userId, onSelect }: { event: EventSummary; userId?: string; onSelect: (id: number) => void }) => {
+const EventCard = ({ event, userId, isOrga, onSelect, onEdit, onSignups }: { event: EventSummary; userId?: string; isOrga: boolean; onSelect: (id: number) => void; onEdit: (event: EventSummary) => void; onSignups: (id: number) => void }) => {
   const { data: detail } = useEvent(userId, event.id);
   const ownSignup = detail?.own_signup;
   const full = event.capacity !== null && event.signup_people_count >= event.capacity;
@@ -28,7 +30,7 @@ const EventCard = ({ event, userId, onSelect }: { event: EventSummary; userId?: 
     </dl>
     {ownSignup && <p className="mt-4 text-sm font-medium text-green-700">Ihre Anmeldung: {ownSignup.people_count} Personen</p>}
     <div className="mt-5 flex-1" />
-    {ownSignup ? <button onClick={() => onSelect(event.id)} className="rounded-md bg-green-600 px-4 py-2 font-medium text-white hover:bg-green-700">Anmeldung bearbeiten</button> : unavailable ? <p className="rounded-md bg-gray-100 px-3 py-2 text-center text-sm font-medium text-gray-600">{full ? 'Ausgebucht' : 'Anmeldeschluss erreicht'}</p> : <button onClick={() => onSelect(event.id)} className="rounded-md bg-green-600 px-4 py-2 font-medium text-white hover:bg-green-700">Anmelden</button>}
+    {isOrga ? <div className="flex gap-2"><button onClick={() => onEdit(event)} className="rounded-md border border-gray-300 px-3 py-2 text-sm">Bearbeiten</button><button onClick={() => onSignups(event.id)} className="rounded-md border border-gray-300 px-3 py-2 text-sm">Anmeldungen anzeigen</button></div> : ownSignup ? <button onClick={() => onSelect(event.id)} className="rounded-md bg-green-600 px-4 py-2 font-medium text-white hover:bg-green-700">Anmeldung bearbeiten</button> : unavailable ? <p className="rounded-md bg-gray-100 px-3 py-2 text-center text-sm font-medium text-gray-600">{full ? 'Ausgebucht' : 'Anmeldeschluss erreicht'}</p> : <button onClick={() => onSelect(event.id)} className="rounded-md bg-green-600 px-4 py-2 font-medium text-white hover:bg-green-700">Anmelden</button>}
   </article>;
 };
 
@@ -36,7 +38,10 @@ const Events = () => {
   const { user } = useAuth();
   const { data: events, isLoading, error } = useEvents(user?.id);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const visibleEvents = (events ?? []).filter((event) => event.status === 'published' && !isPast(event.event_date));
+  const isOrga = user?.role?.trim().toLowerCase() === 'orga';
+  const [editingEvent, setEditingEvent] = useState<EventSummary | null | undefined>(undefined);
+  const [signupsId, setSignupsId] = useState<number | null>(null);
+  const visibleEvents = (events ?? []).filter((event) => isOrga || (event.status === 'published' && !isPast(event.event_date)));
 
   useEffect(() => {
     if (error) toast.error(error instanceof Error ? error.message : 'Veranstaltungen konnten nicht geladen werden');
@@ -50,10 +55,12 @@ const Events = () => {
   return (
     <main className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <h1 className="mb-6 text-2xl font-bold text-gray-900">Veranstaltungen</h1>
-        {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-gray-600 shadow-lg">Keine anstehenden Veranstaltungen</div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((event) => <EventCard key={event.id} event={event} userId={user?.id} onSelect={setSelectedId} />)}</div>}
+        <div className="mb-6 flex items-center justify-between"><h1 className="text-2xl font-bold text-gray-900">Veranstaltungen</h1>{isOrga && <button onClick={() => setEditingEvent(null)} className="rounded-md bg-green-600 px-4 py-2 font-medium text-white">Veranstaltung erstellen</button>}</div>
+        {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-gray-600 shadow-lg">Keine anstehenden Veranstaltungen</div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((event) => <EventCard key={event.id} event={event} userId={user?.id} isOrga={isOrga} onSelect={setSelectedId} onEdit={setEditingEvent} onSignups={setSignupsId} />)}</div>}
       </div>
       {selectedId !== null && <EventSignupModal eventId={selectedId} isOpen onClose={() => setSelectedId(null)} />}
+      {editingEvent !== undefined && <EventFormModal initialData={editingEvent} isOpen onClose={() => setEditingEvent(undefined)} />}
+      {signupsId !== null && <EventSignupsModal eventId={signupsId} isOpen onClose={() => setSignupsId(null)} />}
     </main>
   );
 };
