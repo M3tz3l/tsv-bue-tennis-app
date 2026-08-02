@@ -104,8 +104,15 @@ jobs:
             --smtp-tls-cert sans:localhost \
             --smtp-tls-key sans:localhost \
             --smtp-require-starttls &
-          for i in $(seq 1 10); do
-            curl -sf http://localhost:8025/api/v1/messages > /dev/null && echo "Mailpit ready" && break
+          for attempt in $(seq 1 10); do
+            if curl -sf http://localhost:8025/api/v1/messages > /dev/null; then
+              echo "Mailpit ready"
+              break
+            fi
+            if [ "$attempt" -eq 10 ]; then
+              echo "Mailpit did not become ready" >&2
+              exit 1
+            fi
             sleep 1
           done
 
@@ -113,8 +120,14 @@ jobs:
         working-directory: backend
         run: |
           ./target/release/tsv-tennis-backend &
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:5000/api/health && break
+          for attempt in $(seq 1 30); do
+            if curl -sf http://localhost:5000/api/health; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "Backend did not become ready" >&2
+              exit 1
+            fi
             sleep 1
           done
 
@@ -127,8 +140,14 @@ jobs:
       - name: Verify servers
         run: |
           curl -sf http://localhost:5000/api/health
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:5173 > /dev/null && break
+          for attempt in $(seq 1 30); do
+            if curl -sf http://localhost:5173 > /dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "Frontend did not become ready" >&2
+              exit 1
+            fi
             sleep 1
           done
 
