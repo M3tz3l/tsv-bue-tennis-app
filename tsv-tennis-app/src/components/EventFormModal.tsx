@@ -39,7 +39,13 @@ const EventFormModal = ({ isOpen, onClose, initialData = null }: Props) => {
     const payload: CreateEventRequest = { ...form, title: form.title.trim(), description: form.description?.trim() || null, location: form.location?.trim() || null, start_time: form.start_time || null, end_time: form.end_time || null, signup_deadline: form.signup_deadline || null, capacity: form.capacity === null || form.capacity === 0 ? null : form.capacity };
     try {
       if (initialData) {
-        const updatePayload: UpdateEventRequest = { ...payload };
+        const clear_fields = (['description', 'location', 'start_time', 'end_time', 'signup_deadline', 'capacity'] as const)
+          .filter((field) => payload[field] === null);
+        const updatePayload: UpdateEventRequest = {
+          ...payload,
+          clear_fields,
+          ...Object.fromEntries(clear_fields.map((field) => [field, undefined])),
+        };
         await updateEvent.mutateAsync({ id: initialData.id, payload: updatePayload });
       } else await createEvent.mutateAsync(payload);
       toast.success(initialData ? 'Veranstaltung aktualisiert' : 'Veranstaltung erstellt');

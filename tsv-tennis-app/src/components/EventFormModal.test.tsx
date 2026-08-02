@@ -76,6 +76,21 @@ describe('EventFormModal', () => {
     await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith(4));
   });
 
+  it('sends clear_fields when optional edited values are cleared', async () => {
+    const user = userEvent.setup();
+    render(<EventFormModal isOpen onClose={vi.fn()} initialData={event} />);
+    await user.clear(screen.getByLabelText(/Endzeit/i));
+    await user.clear(screen.getByLabelText(/Beschreibung/i));
+    await user.click(screen.getByRole('button', { name: /Aktualisieren/i }));
+
+    expect(mocks.update).toHaveBeenCalledWith({
+      id: 4,
+      payload: expect.objectContaining({
+        clear_fields: expect.arrayContaining(['description', 'end_time']),
+      }),
+    });
+  });
+
   it('rejects invalid time, deadline, and capacity values before mutation', async () => {
     render(<EventFormModal isOpen onClose={vi.fn()} initialData={{ ...event, start_time: '18:00', end_time: '17:00', signup_deadline: '2099-07-13', capacity: 0 }} />);
     await waitFor(() => expect(screen.getByRole('button', { name: /Aktualisieren/i })).toBeInTheDocument());

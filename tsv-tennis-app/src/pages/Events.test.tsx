@@ -90,6 +90,15 @@ describe('Events', () => {
     expect(screen.queryByRole('button', { name: /Anmelden/i })).not.toBeInTheDocument();
   });
 
+  it('displays RFC3339 deadlines and keeps a date-only deadline actionable', () => {
+    mocks.useEvents.mockReturnValue({ data: [event({ signup_deadline: '2099-07-01T23:00:00Z' }), event({ id: 5, title: 'Tagesschluss', signup_deadline: '2099-07-12' })], isLoading: false, error: null });
+    mocks.useEvent.mockReturnValue({ data: { event: event(), own_signup: null }, isLoading: false, error: null });
+    renderEvents();
+
+    expect(screen.getAllByText(/Anmeldung bis/)).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /Anmelden/i })).toHaveLength(2);
+  });
+
   it('keeps edit and cancel available for an own signup on a full event', async () => {
     const user = userEvent.setup();
     mocks.useEvents.mockReturnValue({ data: [event({ capacity: 3, signup_people_count: 3 })], isLoading: false, error: null });

@@ -53,6 +53,19 @@ describe('BackendService', () => {
     });
   });
 
+  it('returns the standardized event server message from failed requests', async () => {
+    mockInstance.post.mockRejectedValue({
+      response: { status: 409, data: { success: false, message: 'signup deadline has passed', data: null } },
+    });
+
+    await expect(BackendService.createEventSignup(4, {
+      people_count: 1,
+      salad_count: 0,
+      cake_count: 0,
+      comment: null,
+    })).resolves.toEqual({ success: false, message: 'signup deadline has passed' });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();

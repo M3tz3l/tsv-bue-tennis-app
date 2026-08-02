@@ -8,14 +8,23 @@ import EventFormModal from '../components/EventFormModal';
 import EventSignupsModal from '../components/EventSignupsModal';
 import DashboardNavigation from '../components/DashboardNavigation';
 
-const formatDate = (value: string) => new Intl.DateTimeFormat('de-DE', { dateStyle: 'long' }).format(new Date(`${value}T00:00:00`));
-const isPast = (value: string) => new Date(`${value}T23:59:59`).getTime() < Date.now();
+const parseEventDate = (value: string, endOfDay = false) => {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T${endOfDay ? '23:59:59' : '00:00:00'}`)
+    : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+const formatDate = (value: string) => {
+  const date = parseEventDate(value);
+  return date ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'long' }).format(date) : value;
+};
+const isPast = (value: string) => (parseEventDate(value, true)?.getTime() ?? 0) < Date.now();
 
 const EventCard = ({ event, userId, isOrga, onSelect, onEdit, onSignups }: { event: EventSummary; userId?: string; isOrga: boolean; onSelect: (id: number) => void; onEdit: (event: EventSummary) => void; onSignups: (id: number) => void }) => {
   const { data: detail } = useEvent(userId, event.id);
   const ownSignup = detail?.own_signup;
   const full = event.capacity !== null && event.signup_people_count >= event.capacity;
-  const deadlinePassed = event.signup_deadline !== null && new Date(`${event.signup_deadline}T23:59:59`).getTime() < Date.now();
+  const deadlinePassed = event.signup_deadline !== null && (parseEventDate(event.signup_deadline, true)?.getTime() ?? 0) < Date.now();
   const unavailable = full || deadlinePassed;
 
   return <article className="flex flex-col rounded-lg bg-white p-5 shadow-lg">
