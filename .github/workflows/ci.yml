@@ -59,10 +59,25 @@ jobs:
         run: npm ci
       - name: Run Oxlint
         working-directory: tsv-tennis-app
-         run: npm run lint
+        run: npm run lint
       - name: Run TypeScript typecheck
         working-directory: tsv-tennis-app
         run: npx tsc --noEmit
       - name: Run unit tests
         working-directory: tsv-tennis-app
         run: npm test
+
+  workflow-lint:
+    name: GitHub Actions workflow lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download actionlint
+        id: get-actionlint
+        run: bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+        shell: bash
+      - name: Check workflow files
+        run: ${{ steps.get-actionlint.outputs.executable }} -color
+        shell: bash
