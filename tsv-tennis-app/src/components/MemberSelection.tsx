@@ -44,7 +44,7 @@ export const MemberSelection = ({ users, selectionToken, onComplete, onCancel }:
                 </p>
 
                 <div className="space-y-3 mb-6">
-                    {users
+                    {[...users]
                         .sort((a, b) => a.name.localeCompare(b.name, 'de'))
                         .map((user) => (
                             <button

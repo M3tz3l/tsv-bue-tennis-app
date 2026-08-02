@@ -1,5 +1,31 @@
 // Shared utility functions for the frontend
-import type { WorkHourEntry } from '../types';
+import type { DashboardResponse, MemberContribution, WorkHourEntry } from '../types';
+
+export const getCurrentYear = (): number => new Date().getFullYear();
+
+export const getMemberEntries = (
+    dashboard: DashboardResponse | undefined,
+    userId: string | undefined,
+): WorkHourEntry[] => {
+    const familyEntries = (dashboard?.family?.memberContributions ?? [])
+        .filter((member: MemberContribution) => member.id === userId)
+        .flatMap((member: MemberContribution) => member.entries ?? []);
+    return [...(dashboard?.personal?.entries ?? []), ...familyEntries];
+};
+
+export const sortEntriesByDate = (entries: WorkHourEntry[]): WorkHourEntry[] =>
+    [...entries].sort((a, b) => {
+        if (!a.Datum && !b.Datum) return 0;
+        if (!a.Datum) return 1;
+        if (!b.Datum) return -1;
+        return b.Datum.localeCompare(a.Datum);
+    });
+
+export const getProgressPercentage = (completed: number, required: number): number =>
+    required > 0 ? Math.min(100, (completed / required) * 100) : 100;
+
+export const getProgressColor = (percentage: number): string =>
+    percentage >= 100 ? 'bg-green-500' : percentage >= 75 ? 'bg-yellow-500' : 'bg-red-500';
 
 export function hasDuplicateEntry(
     existingEntries: WorkHourEntry[] = [],

@@ -6,8 +6,8 @@ import {
     Link
 } from "react-router-dom";
 import { toast } from "react-toastify";
-import TSVLogo from "../assets/TSV_Tennis.svg";
 import BackendService from "../services/backendService";
+import AuthPageLayout from '@/components/AuthPageLayout';
 
 const ResetPassword = () => {
     const [searchParams] = useSearchParams();
@@ -45,25 +45,7 @@ const ResetPassword = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-gradient-to-br from-green-50 to-blue-50">
-            <div className="max-w-md w-full">
-                <div className="bg-white rounded-xl shadow-xl p-8 backdrop-blur-sm border border-white/20">
-                    <div className="flex flex-col items-center">
-                        <div className="mx-auto flex items-center justify-center mb-4">
-                            <img
-                                src={TSVLogo}
-                                alt="TSV Tennis Logo"
-                                className="h-20 w-auto drop-shadow-md hover:drop-shadow-lg transition-all duration-300"
-                            />
-                        </div>
-                        <h2 className="mt-2 text-center text-3xl font-bold text-gray-900">
-                            Passwort zurücksetzen
-                        </h2>
-                        <p className="mt-2 text-center text-sm text-gray-600">
-                            Wählen Sie ein sicheres Passwort für Ihr Konto
-                        </p>
-                    </div>
-
+        <AuthPageLayout title="Passwort zurücksetzen" description="Wählen Sie ein sicheres Passwort für Ihr Konto">
                     <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
                         <div className="space-y-4">
                             <div>
@@ -113,9 +95,7 @@ const ResetPassword = () => {
                             </Link>
                         </div>
                     </form>
-                </div>
-            </div>
-        </div>
+        </AuthPageLayout>
     );
 };
 

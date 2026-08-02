@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import backendService from '../services/backendService.ts';
 import type { UserResponse, MemberSelectionResponse, LoginResponse } from '@/types';
+import { getApiErrorMessage } from '@/services/backendService';
+import type { ApiError } from '@/services/backendService';
 
 interface AuthResult {
     success: boolean;
@@ -14,6 +16,9 @@ interface MemberSelectionResult {
     selectionToken?: string;
     message?: string;
 }
+
+const isApiError = (response: ApiError | { success: boolean }): response is ApiError =>
+    response.success === false;
 
 interface AuthContextType {
     user: UserResponse | null;
@@ -57,8 +62,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             console.log('🔍 AuthContext: Verifying token:', token?.substring(0, 20) + '...');
             const response = await backendService.verifyToken();
             console.log('🔍 AuthContext: Token verification response:', response);
-            if (response.success && (response as any).user) {
-                setUser((response as any).user);
+            if (response.success && response.user) {
+                setUser(response.user);
             } else {
                 throw new Error(response.message || 'Token-Überprüfung fehlgeschlagen');
             }
@@ -77,14 +82,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
             console.log('🔍 AuthContext: Login response:', response);
 
-            if (!response.success) {
-                const errorMessage = 'message' in response ? response.message : 'Anmeldung fehlgeschlagen';
+            if (isApiError(response)) {
+                const errorMessage = response.message || 'Anmeldung fehlgeschlagen';
                 return { success: false, message: errorMessage };
             }
 
             // Check if this is a multi-member selection response
             if (response.type === 'multiple') {
-                const memberResponse = response as MemberSelectionResponse & { type: 'multiple' };
+                const memberResponse: MemberSelectionResponse & { type: 'multiple' } = response;
                 return {
                     success: true,
                     multiple: true,
@@ -96,7 +101,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
             // Single user login response
             if (response.type === 'single') {
-                const loginResponse = response as LoginResponse & { type: 'single' };
+                const loginResponse: LoginResponse & { type: 'single' } = response;
                 const newToken = loginResponse.token;
                 const userData = loginResponse.user;
 
@@ -111,12 +116,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             }
 
             return { success: false, message: 'Unerwartetes Login-Format' };
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('🚨 AuthContext: Login error:', error);
             return {
                 success: false,
                 multiple: false,
-                message: error.message || 'Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.'
+                message: getApiErrorMessage(error, 'Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.')
             };
         }
     };
@@ -128,9 +133,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
             console.log('🔍 AuthContext: Member selection response:', response);
 
-            if (response.success && (response as any).token && (response as any).user) {
-                const newToken = (response as any).token;
-                const userData = (response as any).user;
+            if (response.success && response.token && response.user) {
+                const newToken = response.token;
+                const userData = response.user;
 
                 console.log('🔍 AuthContext: Setting token and user data after selection');
 
@@ -142,11 +147,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 const errorMessage = 'message' in response ? response.message : 'Mitgliederauswahl fehlgeschlagen';
                 return { success: false, message: errorMessage };
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('🚨 AuthContext: Member selection error:', error);
             return {
                 success: false,
-                message: error.message || 'Mitgliederauswahl fehlgeschlagen. Bitte versuchen Sie es erneut.'
+                message: getApiErrorMessage(error, 'Mitgliederauswahl fehlgeschlagen. Bitte versuchen Sie es erneut.')
             };
         }
     };

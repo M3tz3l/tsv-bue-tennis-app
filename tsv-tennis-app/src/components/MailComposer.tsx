@@ -14,7 +14,7 @@ import {
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
-import BackendService from '../services/backendService';
+import BackendService, { getApiErrorMessage } from '../services/backendService';
 import { useAuth } from '../context/AuthContext';
 import type { SendBulkMailRequest, MailJob } from '../types';
 
@@ -204,8 +204,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       } else {
         toast.error(response.message || 'Fehler beim Versenden der Test-Mail');
       }
-    } catch (error: any) {
-      toast.error(error?.message || 'Fehler beim Versenden der Test-Mail');
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, 'Fehler beim Versenden der Test-Mail'));
     } finally {
       setIsSendingTest(false);
     }
@@ -234,8 +234,13 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       );
 
       if (response.success) {
-        const jobId = (response as any).job_id as string;
-        const total = (response as any).total_recipients as number;
+        const jobId = response.job_id;
+        const total = response.total_recipients ?? 0;
+        if (!jobId) {
+          toast.error('Fehler beim Versenden der Mail');
+          setIsLoading(false);
+          return;
+        }
         toast.info(`Mail-Versand gestartet für ${total} Empfänger...`);
         pollingRef.current = setInterval(() => pollJobStatus(jobId), 1500);
         pollJobStatus(jobId);
@@ -243,8 +248,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
         toast.error(response.message || 'Fehler beim Versenden der Mail');
         setIsLoading(false);
       }
-    } catch (error: any) {
-      toast.error(error?.message || 'Fehler beim Versenden der Mail');
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, 'Fehler beim Versenden der Mail'));
       setIsLoading(false);
     }
   };

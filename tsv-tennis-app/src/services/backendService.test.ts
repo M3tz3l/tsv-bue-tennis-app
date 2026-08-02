@@ -19,7 +19,7 @@ vi.mock('axios', () => ({
   },
 }));
 
-import BackendService from '../services/backendService';
+import BackendService, { getApiErrorMessage } from '../services/backendService';
 
 const requestInterceptor = mockInstance.interceptors.request.use.mock.calls[0][0] as (
   config: { headers: Record<string, string | undefined>; data: unknown }
@@ -30,6 +30,27 @@ type RequestConfig = { headers: Record<string, string | undefined>; data: unknow
 describe('BackendService', () => {
   beforeAll(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  describe('getApiErrorMessage', () => {
+    it('falls back when API messages are not strings', () => {
+      expect(getApiErrorMessage({ response: { data: { message: { detail: 'bad' } } } }, 'Fallback'))
+        .toBe('Fallback');
+    });
+
+    it('uses the generic error message when the server message is not usable', () => {
+      expect(getApiErrorMessage({
+        message: 'Network error',
+        response: { data: { message: { detail: 'bad' } } },
+      }, 'Fallback')).toBe('Network error');
+    });
+
+    it('prefers a string server message over the generic error message', () => {
+      expect(getApiErrorMessage({
+        message: 'Network error',
+        response: { data: { message: 'Server error' } },
+      }, 'Fallback')).toBe('Server error');
+    });
   });
 
   beforeEach(() => {
