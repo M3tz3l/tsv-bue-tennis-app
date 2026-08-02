@@ -23,6 +23,17 @@
 - `cargo fmt --all -- --check`: passed.
 - `git diff --check`: passed.
 
+## Final UPDATE Error-Path Fix
+
+- `update_signup` now explicitly attempts `ROLLBACK` when the `event_signups` UPDATE query fails, preserving and returning the original SQLx error.
+
+### Exact Verification
+
+- `cargo test events -- --nocapture --test-threads=1`: passed, 3 matching tests (1 repository, 2 route; 8 route tests were filtered by the `events` name).
+- `cargo test --workspace --all-targets -- --nocapture --test-threads=1`: passed, 54 tests (39 main, 8 repository, 7 route).
+- `cargo fmt --all -- --check`: passed.
+- `git diff --check`: passed.
+
 ## Concerns
 
 - Event IDs are Rust `i64` values exported as TypeScript `number`; this matches the existing JSON API but assumes IDs remain within JavaScript safe integer range.
