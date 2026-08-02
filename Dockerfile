@@ -14,7 +14,7 @@ RUN cargo build --release
 RUN cargo run --release --bin generate-types
 
 # Frontend build stage
-FROM node:20-alpine as frontend-builder
+FROM node:24-alpine as frontend-builder
 
 WORKDIR /app
 

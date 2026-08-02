@@ -19,8 +19,8 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 20 LTS (system-wide, works on both amd64 and arm64)
-ARG NODE_VERSION=20.19.0
+# Install Node.js 24 LTS (system-wide, works on both amd64 and arm64)
+ARG NODE_VERSION=24.18.1
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then NODE_ARCH="x64"; \
     elif [ "$ARCH" = "arm64" ]; then NODE_ARCH="arm64"; \
