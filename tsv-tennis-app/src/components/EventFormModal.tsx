@@ -33,6 +33,9 @@ const EventFormModal = ({ isOpen, onClose, initialData = null }: Props) => {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form.title.trim() || !form.event_date) { toast.error('Titel und Datum sind erforderlich'); return; }
+    if (form.start_time && form.end_time && form.end_time < form.start_time) { toast.error('Die Endzeit darf nicht vor der Startzeit liegen'); return; }
+    if (form.signup_deadline && form.signup_deadline > form.event_date) { toast.error('Der Anmeldeschluss darf nicht nach dem Veranstaltungsdatum liegen'); return; }
+    if (form.capacity !== null && (!Number.isInteger(form.capacity) || form.capacity < 1)) { toast.error('Die Kapazität muss eine positive ganze Zahl sein'); return; }
     const payload: CreateEventRequest = { ...form, title: form.title.trim(), description: form.description?.trim() || null, location: form.location?.trim() || null, start_time: form.start_time || null, end_time: form.end_time || null, signup_deadline: form.signup_deadline || null, capacity: form.capacity === null || form.capacity === 0 ? null : form.capacity };
     try {
       if (initialData) {

@@ -91,15 +91,21 @@ fn require_orga(secret: &str, headers: &HeaderMap) -> Result<String, EventRouteE
 pub async fn list_events(
     State(state): State<AppState>,
     headers: HeaderMap,
+<<<<<<< HEAD
 ) -> Result<impl IntoResponse, EventRouteError> {
     let claims =
         extract_auth_claims_from_headers(&state.jwt_secret, &headers).map_err(auth_error)?;
+=======
+) -> Result<impl IntoResponse, StatusCode> {
+    let claims = extract_auth_claims_from_headers(&state.jwt_secret, &headers)?;
+>>>>>>> 51c04a2 (fix: address Orga event review findings)
     Ok(Json(
         if claims
             .role
             .as_deref()
             .is_some_and(|role| role.trim().eq_ignore_ascii_case("orga"))
         {
+<<<<<<< HEAD
             state.event_repository.list_all_events().await
         } else {
             state
@@ -108,6 +114,16 @@ pub async fn list_events(
                 .await
         }
         .map_err(error_response)?,
+=======
+            repository(&state).await?.list_all_events().await
+        } else {
+            repository(&state)
+                .await?
+                .list_published_future(&claims.sub)
+                .await
+        }
+        .map_err(|e| error_response(e).0)?,
+>>>>>>> 51c04a2 (fix: address Orga event review findings)
     ))
 }
 
@@ -232,6 +248,7 @@ pub async fn list_signups(
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, EventRouteError> {
     require_orga(&state.jwt_secret, &headers)?;
+<<<<<<< HEAD
     let mut summary = state
         .event_repository
         .list_signups(id)
@@ -274,6 +291,19 @@ pub async fn list_signups(
     match tokio::time::timeout(std::time::Duration::from_secs(15), collect_names).await {
         Ok(Ok(())) | Err(_) => {}
         Ok(Err(error)) => return Err(error),
+=======
+    let mut summary = repository(&state)
+        .await?
+        .list_signups(id)
+        .await
+        .map_err(|e| error_response(e).0)?;
+    for signup in &mut summary.signups {
+        signup.member_name =
+            teable::get_member_by_id(&state.teable_config, &state.http_client, &signup.member_id)
+                .await
+                .map_err(|_| StatusCode::BAD_GATEWAY)?
+                .map(|member| member.name());
+>>>>>>> 51c04a2 (fix: address Orga event review findings)
     }
     Ok(Json(summary))
 }

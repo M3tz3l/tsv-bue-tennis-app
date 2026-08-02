@@ -57,11 +57,11 @@ export function useEvent(userId?: string, eventId?: number) {
   });
 }
 
-export function useEventSignups(userId?: string, eventId?: number) {
+export function useEventSignups(userId?: string, eventId?: number, enabled = true) {
   return useQuery({
     queryKey: EVENT_SIGNUPS_QUERY_KEY(userId, eventId),
     queryFn: async () => throwOnFailure(await BackendService.getEventSignups(eventId!)),
-    enabled: !!userId && eventId !== undefined,
+    enabled: enabled && !!userId && eventId !== undefined,
   });
 }
 

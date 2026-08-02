@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,13 +9,14 @@ const mocks = vi.hoisted(() => ({
   remove: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
+  pending: false,
 }));
 
 vi.mock('../context/AuthContext', () => ({ useAuth: mocks.useAuth }));
 vi.mock('../hooks/useEvents', () => ({
-  useCreateEvent: () => ({ mutateAsync: mocks.create, isPending: false }),
-  useUpdateEvent: () => ({ mutateAsync: mocks.update, isPending: false }),
-  useDeleteEvent: () => ({ mutateAsync: mocks.remove, isPending: false }),
+  useCreateEvent: () => ({ mutateAsync: mocks.create, isPending: mocks.pending }),
+  useUpdateEvent: () => ({ mutateAsync: mocks.update, isPending: mocks.pending }),
+  useDeleteEvent: () => ({ mutateAsync: mocks.remove, isPending: mocks.pending }),
 }));
 vi.mock('react-toastify', () => ({ toast: { success: mocks.toastSuccess, error: mocks.toastError } }));
 
@@ -30,6 +31,7 @@ const event = {
 describe('EventFormModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.pending = false;
     mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
     mocks.create.mockResolvedValue(event);
     mocks.update.mockResolvedValue(event);
@@ -65,11 +67,41 @@ describe('EventFormModal', () => {
     const onClose = vi.fn();
     render(<EventFormModal isOpen onClose={onClose} initialData={event} />);
     await user.click(screen.getByLabelText(/Veröffentlicht/i));
-    await user.click(screen.getByRole('button', { name: /Aktualisieren/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Aktualisieren/i })).toBeInTheDocument());
+    fireEvent.submit(screen.getByRole('button', { name: /Aktualisieren/i }).closest('form')!);
     expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ id: 4, payload: expect.objectContaining({ status: 'published' }) }));
     await user.click(screen.getByRole('button', { name: /^Löschen$/i }));
     const deleteButtons = screen.getAllByRole('button', { name: /^Löschen$/i });
     await user.click(deleteButtons[deleteButtons.length - 1]);
     await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith(4));
+  });
+
+  it('rejects invalid time, deadline, and capacity values before mutation', async () => {
+    render(<EventFormModal isOpen onClose={vi.fn()} initialData={{ ...event, start_time: '18:00', end_time: '17:00', signup_deadline: '2099-07-13', capacity: 0 }} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Aktualisieren/i })).toBeInTheDocument());
+    fireEvent.submit(screen.getByRole('button', { name: /Aktualisieren/i }).closest('form')!);
+    expect(mocks.update).not.toHaveBeenCalled();
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(expect.stringMatching(/Zeit|Kapazität/i)));
+  });
+
+  it('keeps the outer dialog open while a mutation is pending', async () => {
+    mocks.pending = true;
+    const onClose = vi.fn();
+    render(<EventFormModal isOpen onClose={onClose} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: /Abbrechen/i }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Abbrechen/i })).toBeDisabled();
+  });
+
+  it('shows mutation errors and keeps the form open', async () => {
+    mocks.create.mockRejectedValue(new Error('Serverfehler'));
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<EventFormModal isOpen onClose={onClose} />);
+    await user.type(screen.getByLabelText(/Titel/i), 'Test');
+    await user.type(screen.getByLabelText(/Datum/i), '2099-07-12');
+    await user.click(screen.getByRole('button', { name: /Erstellen/i }));
+    expect(mocks.toastError).toHaveBeenCalledWith('Serverfehler');
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
