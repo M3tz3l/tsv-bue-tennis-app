@@ -74,10 +74,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - name: Download actionlint
-        id: get_actionlint
-        run: bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-        shell: bash
       - name: Check workflow files
-        run: ${{ steps.get_actionlint.outputs.executable }} -color
-        shell: bash
+        uses: docker://rhysd/actionlint:latest
+        with:
+          args: -color
