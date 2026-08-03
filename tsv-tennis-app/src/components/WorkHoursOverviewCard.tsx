@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import type { DashboardResponse, MemberContribution } from '../types';
-import { formatHours, getProgressColor, getProgressPercentage } from '../utils/utils';
+import { formatHours, getProgressPercentage } from '../utils/utils';
 import { cardShellClass, stackMdClass } from '../styles/tokens';
 
 type WorkHoursOverviewCardProps = {
@@ -25,15 +25,15 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
                 aria-valuemax={100}
                 aria-valuemin={0}
                 aria-valuenow={clampedPercentage}
-                className="w-full bg-gray-100 border-b-2 border-gray-300 h-3"
+                className="w-full h-2.5 rounded-full bg-[#EDF1EF]"
                 role="progressbar"
             >
                 <div
-                    className={`h-2.5 transition-all duration-300 ${getProgressColor(clampedPercentage)}`}
+                    className="h-2.5 rounded-full transition-all duration-300 bg-emerald-500"
                     style={{ width: `${clampedPercentage}%` }}
                 />
             </div>
-            <div className="text-right text-sm text-gray-600 mt-1">
+            <div className="text-right text-sm text-gray-500 mt-1">
                 {Math.round(clampedPercentage)}% abgeschlossen
             </div>
             </>
@@ -44,7 +44,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
         <section className={`${cardShellClass} mb-6 sm:mb-8`}>
             {hasFamilyView && data.family ? (
                 <>
-                    <h2 className="text-lg sm:text-xl font-semibold text-green-800 mb-4">Familie - {selectedYear}</h2>
+                    <h2 className="text-lg sm:text-xl font-semibold text-emerald-700 mb-4">Familie - {selectedYear}</h2>
                     <div className="mb-4">
                         <div className="flex flex-col sm:flex-row sm:justify-between text-sm text-gray-600 mb-1 space-y-1 sm:space-y-0">
                             <span>Familien-Fortschritt</span>
@@ -61,17 +61,17 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
                                 return (
                                     <div
                                         key={member.id}
-                                        className={`flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 px-3 rounded space-y-1 sm:space-y-0 ${isCurrentUser ? 'bg-green-50 border border-green-200' : 'bg-gray-50'}`}
+                                        className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 px-3 space-y-1 sm:space-y-0"
                                     >
                                         <div className="flex flex-col">
-                                            <span className={`font-medium ${isCurrentUser ? 'text-green-800' : ''}`}>
+                                            <span className={`font-medium ${isCurrentUser ? 'text-emerald-700' : 'text-gray-800'}`}>
                                                 {member.name} {isCurrentUser ? '(Sie)' : ''}
                                             </span>
                                             {member.exemption_reason && (
-                                                <span className="text-xs text-gray-600 italic">Befreit: {member.exemption_reason}</span>
+                                                <span className="text-xs text-gray-500 italic">Befreit: {member.exemption_reason}</span>
                                             )}
                                         </div>
-                                        <span className={`font-bold text-sm sm:text-base ${member.exemption_reason ? 'text-green-600' : isCurrentUser ? 'text-green-700' : 'text-blue-600'}`}>
+                                        <span className={`font-semibold text-sm sm:text-base ${member.exemption_reason ? 'text-emerald-600' : isCurrentUser ? 'text-emerald-700' : 'text-gray-700'}`}>
                                             {member.exemption_reason
                                                 ? (member.hours > 0 ? `${formatHours(member.hours)} Std / Befreit` : 'Befreit')
                                                 : `${formatHours(member.hours)} / ${formatHours(member.required)} Std`}
@@ -80,23 +80,23 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
                                 );
                             })}
                         {data.family.remaining > 0 && (
-                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 px-3 bg-red-50 rounded border border-red-200 space-y-1 sm:space-y-0">
-                                <span className="font-medium text-red-700">Noch zu erledigen</span>
-                                <span className="text-red-600 font-bold">{formatHours(data.family.remaining)} Std</span>
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 px-3 space-y-1 sm:space-y-0">
+                                <span className="font-medium text-gray-600">Noch zu erledigen</span>
+                                <span className="text-amber-600 font-semibold">{formatHours(data.family.remaining)} Std</span>
                             </div>
                         )}
                     </div>
                 </>
             ) : data.personal ? (
                 <>
-                    <h2 className="text-xl font-semibold text-green-800 mb-4">{data.personal.name || 'Ihre Arbeitsstunden'} - {selectedYear}</h2>
+                    <h2 className="text-xl font-semibold text-emerald-700 mb-4">{data.personal.name || 'Ihre Arbeitsstunden'} - {selectedYear}</h2>
                     {data.personal.required === 0 ? (
-                        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="mb-4 p-4 border border-[#E7EAE9] rounded-lg">
                             <div className="flex items-center justify-between">
-                                <span className="text-green-600 font-semibold text-lg">Befreit von Arbeitsstunden</span>
-                                {data.personal.hours > 0 && <span className="text-green-700 font-bold">{formatHours(data.personal.hours)} Std geleistet</span>}
+                                <span className="text-emerald-700 font-semibold text-lg">Befreit von Arbeitsstunden</span>
+                                {data.personal.hours > 0 && <span className="text-emerald-700 font-semibold">{formatHours(data.personal.hours)} Std geleistet</span>}
                             </div>
-                            {data.personal.exemption_reason && <p className="text-sm text-green-700 mt-1">Grund: {data.personal.exemption_reason}</p>}
+                            {data.personal.exemption_reason && <p className="text-sm text-emerald-700 mt-1">Grund: {data.personal.exemption_reason}</p>}
                         </div>
                     ) : (
                         <div className="mb-4">
@@ -111,7 +111,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
             ) : null}
             <Link
                 aria-label="Details anzeigen"
-                className="inline-flex mt-2 text-sm font-medium text-green-800 underline decoration-green-300 underline-offset-4 focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2"
+                className="inline-flex mt-2 text-sm font-medium text-emerald-700 underline decoration-emerald-300 underline-offset-4 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2"
                 to="/dashboard/arbeitsstunden"
             >
                 Arbeitsstunden Details

@@ -14,7 +14,7 @@ const DashboardShell = ({ children, title, onOpenMailComposer, isMailComposerOpe
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
+    <div className="min-h-screen bg-[#F6F8F7]">
       <TopbarNavigation onOpenMailComposer={onOpenMailComposer} />
       <div data-testid="dashboard-shell-content" className="min-w-0 pt-16">
         <header className="border-b border-gray-200 bg-white shadow-sm">

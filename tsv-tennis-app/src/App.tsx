@@ -33,7 +33,7 @@ const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
             <AuthProvider>
-                <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
+                <div className="min-h-screen bg-[#F6F8F7] flex flex-col">
                     <ToastContainer
                         position="top-right"
                         autoClose={5000}

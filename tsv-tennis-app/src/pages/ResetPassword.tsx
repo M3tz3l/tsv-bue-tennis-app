@@ -60,7 +60,7 @@ const ResetPassword = () => {
                                     type="password"
                                     required
                                     autoFocus
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white shadow-sm transition-all duration-200"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white shadow-sm transition-all duration-200"
                                     placeholder="Ihr neues Passwort eingeben"
                                 />
                             </div>
@@ -73,7 +73,7 @@ const ResetPassword = () => {
                                     name="confirmpassword"
                                     type="password"
                                     required
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white shadow-sm transition-all duration-200"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white shadow-sm transition-all duration-200"
                                     placeholder="Ihr neues Passwort bestätigen"
                                 />
                             </div>
@@ -82,7 +82,7 @@ const ResetPassword = () => {
                         <div>
                             <button
                                 type="submit"
-                                className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5"
+                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
                             >
                                 Passwort aktualisieren
                             </button>

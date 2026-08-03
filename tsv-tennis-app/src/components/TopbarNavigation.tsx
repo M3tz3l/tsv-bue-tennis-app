@@ -20,7 +20,7 @@ const TopbarNavigation = ({ onOpenMailComposer }: TopbarNavigationProps) => {
     <>
       <nav
         aria-label="Clubnavigation"
-        className="club-navigation-motion fixed inset-x-0 top-0 z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur"
+        className="club-navigation-motion fixed inset-x-0 top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur"
       >
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
@@ -44,7 +44,7 @@ const TopbarNavigation = ({ onOpenMailComposer }: TopbarNavigationProps) => {
                 end={end}
                 className={({ isActive }) =>
                   `touch-control inline-flex items-center border-b-2 px-3 text-sm font-semibold uppercase tracking-wide ${
-                    isActive ? 'border-green-700 text-green-900' : 'border-transparent text-slate-600 hover:text-slate-900'
+                    isActive ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-600 hover:text-slate-900'
                   } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400`
                 }
               >
