@@ -185,10 +185,10 @@ describe('Events', () => {
     expect(screen.getAllByRole('heading', { name: 'Veranstaltungen' })).toHaveLength(1);
   });
 
-  it('uses both shared navigation variants without legacy page switches', () => {
+  it('uses a single topbar navigation without legacy page switches', () => {
     renderEvents();
 
-    expect(screen.getAllByRole('navigation', { name: 'Clubnavigation' })).toHaveLength(2);
+    expect(screen.getAllByRole('navigation', { name: 'Clubnavigation' })).toHaveLength(1);
     expect(screen.queryByRole('navigation', { name: 'Dashboard-Bereiche' })).not.toBeInTheDocument();
   });
 });

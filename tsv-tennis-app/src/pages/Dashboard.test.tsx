@@ -48,7 +48,7 @@ describe('Dashboard navigation', () => {
     expect(screen.getAllByRole('link', { name: /veranstaltungen/i })[0]).not.toHaveAttribute('aria-current');
   });
 
-  it('keeps both navigation controls usable on narrow layouts', () => {
+  it('provides a single topbar navigation with a mobile trigger on narrow layouts', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={queryClient}>
@@ -58,9 +58,10 @@ describe('Dashboard navigation', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getAllByRole('link', { name: /arbeitsstunden/i })).toHaveLength(2);
-    expect(screen.getAllByRole('link', { name: /arbeitsstunden/i })[0]).toHaveAttribute('href', '/dashboard/arbeitsstunden');
-    expect(screen.getAllByRole('link', { name: /veranstaltungen/i })[0]).toHaveAttribute('href', '/dashboard/veranstaltungen');
+    expect(screen.getAllByRole('navigation', { name: 'Clubnavigation' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Menü öffnen' })).toHaveClass('lg:hidden');
+    expect(screen.getByRole('link', { name: /arbeitsstunden/i })).toHaveAttribute('href', '/dashboard/arbeitsstunden');
+    expect(screen.getByRole('link', { name: /veranstaltungen/i })).toHaveAttribute('href', '/dashboard/veranstaltungen');
     expect(screen.queryByRole('navigation', { name: 'Dashboard-Bereiche' })).not.toBeInTheDocument();
   });
 });

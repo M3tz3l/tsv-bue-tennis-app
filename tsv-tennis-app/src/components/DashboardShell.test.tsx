@@ -26,7 +26,7 @@ describe('DashboardShell', () => {
     });
   });
 
-  it('renders identity, title, shared navigation, account action, and content', () => {
+  it('renders a single top navigation, identity, title, and content', () => {
     render(
       <MemoryRouter initialEntries={['/dashboard/arbeitsstunden']}>
         <DashboardShell
@@ -40,43 +40,17 @@ describe('DashboardShell', () => {
       </MemoryRouter>,
     );
 
+    expect(screen.getByRole('navigation', { name: 'Clubnavigation' })).toBeInTheDocument();
+    expect(screen.getAllByRole('navigation', { name: 'Clubnavigation' })).toHaveLength(1);
     expect(screen.getByRole('img', { name: 'TSV BÜ Tennis Logo' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Arbeitsstunden' })).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Arbeitsstunden' })).toHaveLength(2);
-    expect(screen.getAllByRole('link', { name: 'Veranstaltungen' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Rundmail' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Abmelden' })).toHaveLength(2);
     expect(screen.getByText('Arbeitsstunden-Inhalt')).toBeInTheDocument();
     expect(screen.getByText('Willkommen, Orga')).toBeInTheDocument();
   });
 
-  it('calls the page callback from either navigation and preserves responsive visibility', () => {
-    const onOpenMailComposer = vi.fn();
+  it('offsets the page content below the fixed topbar', () => {
     render(
       <MemoryRouter>
-        <DashboardShell
-          title="Veranstaltungen"
-          onOpenMailComposer={onOpenMailComposer}
-          isMailComposerOpen={false}
-          onCloseMailComposer={vi.fn()}
-        >
-          <p>Events</p>
-        </DashboardShell>
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByTestId('dashboard-shell-content')).not.toHaveClass('pb-[var(--club-nav-height)]');
-    expect(screen.getByTestId('dashboard-shell-content')).toHaveAttribute('data-mobile-safe-spacing', 'true');
-    const navigations = screen.getAllByRole('navigation', { name: 'Clubnavigation' });
-    expect(navigations[0]).toHaveClass('hidden', 'lg:flex');
-    expect(navigations[1]).toHaveClass('lg:hidden');
-    screen.getAllByRole('button', { name: 'Rundmail' }).forEach((button) => button.click());
-    expect(onOpenMailComposer).toHaveBeenCalledTimes(2);
-  });
-
-  it('provides only the shared navigation without legacy dashboard switches', () => {
-    render(
-      <MemoryRouter initialEntries={['/dashboard/veranstaltungen']}>
         <DashboardShell
           title="Veranstaltungen"
           onOpenMailComposer={vi.fn()}
@@ -88,9 +62,7 @@ describe('DashboardShell', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getAllByRole('navigation', { name: 'Clubnavigation' })).toHaveLength(2);
-    expect(screen.queryByRole('navigation', { name: 'Dashboard-Bereiche' })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Veranstaltungen' })).toHaveLength(2);
+    expect(screen.getByTestId('dashboard-shell-content')).toHaveClass('pt-16');
   });
 
   it('passes controlled MailComposer state through and exposes its close callback', () => {
