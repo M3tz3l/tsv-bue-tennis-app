@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,19 +37,15 @@ describe('DashboardOverview', () => {
     expect(screen.getByRole('heading', { name: 'Als Nächstes' })).toBeInTheDocument();
   });
 
-  it('shows Rundmail for Orga but not for regular members', async () => {
-    const user = userEvent.setup();
-    const memberView = render(<MemoryRouter><DashboardOverview /></MemoryRouter>);
+  it('shows Rundmail for Orga but not for regular members', () => {
+    render(<MemoryRouter><DashboardOverview /></MemoryRouter>);
+    expect(screen.queryByRole('button', { name: 'Rundmail' })).not.toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole('button', { name: 'Mitglied' }));
-    expect(screen.queryByRole('menuitem', { name: 'Rundmail' })).not.toBeInTheDocument();
-    memberView.unmount();
-
+  it('shows Rundmail for Orga members', () => {
     mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', name: 'Orga', email: 'orga@example.com', role: 'Orga' } });
     render(<MemoryRouter><DashboardOverview /></MemoryRouter>);
-
-    await user.click(screen.getByRole('button', { name: 'Orga' }));
-    expect(screen.getByRole('menuitem', { name: 'Rundmail' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rundmail' })).toBeInTheDocument();
   });
 
   it('keeps the dashboard error message in the primary work-hours area', () => {

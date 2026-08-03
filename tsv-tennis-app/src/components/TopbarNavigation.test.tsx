@@ -52,17 +52,26 @@ describe('TopbarNavigation', () => {
     });
     renderTopbar('/dashboard/arbeitsstunden', onOpenMailComposer);
 
-    await user.click(screen.getByRole('button', { name: 'Orga' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Rundmail' }));
+    await user.click(screen.getByRole('button', { name: 'Rundmail' }));
     expect(onOpenMailComposer).toHaveBeenCalledOnce();
   });
 
-  it('hides Rundmail from non-orga users', async () => {
+  it('hides Rundmail from non-orga users', () => {
+    renderTopbar();
+    expect(screen.queryByRole('button', { name: 'Rundmail' })).not.toBeInTheDocument();
+  });
+
+  it('provides an accessible logout action', async () => {
     const user = userEvent.setup();
+    const logout = vi.fn();
+    mocks.useAuth.mockReturnValue({
+      user: { id: 'member-1', name: 'Mitglied', email: 'member@example.com', role: 'member' },
+      logout,
+    });
     renderTopbar();
 
-    await user.click(screen.getByRole('button', { name: 'Mitglied' }));
-    expect(screen.queryByRole('menuitem', { name: 'Rundmail' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Abmelden' }));
+    expect(logout).toHaveBeenCalledOnce();
   });
 
   it('opens and closes the mobile drawer from the trigger and closes it via a route link', async () => {

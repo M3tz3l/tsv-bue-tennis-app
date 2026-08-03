@@ -1,9 +1,5 @@
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
-import {
-  ArrowRightOnRectangleIcon,
-  EnvelopeIcon,
-  XMarkIcon,
-} from '@heroicons/react/24/outline';
+import { EnvelopeIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isOrgaRole } from '../utils/roles';
@@ -16,7 +12,7 @@ interface TopbarMobileMenuProps {
 }
 
 const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileMenuProps) => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const isOrga = isOrgaRole(user?.role);
 
   return (
@@ -36,7 +32,6 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
             </button>
           </div>
           <div className="flex flex-col gap-1 overflow-y-auto px-2 py-4">
-            <p className="px-3 pb-2 text-sm text-slate-600">{user?.name || user?.email || 'Mitglied'}</p>
             {routes.map(({ label, to, Icon, end }) => (
               <NavLink
                 key={to}
@@ -60,20 +55,12 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
                   onClose();
                   onOpenMailComposer();
                 }}
-                className="touch-control flex items-center gap-3 border-l-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                className="touch-control flex items-center gap-3 border-l-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-purple-700 hover:bg-slate-50 hover:text-purple-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
               >
                 <EnvelopeIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
                 Rundmail
               </button>
             )}
-            <button
-              type="button"
-              onClick={logout}
-              className="touch-control flex items-center gap-3 border-l-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-            >
-              <ArrowRightOnRectangleIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
-              Abmelden
-            </button>
           </div>
         </DialogPanel>
       </div>

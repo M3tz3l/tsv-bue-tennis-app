@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import {
   ArrowRightOnRectangleIcon,
   Bars3Icon,
   EnvelopeIcon,
-  UserCircleIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { isOrgaRole } from '../utils/roles';
@@ -20,7 +18,6 @@ const TopbarNavigation = ({ onOpenMailComposer }: TopbarNavigationProps) => {
   const { user, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const isOrga = isOrgaRole(user?.role);
-  const displayName = user?.name || user?.email || 'Mitglied';
 
   return (
     <>
@@ -62,44 +59,26 @@ const TopbarNavigation = ({ onOpenMailComposer }: TopbarNavigationProps) => {
                 )}
               </NavLink>
             ))}
+            {isOrga && (
+              <button
+                type="button"
+                onClick={onOpenMailComposer}
+                className="touch-control inline-flex items-center gap-2 border-b-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-purple-700 hover:text-purple-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+              >
+                <EnvelopeIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                Rundmail
+              </button>
+            )}
           </div>
 
-          <Menu>
-            <MenuButton
-              aria-label={displayName}
-              className="touch-control flex items-center gap-2 px-2 text-sm font-medium text-slate-600 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-            >
-              <UserCircleIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
-              <span className="hidden max-w-[10rem] truncate sm:inline">{displayName}</span>
-            </MenuButton>
-            <MenuItems
-              anchor="bottom end"
-              className="z-50 mt-2 w-56 rounded-md border border-slate-200 bg-white p-1 shadow-lg"
-            >
-              {isOrga && (
-                <MenuItem>
-                  <button
-                    type="button"
-                    onClick={onOpenMailComposer}
-                    className="touch-control flex w-full items-center gap-2 rounded-md px-3 text-sm font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-                  >
-                    <EnvelopeIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                    Rundmail
-                  </button>
-                </MenuItem>
-              )}
-              <MenuItem>
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="touch-control flex w-full items-center gap-2 rounded-md px-3 text-sm font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-                >
-                  <ArrowRightOnRectangleIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                  Abmelden
-                </button>
-              </MenuItem>
-            </MenuItems>
-          </Menu>
+          <button
+            type="button"
+            onClick={logout}
+            aria-label="Abmelden"
+            className="touch-control inline-flex items-center justify-center rounded-md px-2 text-slate-600 hover:bg-slate-100 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+          >
+            <ArrowRightOnRectangleIcon className="h-5 w-5" aria-hidden="true" />
+          </button>
         </div>
       </nav>
       <TopbarMobileMenu
