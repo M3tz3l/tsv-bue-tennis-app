@@ -68,6 +68,24 @@ describe('ClubNavigation', () => {
     expect(screen.queryByRole('button', { name: /rundmail/i })).not.toBeInTheDocument();
   });
 
+  it('keeps Orga and logout controls named when their labels are visually collapsed', async () => {
+    const user = userEvent.setup();
+    const logout = vi.fn();
+    mocks.useAuth.mockReturnValue({
+      user: { id: 'orga-1', name: 'Orga', email: 'orga@example.com', role: 'orga' },
+      logout,
+    });
+
+    renderNavigation();
+    await user.click(screen.getByRole('button', { name: /navigation einklappen/i }));
+
+    expect(screen.getByRole('button', { name: 'Rundmail' })).not.toHaveTextContent('Rundmail');
+    expect(screen.getByRole('button', { name: 'Rundmail' })).toHaveAttribute('title', 'Rundmail');
+    expect(screen.getByRole('button', { name: 'Abmelden' })).not.toHaveTextContent('Abmelden');
+    expect(screen.getByRole('button', { name: 'Abmelden' })).toHaveAttribute('title', 'Abmelden');
+    expect(screen.queryByText('Orga')).not.toBeInTheDocument();
+  });
+
   it('toggles the expanded state with a labeled collapse button', async () => {
     const user = userEvent.setup();
     renderNavigation();
@@ -92,6 +110,9 @@ describe('ClubNavigation', () => {
     expect(screen.getByRole('navigation', { name: 'Clubnavigation' })).toHaveClass('club-navigation-mobile');
     expect(screen.getByRole('link', { name: 'Veranstaltungen' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('button', { name: /navigation einklappen/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Übersicht' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Arbeitsstunden' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Veranstaltungen' })).toBeVisible();
   });
 
   it('keeps controls accessible and preserves account and logout controls', async () => {
