@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import { useEvent, useEvents } from '../hooks/useEvents';
+import useModalRoute from '../hooks/useModalRoute';
 import type { EventSummary } from '../types';
 import EventSignupModal from '../components/EventSignupModal';
 import EventFormModal from '../components/EventFormModal';
@@ -51,9 +51,7 @@ const EventCard = ({ event, userId, isOrga, onSelect, onEdit, onSignups }: { eve
 const Events = () => {
   const { user } = useAuth();
   const { data: events, isLoading, error } = useEvents(user?.id);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const requestedEventId = Number(searchParams.get('eventId'));
-  const [selectedId, setSelectedId] = useState<number | null>(Number.isInteger(requestedEventId) && requestedEventId > 0 ? requestedEventId : null);
+  const signupModal = useModalRoute('eventId');
   const isOrga = isOrgaRole(user?.role);
   const [editingEvent, setEditingEvent] = useState<EventSummary | null | undefined>(undefined);
   const [signupsId, setSignupsId] = useState<number | null>(null);
@@ -72,8 +70,8 @@ const Events = () => {
   return (
     <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}>
         <div className="mb-6 flex items-center justify-between">{isOrga && <button onClick={() => setEditingEvent(null)} className={buttonVariants.primary}>Veranstaltung erstellen</button>}</div>
-        {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-gray-600 shadow-lg">Keine anstehenden Veranstaltungen</div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((event) => <EventCard key={event.id} event={event} userId={user?.id} isOrga={isOrga} onSelect={setSelectedId} onEdit={setEditingEvent} onSignups={setSignupsId} />)}</div>}
-      {selectedId !== null && <EventSignupModal eventId={selectedId} isOpen onClose={() => { setSelectedId(null); searchParams.delete('eventId'); setSearchParams(searchParams); }} />}
+        {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-gray-600 shadow-lg">Keine anstehenden Veranstaltungen</div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((event) => <EventCard key={event.id} event={event} userId={user?.id} isOrga={isOrga} onSelect={signupModal.open} onEdit={setEditingEvent} onSignups={setSignupsId} />)}</div>}
+      {signupModal.value !== null && <EventSignupModal eventId={signupModal.value} isOpen onClose={signupModal.close} />}
       {editingEvent !== undefined && <EventFormModal initialData={editingEvent} isOpen onClose={() => setEditingEvent(undefined)} />}
       {signupsId !== null && <EventSignupsModal eventId={signupsId} isOpen onClose={() => setSignupsId(null)} />}
     </DashboardShell>
