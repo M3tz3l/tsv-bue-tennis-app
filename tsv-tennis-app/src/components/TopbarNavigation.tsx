@@ -12,6 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { isOrgaRole } from '../utils/roles';
+import TopbarMobileMenu from './TopbarMobileMenu';
 
 interface TopbarNavigationProps {
   onOpenMailComposer: () => void;
@@ -109,8 +110,14 @@ const TopbarNavigation = ({ onOpenMailComposer }: TopbarNavigationProps) => {
           </Menu>
         </div>
       </nav>
-      {/* The slide-over drawer is created and rendered here in Task 2.
-          For now `isMobileMenuOpen` only drives `aria-expanded` on the trigger. */}
+      <TopbarMobileMenu
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+        onOpenMailComposer={() => {
+          setIsMobileMenuOpen(false);
+          onOpenMailComposer();
+        }}
+      />
     </>
   );
 };
