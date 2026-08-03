@@ -11,6 +11,7 @@ import {
     UserCircleIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
+import { isOrgaRole } from '../utils/roles';
 
 type ClubNavigationVariant = 'desktop' | 'mobile';
 
@@ -28,7 +29,7 @@ const routes = [
 const ClubNavigation = ({ variant, onRundmail }: ClubNavigationProps) => {
     const { user, logout } = useAuth();
     const [isExpanded, setIsExpanded] = useState(true);
-    const isOrga = user?.role?.trim().toLowerCase() === 'orga';
+    const isOrga = isOrgaRole(user?.role);
     const isMobile = variant === 'mobile';
 
     return (
