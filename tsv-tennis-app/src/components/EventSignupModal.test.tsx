@@ -123,6 +123,18 @@ describe('EventSignupModal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['loading', { data: undefined, isLoading: true, error: null }],
+    ['error', { data: undefined, isLoading: false, error: new Error('Laden fehlgeschlagen') }],
+  ])('does not expose an enabled submit button without a form while %s', (_state, queryState) => {
+    mocks.useEvent.mockReturnValue(queryState);
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+
+    const submit = screen.queryByRole('button', { name: /Anmelden|Speichern|Aktualisieren/i });
+    expect(submit).not.toBeInTheDocument();
+    expect(document.getElementById('event-signup-form')).not.toBeInTheDocument();
+  });
+
   it('uses shared minimum touch and action control classes and accessibility styles', () => {
     render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
 

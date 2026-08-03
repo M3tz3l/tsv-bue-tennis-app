@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
-import { buttonVariants } from '../styles/tokens';
+import { buttonVariants, stackMdClass } from '../styles/tokens';
 import { useAuth } from '../context/AuthContext';
 import { useCreateEventSignup, useDeleteEventSignup, useEvent, useUpdateEventSignup } from '../hooks/useEvents';
 import type { SignupRequest } from '../types';
@@ -99,14 +99,14 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
         <>
           {signup && <button type="button" onClick={() => void cancelSignup()} disabled={pending} className={`${buttonVariants.destructive} mr-auto`}>Abmelden</button>}
           <button type="button" onClick={close} disabled={pending} className={buttonVariants.secondary}>Abbrechen</button>
-          <button type="submit" form="event-signup-form" disabled={pending} className={buttonVariants.primary}>{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>
+          {data?.event && <button type="submit" form="event-signup-form" disabled={pending} className={buttonVariants.primary}>{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>}
         </>
       )}
     >
       {isLoading && <p className="p-6 text-gray-600">Wird geladen...</p>}
       {error && <p className="p-6 text-red-600">Fehler beim Laden der Veranstaltung</p>}
       {data?.event && (
-        <form id="event-signup-form" onSubmit={submit} className="space-y-4 px-6 py-5">
+        <form id="event-signup-form" onSubmit={submit} className={`${stackMdClass} px-6 py-5`}>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Personen
                   <input aria-label="Personen" type="number" step="1" value={peopleCount} onChange={(e) => setPeopleCount(e.target.value)} disabled={pending} className={`mt-1 w-full min-h-[44px] rounded-md border px-3 py-2 ${errors.peopleCount ? 'border-red-500' : 'border-gray-300'}`} />

@@ -38,7 +38,7 @@ describe('ModalShell', () => {
     expect(backdrop?.className).toMatch(/backdrop-blur-sm/);
   });
 
-  it('keeps footer controls in the supplied order', () => {
+  it('keeps the supplied footer controls in order after the close control', () => {
     render(
       <ModalShell
         isOpen
@@ -49,10 +49,12 @@ describe('ModalShell', () => {
         <p>Inhalt</p>
       </ModalShell>,
     );
-    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+    const buttons = screen.getAllByRole('button');
+    expect(buttons.map((button) => button.textContent)).toEqual([
       '',
       'Abbrechen',
       'Speichern',
     ]);
+    expect(buttons[1].compareDocumentPosition(buttons[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

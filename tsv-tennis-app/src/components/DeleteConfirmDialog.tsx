@@ -19,7 +19,7 @@ export default function DeleteConfirmDialog({
         <ModalShell isOpen={isOpen} onClose={onCancel} title="Eintrag löschen" disableClose={isProcessing} widthClassName="max-w-sm" footer={(
             <>
                 <button type="button" onClick={onCancel} disabled={isProcessing} className={buttonVariants.secondary}>Abbrechen</button>
-                <button type="button" onClick={async () => { await onConfirm(); }} disabled={isProcessing} className={`${buttonVariants.destructive} bg-red-600 text-white hover:bg-red-700 disabled:bg-red-400`}>{isProcessing ? 'Löschen...' : 'Löschen'}</button>
+                <button type="button" onClick={async () => { await onConfirm(); }} disabled={isProcessing} className={buttonVariants.destructive}>{isProcessing ? 'Löschen...' : 'Löschen'}</button>
             </>
         )}>
                             <div className="p-4 sm:p-6">
