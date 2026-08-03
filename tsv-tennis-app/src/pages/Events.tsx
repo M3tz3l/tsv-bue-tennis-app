@@ -8,6 +8,7 @@ import EventSignupModal from '../components/EventSignupModal';
 import EventFormModal from '../components/EventFormModal';
 import EventSignupsModal from '../components/EventSignupsModal';
 import DashboardShell from '../components/DashboardShell';
+import { isOrgaRole } from '../utils/roles';
 
 const parseEventDate = (value: string, endOfDay = false) => {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -22,7 +23,7 @@ const formatDate = (value: string) => {
 const isPast = (value: string) => (parseEventDate(value, true)?.getTime() ?? 0) < Date.now();
 
 const EventCard = ({ event, userId, isOrga, onSelect, onEdit, onSignups }: { event: EventSummary; userId?: string; isOrga: boolean; onSelect: (id: number) => void; onEdit: (event: EventSummary) => void; onSignups: (id: number) => void }) => {
-  const { data: detail } = useEvent(userId, event.id);
+  const { data: detail } = useEvent(userId, event.id, !isOrga);
   const ownSignup = detail?.own_signup;
   const full = event.capacity !== null && event.signup_people_count >= event.capacity;
   const deadlinePassed = event.signup_deadline !== null && (parseEventDate(event.signup_deadline, true)?.getTime() ?? 0) < Date.now();
@@ -52,7 +53,7 @@ const Events = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedEventId = Number(searchParams.get('eventId'));
   const [selectedId, setSelectedId] = useState<number | null>(Number.isInteger(requestedEventId) && requestedEventId > 0 ? requestedEventId : null);
-  const isOrga = user?.role?.trim().toLowerCase() === 'orga';
+  const isOrga = isOrgaRole(user?.role);
   const [editingEvent, setEditingEvent] = useState<EventSummary | null | undefined>(undefined);
   const [signupsId, setSignupsId] = useState<number | null>(null);
   const [showMailComposer, setShowMailComposer] = useState(false);

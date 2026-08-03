@@ -49,11 +49,11 @@ export function useEvents(userId?: string, authenticated = true) {
   });
 }
 
-export function useEvent(userId?: string, eventId?: number) {
+export function useEvent(userId?: string, eventId?: number, enabled = true) {
   return useQuery({
     queryKey: EVENT_DETAIL_QUERY_KEY(userId, eventId),
     queryFn: async () => throwOnFailure(await BackendService.getEvent(eventId!)),
-    enabled: !!userId && eventId !== undefined,
+    enabled: enabled && !!userId && eventId !== undefined,
   });
 }
 
@@ -93,14 +93,10 @@ function useSignupMutation(
   userId: string | undefined,
   action: (id: number, payload: SignupRequest) => Promise<EventSignup | ApiError>,
 ) {
-  const queryClient = useQueryClient();
+  const onSuccess = useEventInvalidation(userId);
   return useMutation<EventSignup, Error, { id: number; payload: SignupRequest }>({
     mutationFn: ({ id, payload }) => action(id, payload).then(throwOnFailure),
-    onSuccess: async (_data, { id }) => {
-      await queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY(userId) });
-      await queryClient.invalidateQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(userId, id) });
-      await queryClient.invalidateQueries({ queryKey: EVENT_SIGNUPS_QUERY_KEY(userId, id) });
-    },
+    onSuccess: (_data, { id }) => onSuccess(id),
   });
 }
 

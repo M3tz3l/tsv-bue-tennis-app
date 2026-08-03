@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCreateEvent, useDeleteEvent, useUpdateEvent } from '../hooks/useEvents';
 import type { CreateEventRequest, EventSummary, EventType, UpdateEventRequest } from '../types';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
+import { isOrgaRole } from '../utils/roles';
 
 type Props = { isOpen: boolean; onClose: () => void; initialData?: EventSummary | null };
 type FormState = Omit<CreateEventRequest, 'type'> & { type: EventType };
@@ -14,7 +15,7 @@ const emptyForm: FormState = { type: 'event', title: '', description: null, even
 
 const EventFormModal = ({ isOpen, onClose, initialData = null }: Props) => {
   const { user } = useAuth();
-  const isOrga = user?.role?.trim().toLowerCase() === 'orga';
+  const isOrga = isOrgaRole(user?.role);
   const createEvent = useCreateEvent(user?.id);
   const updateEvent = useUpdateEvent(user?.id);
   const deleteEvent = useDeleteEvent(user?.id);

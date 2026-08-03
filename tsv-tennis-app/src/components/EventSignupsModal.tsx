@@ -2,12 +2,13 @@ import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { useEventSignups } from '../hooks/useEvents';
+import { isOrgaRole } from '../utils/roles';
 
 type Props = { eventId: number; isOpen: boolean; onClose: () => void };
 
 const EventSignupsModal = ({ eventId, isOpen, onClose }: Props) => {
   const { user } = useAuth();
-  const isOrga = user?.role?.trim().toLowerCase() === 'orga';
+  const isOrga = isOrgaRole(user?.role);
   const { data, isLoading, error } = useEventSignups(user?.id, eventId, isOrga);
   if (!isOrga) return null;
    return <Dialog open={isOpen} onClose={onClose} className="relative z-50">

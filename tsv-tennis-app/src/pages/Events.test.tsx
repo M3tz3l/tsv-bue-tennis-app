@@ -78,7 +78,7 @@ describe('Events', () => {
     renderEvents();
 
     expect(screen.getByText(/Ihre Anmeldung: 2 Personen/)).toBeInTheDocument();
-    expect(mocks.useEvent).toHaveBeenCalledWith('member-1', 1);
+    expect(mocks.useEvent).toHaveBeenCalledWith('member-1', 1, true);
   });
 
   it('opens the event identified by the eventId query parameter', () => {
@@ -134,6 +134,10 @@ describe('Events', () => {
     renderEvents();
     expect(screen.getByRole('button', { name: /Veranstaltung erstellen/i })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Anmeldungen anzeigen/i })).not.toHaveLength(0);
+    expect(screen.getByText('Entwurf')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Bearbeiten$/i })).toHaveLength(3);
+    expect(mocks.useEvent).toHaveBeenCalledTimes(3);
+    expect(mocks.useEvent).toHaveBeenCalledWith('orga-1', 1, false);
   });
 
   it('lets Orga members sign up while retaining management controls', async () => {
