@@ -109,7 +109,7 @@ describe('EventFormModal', () => {
   });
 
   it('uses shared minimum touch and action control classes and accessibility styles', () => {
-    const { container } = render(<EventFormModal isOpen onClose={vi.fn()} />);
+    render(<EventFormModal isOpen onClose={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Schließen' })).toHaveClass('touch-control');
     expect(screen.getByRole('button', { name: /Abbrechen/i })).toHaveClass('action-control');
@@ -126,6 +126,12 @@ describe('EventFormModal', () => {
     // Backdrop blur
     const backdrop = screen.getByTestId('modal-backdrop');
     expect(backdrop).toHaveClass('backdrop-blur-sm');
+  });
+
+  it('uses the destructive token for deleting an existing event', () => {
+    render(<EventFormModal isOpen onClose={vi.fn()} initialData={event} />);
+
+    expect(screen.getByRole('button', { name: /^Löschen$/i })).toHaveClass('action-control');
   });
 
   it('shows mutation errors and keeps the form open', async () => {

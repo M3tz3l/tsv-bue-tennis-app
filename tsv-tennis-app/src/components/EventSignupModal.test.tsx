@@ -124,7 +124,7 @@ describe('EventSignupModal', () => {
   });
 
   it('uses shared minimum touch and action control classes and accessibility styles', () => {
-    const { container } = render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Schließen' })).toHaveClass('touch-control');
     expect(screen.getByRole('button', { name: /Abbrechen/i })).toHaveClass('action-control');
@@ -134,6 +134,9 @@ describe('EventSignupModal', () => {
     expect(submitBtn).toHaveClass('bg-emerald-700');
     expect(submitBtn).toHaveClass('hover:bg-emerald-800');
 
+    const cancelBtn = screen.getByRole('button', { name: /Abbrechen/i });
+    expect(cancelBtn).toHaveClass('border-gray-300');
+
     // Inputs have touch targets
     const personInput = screen.getByLabelText(/Personen/i);
     expect(personInput).toHaveClass('min-h-[44px]');
@@ -141,6 +144,13 @@ describe('EventSignupModal', () => {
     // Backdrop blur
     const backdrop = screen.getByTestId('modal-backdrop');
     expect(backdrop).toHaveClass('backdrop-blur-sm');
+  });
+
+  it('uses the destructive token for cancelling an existing signup', () => {
+    mocks.useEvent.mockReturnValue({ data: detail({ own_signup: { id: 7, event_id: 1, member_id: 'member-1', people_count: 2, salad_count: 1, cake_count: 0, comment: 'Hi' } }), isLoading: false, error: null });
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: /Abmelden/i })).toHaveClass('action-control');
   });
 
   it('shows API errors through a toast and keeps the modal open', async () => {

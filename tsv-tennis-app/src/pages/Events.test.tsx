@@ -140,6 +140,14 @@ describe('Events', () => {
     expect(mocks.useEvent).toHaveBeenCalledWith('orga-1', 1, false);
   });
 
+  it('uses shared button variants for event actions', () => {
+    mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
+    renderEvents();
+
+    expect(screen.getByRole('button', { name: /Veranstaltung erstellen/i })).toHaveClass('bg-emerald-700');
+    expect(screen.getAllByRole('button', { name: /^Bearbeiten$/i })[0]).toHaveClass('border-gray-300');
+  });
+
   it('lets Orga members sign up while retaining management controls', async () => {
     const user = userEvent.setup();
     mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });

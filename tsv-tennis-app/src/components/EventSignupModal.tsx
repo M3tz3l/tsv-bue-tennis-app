@@ -2,6 +2,7 @@ import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
+import { buttonVariants } from '../styles/tokens';
 import { useAuth } from '../context/AuthContext';
 import { useCreateEventSignup, useDeleteEventSignup, useEvent, useUpdateEventSignup } from '../hooks/useEvents';
 import type { SignupRequest } from '../types';
@@ -129,9 +130,9 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
                 <textarea value={comment} onChange={(e) => setComment(e.target.value)} disabled={pending} className="mt-1 w-full min-h-[44px] rounded-md border border-gray-300 px-3 py-2" />
               </label>
               <div className="flex flex-wrap justify-end gap-3 pt-2">
-                {signup && <button type="button" onClick={() => void cancelSignup()} disabled={pending} className="mr-auto rounded-md border border-red-300 px-4 py-2 text-sm text-red-700">Abmelden</button>}
-                 <button type="button" onClick={close} disabled={pending} className="action-control rounded-md border border-gray-300 text-sm text-gray-700">Abbrechen</button>
-                 <button type="submit" disabled={pending} className="action-control rounded-md bg-emerald-700 hover:bg-emerald-800 text-sm font-medium text-white disabled:bg-gray-400">{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>
+                 {signup && <button type="button" onClick={() => void cancelSignup()} disabled={pending} className={`${buttonVariants.destructive} mr-auto`}>Abmelden</button>}
+                  <button type="button" onClick={close} disabled={pending} className={buttonVariants.secondary}>Abbrechen</button>
+                  <button type="submit" disabled={pending} className={buttonVariants.primary}>{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>
               </div>
             </form>
           )}

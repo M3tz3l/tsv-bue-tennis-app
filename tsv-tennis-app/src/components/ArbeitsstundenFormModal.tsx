@@ -10,6 +10,7 @@ import BackendService from '../services/backendService';
 import { useAuth } from '../context/AuthContext';
 import { DASHBOARD_QUERY_KEY } from '../hooks/useDashboard';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
+import { buttonVariants } from '../styles/tokens';
 
 type FormValues = {
     Nachname: string;
@@ -241,7 +242,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                     <button
                                         type="button"
                                         onClick={() => setShowDeleteDialog(true)}
-                                        className={`px-3 py-2 border border-red-300 rounded-md text-sm font-medium text-red-700 hover:bg-red-50 transition-colors ${isDeleting ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                         className={`${buttonVariants.destructive} ${isDeleting ? 'opacity-60 cursor-not-allowed' : ''}`}
                                         disabled={isDeleting || isSubmitting}
                                     >
                                         Löschen
@@ -251,14 +252,14 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                 className={buttonVariants.secondary}
                                 disabled={isSubmitting || isDeleting}
                             >
                                 Abbrechen
                             </button>
                             <button
                                 type="submit"
-                                className={`px-4 py-2 border border-transparent rounded-md text-sm font-medium transition-colors ${isSubmitting ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-emerald-700 text-white hover:bg-emerald-800'}`}
+                                 className={`${buttonVariants.primary} ${isSubmitting ? 'cursor-not-allowed' : ''}`}
                                 disabled={isSubmitting || isDeleting}
                                 style={isSubmitting ? { pointerEvents: 'none' } : {}}
                             >

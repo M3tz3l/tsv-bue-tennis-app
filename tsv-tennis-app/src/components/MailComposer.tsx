@@ -17,6 +17,7 @@ import { toast } from 'react-toastify';
 import BackendService, { getApiErrorMessage } from '../services/backendService';
 import { useAuth } from '../context/AuthContext';
 import type { SendBulkMailRequest, MailJob } from '../types';
+import { buttonVariants } from '../styles/tokens';
 
 interface MailComposerProps {
   isOpen: boolean;
@@ -357,7 +358,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
               <button
                 onClick={handleClose}
                 disabled={isBusy}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                 className={buttonVariants.secondary}
               >
                 {activeJob.status === 'completed' || activeJob.status === 'failed'
                   ? 'Schließen'
@@ -642,7 +643,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
             <div className="flex items-center gap-3">
               <button
                 onClick={handleClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                 className={buttonVariants.secondary}
                 disabled={isBusy}
               >
                 Abbrechen
@@ -650,7 +651,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
               <button
                 onClick={handleSendTest}
                 disabled={isBusy || !isFormValid}
-                className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                 className={`${buttonVariants.secondary} inline-flex items-center justify-center`}
               >
                 {isSendingTest ? 'Wird gesendet...' : 'Test-Mail senden'}
               </button>
@@ -666,14 +667,14 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                   <button
                     onClick={() => setConfirmSend(false)}
                     disabled={isBusy}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium text-sm"
+                     className={buttonVariants.secondary}
                   >
                     Zurück
                   </button>
                   <button
                     onClick={handleSendBulk}
                     disabled={isBusy}
-                    className="inline-flex items-center justify-center px-5 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+                     className={`${buttonVariants.primary} inline-flex items-center justify-center shadow-sm`}
                   >
                     <PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />
                     Jetzt senden
@@ -683,7 +684,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                 <button
                   onClick={() => isFormValid && setConfirmSend(true)}
                   disabled={isBusy || !isFormValid}
-                  className="inline-flex items-center justify-center px-5 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+                   className={`${buttonVariants.primary} inline-flex items-center justify-center shadow-sm`}
                 >
                   <PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />
                   {isLoading ? 'Wird gestartet...' : 'Versenden'}

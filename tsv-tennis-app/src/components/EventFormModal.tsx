@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import { useCreateEvent, useDeleteEvent, useUpdateEvent } from '../hooks/useEvents';
+import { buttonVariants } from '../styles/tokens';
 import type { CreateEventRequest, EventSummary, EventType, UpdateEventRequest } from '../types';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import { isOrgaRole } from '../utils/roles';
@@ -75,7 +76,7 @@ const EventFormModal = ({ isOpen, onClose, initialData = null }: Props) => {
           <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium text-gray-700">Anmeldeschluss<input aria-label="Anmeldeschluss" type="date" value={String(value('signup_deadline'))} onChange={(e) => set('signup_deadline', e.target.value || null)} className="mt-1 w-full min-h-[44px] rounded-md border border-gray-300 px-3 py-2" /></label><label className="block text-sm font-medium text-gray-700">Kapazität<input aria-label="Kapazität" type="number" min="1" value={form.capacity ?? ''} onChange={(e) => set('capacity', e.target.value ? Number(e.target.value) : null)} className="mt-1 w-full min-h-[44px] rounded-md border border-gray-300 px-3 py-2" /></label></div>
           <div className="flex flex-wrap gap-4"><label><input aria-label="Salat anbieten" type="checkbox" checked={form.allow_salad} onChange={(e) => set('allow_salad', e.target.checked)} /> Salat anbieten</label><label><input aria-label="Kuchen anbieten" type="checkbox" checked={form.allow_cake} onChange={(e) => set('allow_cake', e.target.checked)} /> Kuchen anbieten</label></div>
           <fieldset><legend className="text-sm font-medium text-gray-700">Status</legend><label className="mr-4"><input aria-label="Entwurf" type="radio" checked={form.status === 'draft'} onChange={() => set('status', 'draft')} /> Entwurf</label><label><input aria-label="Veröffentlicht" type="radio" checked={form.status === 'published'} onChange={() => set('status', 'published')} /> Veröffentlicht</label></fieldset>
-           <div className="flex justify-end gap-3"><>{initialData && <button type="button" onClick={() => setShowDelete(true)} disabled={pending} className="action-control mr-auto rounded-md border border-red-300 text-sm text-red-700">Löschen</button>}</><button type="button" onClick={onClose} disabled={pending} className="action-control rounded-md border border-gray-300 text-sm">Abbrechen</button><button type="submit" disabled={pending} className="action-control rounded-md bg-emerald-700 hover:bg-emerald-800 text-sm font-medium text-white">{initialData ? 'Aktualisieren' : 'Erstellen'}</button></div>
+            <div className="flex justify-end gap-3"><>{initialData && <button type="button" onClick={() => setShowDelete(true)} disabled={pending} className={`${buttonVariants.destructive} mr-auto`}>Löschen</button>}</><button type="button" onClick={onClose} disabled={pending} className={buttonVariants.secondary}>Abbrechen</button><button type="submit" disabled={pending} className={buttonVariants.primary}>{initialData ? 'Aktualisieren' : 'Erstellen'}</button></div>
         </form>
       </DialogPanel></div>
     </Dialog>

@@ -9,6 +9,7 @@ import EventFormModal from '../components/EventFormModal';
 import EventSignupsModal from '../components/EventSignupsModal';
 import DashboardShell from '../components/DashboardShell';
 import { isOrgaRole } from '../utils/roles';
+import { buttonVariants } from '../styles/tokens';
 
 const parseEventDate = (value: string, endOfDay = false) => {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -42,8 +43,8 @@ const EventCard = ({ event, userId, isOrga, onSelect, onEdit, onSignups }: { eve
     </dl>
     {ownSignup && <p className="mt-4 text-sm font-medium text-green-700">Ihre Anmeldung: {ownSignup.people_count} Personen</p>}
     <div className="mt-5 flex-1" />
-    {isOrga && <div className="flex gap-2"><button onClick={() => onEdit(event)} className="action-control rounded-md border border-gray-300 text-sm">Bearbeiten</button><button onClick={() => onSignups(event.id)} className="action-control rounded-md border border-gray-300 text-sm">Anmeldungen anzeigen</button></div>}
-    {ownSignup ? <button onClick={() => onSelect(event.id)} className="action-control rounded-md bg-emerald-700 font-medium text-white hover:bg-emerald-800">Anmeldung bearbeiten</button> : unavailable ? <p className="rounded-md bg-gray-100 px-3 py-2 text-center text-sm font-medium text-gray-600">{full ? 'Ausgebucht' : 'Anmeldeschluss erreicht'}</p> : <button onClick={() => onSelect(event.id)} className="action-control rounded-md bg-emerald-700 font-medium text-white hover:bg-emerald-800">Anmelden</button>}
+    {isOrga && <div className="flex gap-2"><button onClick={() => onEdit(event)} className={buttonVariants.secondary}>Bearbeiten</button><button onClick={() => onSignups(event.id)} className={buttonVariants.secondary}>Anmeldungen anzeigen</button></div>}
+    {ownSignup ? <button onClick={() => onSelect(event.id)} className={buttonVariants.primary}>Anmeldung bearbeiten</button> : unavailable ? <p className="rounded-md bg-gray-100 px-3 py-2 text-center text-sm font-medium text-gray-600">{full ? 'Ausgebucht' : 'Anmeldeschluss erreicht'}</p> : <button onClick={() => onSelect(event.id)} className={buttonVariants.primary}>Anmelden</button>}
   </article>;
 };
 
@@ -70,7 +71,7 @@ const Events = () => {
 
   return (
     <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}>
-        <div className="mb-6 flex items-center justify-between">{isOrga && <button onClick={() => setEditingEvent(null)} className="action-control rounded-md bg-emerald-700 font-medium text-white">Veranstaltung erstellen</button>}</div>
+        <div className="mb-6 flex items-center justify-between">{isOrga && <button onClick={() => setEditingEvent(null)} className={buttonVariants.primary}>Veranstaltung erstellen</button>}</div>
         {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-gray-600 shadow-lg">Keine anstehenden Veranstaltungen</div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((event) => <EventCard key={event.id} event={event} userId={user?.id} isOrga={isOrga} onSelect={setSelectedId} onEdit={setEditingEvent} onSignups={setSignupsId} />)}</div>}
       {selectedId !== null && <EventSignupModal eventId={selectedId} isOpen onClose={() => { setSelectedId(null); searchParams.delete('eventId'); setSearchParams(searchParams); }} />}
       {editingEvent !== undefined && <EventFormModal initialData={editingEvent} isOpen onClose={() => setEditingEvent(undefined)} />}
