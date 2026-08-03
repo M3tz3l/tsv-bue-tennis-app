@@ -87,6 +87,14 @@ describe('Events', () => {
     expect(screen.getByRole('dialog')).toHaveTextContent('Signup modal for 1');
   });
 
+  it('clears the eventId query parameter when the signup modal closes', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/dashboard/veranstaltungen?eventId=1']}><Events /></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: 'close' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(window.location.search).toBe('');
+  });
+
   it('keeps full events visible but does not offer an action', () => {
     mocks.useEvents.mockReturnValue({ data: [event({ capacity: 3, signup_people_count: 3 })], isLoading: false, error: null });
     mocks.useEvent.mockReturnValue({ data: { event: event({ capacity: 3, signup_people_count: 3 }), own_signup: null }, isLoading: false, error: null });

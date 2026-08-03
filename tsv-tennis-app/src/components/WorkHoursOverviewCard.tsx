@@ -56,7 +56,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
                         {[...data.family.memberContributions]
                             .sort((a: MemberContribution, b: MemberContribution) => a.name.localeCompare(b.name, 'de'))
                             .map((member: MemberContribution) => {
-                                const isCurrentUser = user?.name === member.name;
+                                const isCurrentUser = user?.id === member.id;
                                 return (
                                     <div
                                         key={member.id}
@@ -70,7 +70,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
                                                 <span className="text-xs text-gray-600 italic">Befreit: {member.exemption_reason}</span>
                                             )}
                                         </div>
-                                        <span className={`font-bold text-sm sm:text-base ${isCurrentUser ? 'text-green-700' : 'text-blue-600'} ${member.exemption_reason ? 'text-green-600' : ''}`}>
+                                        <span className={`font-bold text-sm sm:text-base ${member.exemption_reason ? 'text-green-600' : isCurrentUser ? 'text-green-700' : 'text-blue-600'}`}>
                                             {member.exemption_reason
                                                 ? (member.hours > 0 ? `${formatHours(member.hours)} Std / Befreit` : 'Befreit')
                                                 : `${formatHours(member.hours)} / ${formatHours(member.required)} Std`}

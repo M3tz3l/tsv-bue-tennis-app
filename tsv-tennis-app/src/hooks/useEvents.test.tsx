@@ -66,6 +66,7 @@ describe('event query hooks', () => {
     const list = renderHook(() => useEvents('member-1'), { wrapper });
     const detailHook = renderHook(() => useEvent('member-1', 42), { wrapper });
     const disabled = renderHook(() => useEvents(undefined), { wrapper });
+    const unauthenticated = renderHook(() => useEvents('member-1', false), { wrapper });
 
     await waitFor(() => expect(list.result.current.isSuccess).toBe(true));
     await waitFor(() => expect(detailHook.result.current.isSuccess).toBe(true));
@@ -73,6 +74,7 @@ describe('event query hooks', () => {
     expect(serviceMocks.getEvent).toHaveBeenCalledWith(42);
     expect(serviceMocks.getEvents).not.toHaveBeenCalledTimes(2);
     expect(disabled.result.current.fetchStatus).toBe('idle');
+    expect(unauthenticated.result.current.fetchStatus).toBe('idle');
   });
 
   it('loads signups only for authenticated users', async () => {

@@ -93,8 +93,8 @@ const ClubNavigation = ({ variant, onRundmail }: ClubNavigationProps) => {
                 )}
             </div>
 
-            <div className={isMobile ? 'hidden' : 'mt-auto border-t border-slate-800 pt-4'}>
-                {isExpanded && (
+            <div className={isMobile ? 'mt-auto flex items-center justify-center border-t border-slate-200 pt-1 lg:hidden' : 'mt-auto border-t border-slate-800 pt-4'}>
+                {!isMobile && isExpanded && (
                     <div className="mb-3 flex items-center gap-3 px-3 text-sm text-slate-300">
                         <UserCircleIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
                         <span className="truncate">{user?.name || user?.email || 'Mitglied'}</span>
@@ -104,10 +104,10 @@ const ClubNavigation = ({ variant, onRundmail }: ClubNavigationProps) => {
                     type="button"
                     title={!isExpanded ? 'Abmelden' : undefined}
                     onClick={logout}
-                    className="touch-control w-full flex items-center justify-center gap-3 rounded-md px-3 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                    className={`touch-control flex items-center justify-center gap-3 rounded-md px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 ${isMobile ? 'text-slate-600 hover:bg-slate-100' : 'w-full text-slate-300 hover:bg-slate-800 hover:text-white'}`}
                 >
                     <ArrowRightOnRectangleIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                    {isExpanded && <span>Abmelden</span>}
+                    {(isMobile || isExpanded) && <span>Abmelden</span>}
                 </button>
             </div>
         </nav>

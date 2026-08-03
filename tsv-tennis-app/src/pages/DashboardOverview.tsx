@@ -12,7 +12,7 @@ const DashboardOverview = () => {
     const { user, token } = useAuth();
     const selectedYear = new Date().getFullYear();
     const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError } = useDashboard(user?.id, selectedYear, !!user?.id && !!token);
-    const { data: events, isLoading: eventsLoading, error: eventsError } = useEvents(user?.id);
+    const { data: events, isLoading: eventsLoading, error: eventsError } = useEvents(user?.id, !!user?.id && !!token);
     const [isMailComposerOpen, setIsMailComposerOpen] = useState(false);
 
     useEffect(() => {

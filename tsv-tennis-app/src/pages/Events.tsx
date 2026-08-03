@@ -49,7 +49,7 @@ const EventCard = ({ event, userId, isOrga, onSelect, onEdit, onSignups }: { eve
 const Events = () => {
   const { user } = useAuth();
   const { data: events, isLoading, error } = useEvents(user?.id);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requestedEventId = Number(searchParams.get('eventId'));
   const [selectedId, setSelectedId] = useState<number | null>(Number.isInteger(requestedEventId) && requestedEventId > 0 ? requestedEventId : null);
   const isOrga = user?.role?.trim().toLowerCase() === 'orga';
@@ -71,7 +71,7 @@ const Events = () => {
     <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}>
         <div className="mb-6 flex items-center justify-between">{isOrga && <button onClick={() => setEditingEvent(null)} className="action-control rounded-md bg-green-600 font-medium text-white">Veranstaltung erstellen</button>}</div>
         {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-gray-600 shadow-lg">Keine anstehenden Veranstaltungen</div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((event) => <EventCard key={event.id} event={event} userId={user?.id} isOrga={isOrga} onSelect={setSelectedId} onEdit={setEditingEvent} onSignups={setSignupsId} />)}</div>}
-      {selectedId !== null && <EventSignupModal eventId={selectedId} isOpen onClose={() => setSelectedId(null)} />}
+      {selectedId !== null && <EventSignupModal eventId={selectedId} isOpen onClose={() => { setSelectedId(null); searchParams.delete('eventId'); setSearchParams(searchParams); }} />}
       {editingEvent !== undefined && <EventFormModal initialData={editingEvent} isOpen onClose={() => setEditingEvent(undefined)} />}
       {signupsId !== null && <EventSignupsModal eventId={signupsId} isOpen onClose={() => setSignupsId(null)} />}
     </DashboardShell>

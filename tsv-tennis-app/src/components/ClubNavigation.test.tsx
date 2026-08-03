@@ -111,6 +111,20 @@ describe('ClubNavigation', () => {
     expect(screen.getByRole('link', { name: 'Veranstaltungen' })).toBeVisible();
   });
 
+  it('shows an accessible logout action in mobile navigation', async () => {
+    const user = userEvent.setup();
+    const logout = vi.fn();
+    mocks.useAuth.mockReturnValue({ user: { id: 'member-1', name: 'Mitglied', role: 'member' }, logout });
+    render(
+      <MemoryRouter>
+        <ClubNavigation variant="mobile" onRundmail={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Abmelden' }));
+    expect(logout).toHaveBeenCalledOnce();
+  });
+
   it('keeps controls accessible and preserves account and logout controls', async () => {
     const user = userEvent.setup();
     const logout = vi.fn();
@@ -173,6 +187,6 @@ describe('ClubNavigation', () => {
     );
     const navigation = screen.getByRole('navigation', { name: 'Clubnavigation' });
     expect(navigation).toHaveAttribute('data-overflow-safe', 'true');
-    expect(navigation.querySelectorAll('[aria-hidden="true"]')).toHaveLength(5);
+    expect(navigation.querySelectorAll('[aria-hidden="true"]')).toHaveLength(4);
   });
 });

@@ -245,6 +245,11 @@ describe('BackendService', () => {
 
       expect(mockInstance.delete).toHaveBeenCalledWith('/arbeitsstunden/wh-1');
     });
+
+    it('normalizes an empty work-hour delete response', async () => {
+      mockInstance.delete.mockResolvedValue({ status: 204, data: '' });
+      await expect(BackendService.deleteArbeitsstunden('wh-1')).resolves.toEqual({ success: true });
+    });
   });
 
   describe('event endpoints', () => {
@@ -316,7 +321,7 @@ describe('BackendService', () => {
     });
 
     it('normalizes event and signup delete 204 responses to success results', async () => {
-      mockInstance.delete.mockResolvedValue({ status: 204, data: undefined });
+      mockInstance.delete.mockResolvedValue({ status: 204, data: '' });
 
       await expect(BackendService.deleteEvent(42)).resolves.toEqual({ success: true });
       await expect(BackendService.deleteEventSignup(42)).resolves.toEqual({ success: true });

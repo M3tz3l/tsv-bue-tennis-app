@@ -41,11 +41,11 @@ function useEventInvalidation(userId?: string, eventId?: number) {
   };
 }
 
-export function useEvents(userId?: string) {
+export function useEvents(userId?: string, authenticated = true) {
   return useQuery({
     queryKey: EVENTS_QUERY_KEY(userId),
     queryFn: async () => throwOnFailure(await BackendService.getEvents()),
-    enabled: !!userId,
+    enabled: authenticated && !!userId,
   });
 }
 

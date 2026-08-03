@@ -66,6 +66,9 @@ const logApiError = (label: string, error: unknown): void => {
   console.error(label, { status: getApiErrorStatus(error) });
 };
 
+const normalizeDeleteResponse = (data: unknown): ApiResult | ApiError =>
+  data === '' || data === undefined ? { success: true } : data as ApiResult | ApiError;
+
 class BackendService {
   private api: AxiosInstance;
   private baseURL: string;
@@ -222,7 +225,7 @@ class BackendService {
   async deleteArbeitsstunden(id: string): Promise<ApiResult | ApiError> {
     try {
       const response = await this.api.delete<ApiResult>(`/arbeitsstunden/${id}`);
-      return response.data;
+      return normalizeDeleteResponse(response.data);
     } catch (error: unknown) {
       logApiError('Error deleting work hours:', error);
       return {
@@ -398,7 +401,7 @@ class BackendService {
   async deleteEvent(id: number): Promise<ApiResult | ApiError> {
     try {
       const response = await this.api.delete<ApiResult>(`/events/${id}`);
-      return response.data ?? { success: true };
+      return normalizeDeleteResponse(response.data);
     } catch (error: unknown) {
       logApiError('Error deleting event:', error);
       return { success: false, message: getApiErrorMessage(error, 'Veranstaltung konnte nicht gelöscht werden') };
@@ -428,7 +431,7 @@ class BackendService {
   async deleteEventSignup(id: number): Promise<ApiResult | ApiError> {
     try {
       const response = await this.api.delete<ApiResult>(`/events/${id}/signup`);
-      return response.data ?? { success: true };
+      return normalizeDeleteResponse(response.data);
     } catch (error: unknown) {
       logApiError('Error deleting event signup:', error);
       return { success: false, message: getApiErrorMessage(error, 'Anmeldung konnte nicht gelöscht werden') };

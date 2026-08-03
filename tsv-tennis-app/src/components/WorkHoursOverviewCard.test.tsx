@@ -46,9 +46,31 @@ describe('WorkHoursOverviewCard', () => {
         expect(screen.getByRole('heading', { name: 'Familie - 2026' })).toBeInTheDocument();
         expect(screen.getByText('10.5 Std von 16 Std')).toBeInTheDocument();
         expect(screen.getByRole('progressbar', { name: 'Familien-Fortschritt: 66% abgeschlossen' })).toHaveAttribute('aria-valuenow', '65.625');
-        expect(screen.getByText('Anna Mitglied (Sie)')).toBeInTheDocument();
+    expect(screen.getByText('Anna Mitglied (Sie)')).toBeInTheDocument();
         expect(screen.getByText('6.5 / 8 Std')).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Details anzeigen' })).toHaveAttribute('href', '/dashboard/arbeitsstunden');
+  });
+
+    it('identifies the current family member by ID and uses one exemption color', () => {
+        renderCard(dashboard({
+            family: {
+                name: 'Familie Mitglied',
+                members: [
+                    { id: 'member-1', name: 'Alter Name', email: 'anna@example.com' },
+                    { id: 'member-2', name: 'Anna Mitglied', email: 'other@example.com' },
+                ],
+                required: 8, completed: 0, remaining: 8, percentage: 0,
+                memberContributions: [
+                    { id: 'member-1', name: 'Alter Name', hours: 0, required: 0, entries: [], exemption_reason: 'Vorstand' },
+                    { id: 'member-2', name: 'Anna Mitglied', hours: 2, required: 8, entries: [], exemption_reason: null },
+                ],
+            },
+        }));
+
+        expect(screen.getByText('Alter Name (Sie)')).toBeInTheDocument();
+        const exemptValue = screen.getByText('Befreit');
+        expect(exemptValue).toHaveClass('text-green-600');
+        expect(exemptValue).not.toHaveClass('text-green-700');
     });
 
     it('shows the personal exemption state without rendering a progress bar', () => {
