@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
+import DashboardOverview from "./pages/DashboardOverview";
 import Events from "./pages/Events";
 import Impressum from "./pages/Impressum";
 import Datenschutz from "./pages/Datenschutz";
@@ -58,7 +59,7 @@ const App = () => {
                                 <Route path="/dashboard"
                                     element={
                                         <ProtectedRoute>
-                                            <Dashboard />
+                                             <DashboardOverview />
                                         </ProtectedRoute>
                                     } />
                                 <Route path="/dashboard/arbeitsstunden"

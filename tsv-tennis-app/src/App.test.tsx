@@ -12,6 +12,7 @@ vi.mock('./context/AuthContext', () => ({
 vi.mock('./pages/Login', () => ({ default: () => <div>Login page</div> }));
 vi.mock('./pages/Events', () => ({ default: () => <div>Events page</div> }));
 vi.mock('./pages/Dashboard', () => ({ default: () => <div>Dashboard page</div> }));
+vi.mock('./pages/DashboardOverview', () => ({ default: () => <div>Dashboard overview page</div> }));
 
 import App from './App';
 
@@ -38,12 +39,12 @@ describe('dashboard routes', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/login'));
   });
 
-  it('keeps the existing dashboard entry for authenticated users', async () => {
+  it('renders the overview for authenticated users', async () => {
     window.history.pushState({}, '', '/dashboard');
 
     render(<App />);
 
-    expect(await screen.findByText('Dashboard page')).toBeInTheDocument();
+    expect(await screen.findByText('Dashboard overview page')).toBeInTheDocument();
   });
 
   it('redirects an unauthenticated direct dashboard link to login', async () => {
