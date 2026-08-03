@@ -45,4 +45,13 @@ describe('DashboardOverview', () => {
     rerender(<MemoryRouter><DashboardOverview /></MemoryRouter>);
     expect(screen.getAllByRole('button', { name: 'Rundmail' })).toHaveLength(2);
   });
+
+  it('keeps the dashboard error message in the primary work-hours area', () => {
+    const dashboardError = new Error('Teable ist vorübergehend nicht erreichbar');
+    mocks.useDashboard.mockReturnValue({ data: undefined, isLoading: false, error: dashboardError });
+
+    render(<MemoryRouter><DashboardOverview /></MemoryRouter>);
+
+    expect(screen.getByText(/Arbeitsstunden konnten nicht geladen werden: Teable ist vorübergehend nicht erreichbar/i)).toBeInTheDocument();
+  });
 });
