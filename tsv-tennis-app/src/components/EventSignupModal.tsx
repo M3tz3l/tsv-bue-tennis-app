@@ -1,11 +1,10 @@
-import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import { buttonVariants } from '../styles/tokens';
 import { useAuth } from '../context/AuthContext';
 import { useCreateEventSignup, useDeleteEventSignup, useEvent, useUpdateEventSignup } from '../hooks/useEvents';
 import type { SignupRequest } from '../types';
+import ModalShell from './ModalShell';
 
 type Props = { eventId: number; isOpen: boolean; onClose: () => void };
 
@@ -90,18 +89,24 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
   };
 
   return (
-    <Dialog open={isOpen} onClose={close} className="relative z-50">
-      <div data-testid="modal-backdrop" className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <DialogPanel className="w-full max-w-lg rounded-lg bg-white shadow-xl">
-          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-            <DialogTitle className="text-lg font-medium text-gray-900">{data?.event.title ?? 'Veranstaltung'}</DialogTitle>
-             <button aria-label="Schließen" onClick={close} disabled={pending} className="touch-control"><XMarkIcon className="h-6 w-6 text-gray-400" /></button>
-          </div>
-          {isLoading && <p className="p-6 text-gray-600">Wird geladen...</p>}
-          {error && <p className="p-6 text-red-600">Fehler beim Laden der Veranstaltung</p>}
-          {data?.event && (
-            <form onSubmit={submit} className="space-y-4 px-6 py-5">
+    <ModalShell
+      isOpen={isOpen}
+      onClose={close}
+      title={data?.event.title ?? 'Veranstaltung'}
+      disableClose={pending}
+      backdropTestId="modal-backdrop"
+      footer={(
+        <>
+          {signup && <button type="button" onClick={() => void cancelSignup()} disabled={pending} className={`${buttonVariants.destructive} mr-auto`}>Abmelden</button>}
+          <button type="button" onClick={close} disabled={pending} className={buttonVariants.secondary}>Abbrechen</button>
+          <button type="submit" form="event-signup-form" disabled={pending} className={buttonVariants.primary}>{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>
+        </>
+      )}
+    >
+      {isLoading && <p className="p-6 text-gray-600">Wird geladen...</p>}
+      {error && <p className="p-6 text-red-600">Fehler beim Laden der Veranstaltung</p>}
+      {data?.event && (
+        <form id="event-signup-form" onSubmit={submit} className="space-y-4 px-6 py-5">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Personen
                   <input aria-label="Personen" type="number" step="1" value={peopleCount} onChange={(e) => setPeopleCount(e.target.value)} disabled={pending} className={`mt-1 w-full min-h-[44px] rounded-md border px-3 py-2 ${errors.peopleCount ? 'border-red-500' : 'border-gray-300'}`} />
@@ -129,16 +134,9 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
               <label className="block text-sm font-medium text-gray-700">Kommentar
                 <textarea value={comment} onChange={(e) => setComment(e.target.value)} disabled={pending} className="mt-1 w-full min-h-[44px] rounded-md border border-gray-300 px-3 py-2" />
               </label>
-              <div className="flex flex-wrap justify-end gap-3 pt-2">
-                 {signup && <button type="button" onClick={() => void cancelSignup()} disabled={pending} className={`${buttonVariants.destructive} mr-auto`}>Abmelden</button>}
-                  <button type="button" onClick={close} disabled={pending} className={buttonVariants.secondary}>Abbrechen</button>
-                  <button type="submit" disabled={pending} className={buttonVariants.primary}>{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>
-              </div>
-            </form>
-          )}
-        </DialogPanel>
-      </div>
-    </Dialog>
+        </form>
+      )}
+    </ModalShell>
   );
 };
 

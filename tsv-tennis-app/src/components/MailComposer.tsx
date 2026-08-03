@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
+import { DialogTitle } from '@headlessui/react';
 import {
-  XMarkIcon,
   PaperAirplaneIcon,
   EnvelopeIcon,
   UserGroupIcon,
@@ -18,6 +17,7 @@ import BackendService, { getApiErrorMessage } from '../services/backendService';
 import { useAuth } from '../context/AuthContext';
 import type { SendBulkMailRequest, MailJob } from '../types';
 import { buttonVariants } from '../styles/tokens';
+import ModalShell from './ModalShell';
 
 interface MailComposerProps {
   isOpen: boolean;
@@ -268,30 +268,16 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   // During active job: show progress view
   if (activeJob) {
     return (
-      <Dialog open={isOpen} onClose={handleClose} className="relative z-50">
-        <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
-        <div className="fixed inset-0 flex w-screen items-center justify-center p-4 sm:p-6">
-          <DialogPanel className="max-w-lg w-full bg-white rounded-xl shadow-2xl overflow-hidden">
-            {/* Header */}
-            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="bg-purple-100 p-2 rounded-lg">
-                  <EnvelopeIcon className="h-6 w-6 text-purple-700" />
-                </div>
-                <DialogTitle className="text-lg font-semibold text-gray-900">
-                  Mail versenden
-                </DialogTitle>
-              </div>
-              <button
-                onClick={handleClose}
-                disabled={isBusy}
-                className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                aria-label="Schließen"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
+      <ModalShell isOpen={isOpen} onClose={handleClose} title="Mail versenden" disableClose={isBusy} widthClassName="max-w-lg" backdropClassName="bg-black/60" headerContent={(
+            <div className="flex items-center gap-3">
+              <div className="bg-purple-100 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-purple-700" /></div>
+              <DialogTitle className="text-lg font-semibold text-gray-900">Mail versenden</DialogTitle>
             </div>
-
+          )} footer={(
+            <button onClick={handleClose} disabled={isBusy} className={buttonVariants.secondary}>
+              {activeJob.status === 'completed' || activeJob.status === 'failed' ? 'Schließen' : 'Abbrechen'}
+            </button>
+          )}>
             {/* Progress content */}
             <div className="px-6 py-8">
               <div className="text-center">
@@ -353,55 +339,45 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="flex justify-end px-6 py-4 border-t border-gray-200">
-              <button
-                onClick={handleClose}
-                disabled={isBusy}
-                 className={buttonVariants.secondary}
-              >
-                {activeJob.status === 'completed' || activeJob.status === 'failed'
-                  ? 'Schließen'
-                  : 'Abbrechen'}
-              </button>
-            </div>
-          </DialogPanel>
-        </div>
-      </Dialog>
+      </ModalShell>
     );
   }
 
   // Main compose view
   return (
-    <Dialog open={isOpen} onClose={handleClose} className="relative z-50">
-      <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
-      <div className="fixed inset-0 flex w-screen items-center justify-center p-4 sm:p-6">
-        <DialogPanel
-          className="max-w-4xl w-full max-h-[90vh] min-h-[60vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden"
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          {/* Header */}
-          <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 shrink-0 bg-purple-50/50">
-            <div className="flex items-center gap-3">
-              <div className="bg-purple-100 p-2 rounded-lg">
-                <EnvelopeIcon className="h-6 w-6 text-purple-700" />
-              </div>
-              <DialogTitle className="text-lg font-semibold text-gray-900">
-                Rundmail versenden
-              </DialogTitle>
-            </div>
-            <button
-              onClick={handleClose}
-              disabled={isBusy}
-              className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-              aria-label="Schließen"
-            >
-              <XMarkIcon className="h-6 w-6" />
-            </button>
+    <ModalShell
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Rundmail versenden"
+      disableClose={isBusy}
+      widthClassName="max-w-4xl"
+      panelClassName="max-h-[90vh] min-h-[60vh] flex flex-col overflow-hidden"
+      backdropClassName="bg-black/60"
+      panelProps={{ onDragOver: handleDragOver, onDragLeave: handleDragLeave, onDrop: handleDrop }}
+      headerContent={(
+        <div className="flex items-center gap-3">
+          <div className="bg-purple-100 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-purple-700" /></div>
+          <DialogTitle className="text-lg font-semibold text-gray-900">Rundmail versenden</DialogTitle>
+        </div>
+      )}
+      headerClassName="shrink-0 bg-purple-50/50"
+      footerClassName="shrink-0 bg-gray-50/50"
+      footer={(
+        <>
+          <div className="flex items-center gap-3 mr-auto">
+            <button onClick={handleClose} className={buttonVariants.secondary} disabled={isBusy}>Abbrechen</button>
+            <button onClick={handleSendTest} disabled={isBusy || !isFormValid} className={`${buttonVariants.secondary} inline-flex items-center justify-center`}>{isSendingTest ? 'Wird gesendet...' : 'Test-Mail senden'}</button>
           </div>
-
+          <div className="flex items-center gap-3">
+            {confirmSend ? <>
+              <span className="text-sm text-gray-600">An {currentRecipientCount} {recipientFilter === 'all' ? 'Mitglieder' : 'Ausschuss-Mitglieder'} senden?</span>
+              <button onClick={() => setConfirmSend(false)} disabled={isBusy} className={buttonVariants.secondary}>Zurück</button>
+              <button onClick={handleSendBulk} disabled={isBusy} className={`${buttonVariants.primary} inline-flex items-center justify-center shadow-sm`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />Jetzt senden</button>
+            </> : <button onClick={() => isFormValid && setConfirmSend(true)} disabled={isBusy || !isFormValid} className={`${buttonVariants.primary} inline-flex items-center justify-center shadow-sm`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />{isLoading ? 'Wird gestartet...' : 'Versenden'}{currentRecipientCount !== null && <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-green-500/20">{currentRecipientCount}</span>}</button>}
+          </div>
+        </>
+      )}
+    >
           {/* Drag overlay */}
           {isDragOver && (
             <div className="absolute inset-0 z-20 bg-purple-50/90 border-2 border-dashed border-purple-400 rounded-xl flex items-center justify-center pointer-events-none">
@@ -637,69 +613,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 shrink-0 bg-gray-50/50">
-            {/* Left side: cancel + test */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleClose}
-                 className={buttonVariants.secondary}
-                disabled={isBusy}
-              >
-                Abbrechen
-              </button>
-              <button
-                onClick={handleSendTest}
-                disabled={isBusy || !isFormValid}
-                 className={`${buttonVariants.secondary} inline-flex items-center justify-center`}
-              >
-                {isSendingTest ? 'Wird gesendet...' : 'Test-Mail senden'}
-              </button>
-            </div>
-
-            {/* Right side: send button */}
-            <div className="flex items-center gap-3">
-              {confirmSend ? (
-                <>
-                  <span className="text-sm text-gray-600">
-                    An {currentRecipientCount} {recipientFilter === 'all' ? 'Mitglieder' : 'Ausschuss-Mitglieder'} senden?
-                  </span>
-                  <button
-                    onClick={() => setConfirmSend(false)}
-                    disabled={isBusy}
-                     className={buttonVariants.secondary}
-                  >
-                    Zurück
-                  </button>
-                  <button
-                    onClick={handleSendBulk}
-                    disabled={isBusy}
-                     className={`${buttonVariants.primary} inline-flex items-center justify-center shadow-sm`}
-                  >
-                    <PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />
-                    Jetzt senden
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => isFormValid && setConfirmSend(true)}
-                  disabled={isBusy || !isFormValid}
-                   className={`${buttonVariants.primary} inline-flex items-center justify-center shadow-sm`}
-                >
-                  <PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />
-                  {isLoading ? 'Wird gestartet...' : 'Versenden'}
-                  {currentRecipientCount !== null && (
-                    <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-green-500/20">
-                      {currentRecipientCount}
-                    </span>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        </DialogPanel>
-      </div>
-    </Dialog>
+    </ModalShell>
   );
 };
 

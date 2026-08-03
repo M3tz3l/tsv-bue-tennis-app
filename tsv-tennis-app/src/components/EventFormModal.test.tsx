@@ -68,7 +68,7 @@ describe('EventFormModal', () => {
     render(<EventFormModal isOpen onClose={onClose} initialData={event} />);
     await user.click(screen.getByLabelText(/Veröffentlicht/i));
     await waitFor(() => expect(screen.getByRole('button', { name: /Aktualisieren/i })).toBeInTheDocument());
-    fireEvent.submit(screen.getByRole('button', { name: /Aktualisieren/i }).closest('form')!);
+    fireEvent.submit(document.getElementById('event-form')!);
     expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ id: 4, payload: expect.objectContaining({ status: 'published' }) }));
     await user.click(screen.getByRole('button', { name: /^Löschen$/i }));
     const deleteButtons = screen.getAllByRole('button', { name: /^Löschen$/i });
@@ -94,7 +94,7 @@ describe('EventFormModal', () => {
   it('rejects invalid time, deadline, and capacity values before mutation', async () => {
     render(<EventFormModal isOpen onClose={vi.fn()} initialData={{ ...event, start_time: '18:00', end_time: '17:00', signup_deadline: '2099-07-13', capacity: 0 }} />);
     await waitFor(() => expect(screen.getByRole('button', { name: /Aktualisieren/i })).toBeInTheDocument());
-    fireEvent.submit(screen.getByRole('button', { name: /Aktualisieren/i }).closest('form')!);
+    fireEvent.submit(document.getElementById('event-form')!);
     expect(mocks.update).not.toHaveBeenCalled();
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(expect.stringMatching(/Zeit|Kapazität/i)));
   });

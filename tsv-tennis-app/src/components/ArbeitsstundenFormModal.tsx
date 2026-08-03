@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 import { useForm } from 'react-hook-form';
 import { isQuarterHour, parseHoursInput } from '../utils/utils';
@@ -11,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { DASHBOARD_QUERY_KEY } from '../hooks/useDashboard';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import { buttonVariants } from '../styles/tokens';
+import ModalShell from './ModalShell';
 
 type FormValues = {
     Nachname: string;
@@ -136,21 +135,20 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
     };
 
     return (
-        <Dialog open={isOpen} onClose={onClose} className="relative z-50">
-            <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-            <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
-                <DialogPanel className="max-w-2xl w-full max-h-[80vh] overflow-y-auto bg-white rounded-lg shadow-xl">
-                    <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                        <DialogTitle className="text-lg font-medium text-gray-900">
-                            {initialData ? 'Arbeitsstunden bearbeiten' : 'Neue Arbeitsstunden eintragen'}
-                        </DialogTitle>
-                        <button
-                            onClick={onClose}
-                            className="text-gray-400 hover:text-gray-600 transition-colors"
-                        >
-                            <XMarkIcon className="h-6 w-6" />
-                        </button>
-                    </div>
+        <ModalShell
+            isOpen={isOpen}
+            onClose={onClose}
+            title={initialData ? 'Arbeitsstunden bearbeiten' : 'Neue Arbeitsstunden eintragen'}
+            widthClassName="max-w-2xl"
+            panelClassName="max-h-[80vh] overflow-y-auto"
+            footer={(
+                <>
+                    {initialData && <div className="mr-auto w-full sm:w-auto"><button type="button" onClick={() => setShowDeleteDialog(true)} className={`${buttonVariants.destructive} ${isDeleting ? 'opacity-60 cursor-not-allowed' : ''}`} disabled={isDeleting || isSubmitting}>Löschen</button></div>}
+                    <button type="button" onClick={onClose} className={buttonVariants.secondary} disabled={isSubmitting || isDeleting}>Abbrechen</button>
+                    <button type="submit" form="work-hours-form" className={`${buttonVariants.primary} ${isSubmitting ? 'cursor-not-allowed' : ''}`} disabled={isSubmitting || isDeleting} style={isSubmitting ? { pointerEvents: 'none' } : {}}>{isSubmitting ? 'Speichern...' : (initialData ? 'Aktualisieren' : 'Erstellen')}</button>
+                </>
+            )}
+        >
 
                     {selectedYear && !initialData && (
                         <div className="px-6 pt-2">
@@ -158,7 +156,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-4">
+                    <form id="work-hours-form" onSubmit={handleSubmit(onSubmit)} className="px-6 py-4">
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Nachname</label>
@@ -236,46 +234,14 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                             </div>
                         </div>
 
-                        <div className="flex justify-end space-x-3 mt-6 w-full items-center">
-                            {initialData && (
-                                <div className="mr-auto w-full sm:w-auto">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowDeleteDialog(true)}
-                                         className={`${buttonVariants.destructive} ${isDeleting ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                        disabled={isDeleting || isSubmitting}
-                                    >
-                                        Löschen
-                                    </button>
-                                </div>
-                            )}
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                 className={buttonVariants.secondary}
-                                disabled={isSubmitting || isDeleting}
-                            >
-                                Abbrechen
-                            </button>
-                            <button
-                                type="submit"
-                                 className={`${buttonVariants.primary} ${isSubmitting ? 'cursor-not-allowed' : ''}`}
-                                disabled={isSubmitting || isDeleting}
-                                style={isSubmitting ? { pointerEvents: 'none' } : {}}
-                            >
-                                {isSubmitting ? 'Speichern...' : (initialData ? 'Aktualisieren' : 'Erstellen')}
-                            </button>
-                        </div>
                     </form>
-                </DialogPanel>
-            </div>
             <DeleteConfirmDialog
                 isOpen={showDeleteDialog}
                 isProcessing={isDeleting}
                 onCancel={() => setShowDeleteDialog(false)}
                 onConfirm={handleDelete}
             />
-        </Dialog>
+        </ModalShell>
     );
 };
 
