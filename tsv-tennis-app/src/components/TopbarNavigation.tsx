@@ -4,25 +4,17 @@ import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import {
   ArrowRightOnRectangleIcon,
   Bars3Icon,
-  CalendarDaysIcon,
-  ClockIcon,
   EnvelopeIcon,
-  HomeIcon,
   UserCircleIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { isOrgaRole } from '../utils/roles';
+import { routes } from './navigationRoutes';
 import TopbarMobileMenu from './TopbarMobileMenu';
 
 interface TopbarNavigationProps {
   onOpenMailComposer: () => void;
 }
-
-export const routes = [
-  { label: 'Übersicht', to: '/dashboard', Icon: HomeIcon, end: true },
-  { label: 'Arbeitsstunden', to: '/dashboard/arbeitsstunden', Icon: ClockIcon, end: false },
-  { label: 'Veranstaltungen', to: '/dashboard/veranstaltungen', Icon: CalendarDaysIcon, end: false },
-] as const;
 
 const TopbarNavigation = ({ onOpenMailComposer }: TopbarNavigationProps) => {
   const { user, logout } = useAuth();

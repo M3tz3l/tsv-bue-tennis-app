@@ -17,7 +17,7 @@ const DashboardShell = ({ children, title, onOpenMailComposer, isMailComposerOpe
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
       <TopbarNavigation onOpenMailComposer={onOpenMailComposer} />
-      <div data-testid="dashboard-shell-content" className="min-w-0 flex-1 pt-16">
+      <div data-testid="dashboard-shell-content" className="min-w-0 pt-16">
         <header className="border-b border-gray-200 bg-white shadow-sm">
           <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-4 sm:flex-row sm:px-6 lg:px-8">
             <div className="flex items-center gap-4">

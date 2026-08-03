@@ -7,7 +7,7 @@ import {
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isOrgaRole } from '../utils/roles';
-import { routes } from './TopbarNavigation';
+import { routes } from './navigationRoutes';
 
 interface TopbarMobileMenuProps {
   isOpen: boolean;

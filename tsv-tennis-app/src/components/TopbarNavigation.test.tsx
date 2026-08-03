@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -63,5 +63,47 @@ describe('TopbarNavigation', () => {
 
     await user.click(screen.getByRole('button', { name: 'Mitglied' }));
     expect(screen.queryByRole('menuitem', { name: 'Rundmail' })).not.toBeInTheDocument();
+  });
+
+  it('opens and closes the mobile drawer from the trigger and closes it via a route link', async () => {
+    const user = userEvent.setup();
+    mocks.useAuth.mockReturnValue({
+      user: { id: 'orga-1', name: 'Orga', email: 'orga@example.com', role: 'orga' },
+      logout: vi.fn(),
+    });
+    renderTopbar();
+
+    const trigger = screen.getByRole('button', { name: 'Menü öffnen' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('link', { name: 'Übersicht' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('closes the mobile drawer and opens the mail composer when Rundmail is clicked', async () => {
+    const user = userEvent.setup();
+    const onOpenMailComposer = vi.fn();
+    mocks.useAuth.mockReturnValue({
+      user: { id: 'orga-1', name: 'Orga', email: 'orga@example.com', role: 'orga' },
+      logout: vi.fn(),
+    });
+    renderTopbar('/dashboard/arbeitsstunden', onOpenMailComposer);
+
+    const trigger = screen.getByRole('button', { name: 'Menü öffnen' });
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Rundmail' }));
+    expect(onOpenMailComposer).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
   });
 });
