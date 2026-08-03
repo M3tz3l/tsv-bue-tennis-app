@@ -7,13 +7,23 @@ import { cardShellClass } from '../styles/tokens';
 type WorkHoursOverviewCardProps = {
     data: DashboardResponse;
     selectedYear: number;
+    showDetailsLink?: boolean;
 };
 
-const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProps) => {
+const WorkHoursOverviewCard = ({ data, selectedYear, showDetailsLink = true }: WorkHoursOverviewCardProps) => {
     const { user } = useAuth();
     const hasFamilyView = !!data.family && data.family.members.length > 1;
 
     if (!data.family && !data.personal) return null;
+
+    const detailsLink = showDetailsLink && (
+        <Link
+            className="text-sm font-medium text-[var(--primary)] underline decoration-[var(--primary)]/40 underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
+            to="/dashboard/arbeitsstunden"
+        >
+            Details ansehen
+        </Link>
+    );
 
     const renderProgress = (percentage: number, label: string) => {
         const clampedPercentage = Math.min(100, Math.max(0, percentage));
@@ -41,6 +51,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
                 <>
                     <div className="flex items-baseline justify-between gap-2 mb-3">
                         <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-[var(--ink)]">Familie - {selectedYear}</h2>
+                        {detailsLink}
                     </div>
                     <div className="flex items-center justify-between gap-2 text-sm text-[var(--body)] mb-1">
                         <span>Familien-Fortschritt</span>
@@ -83,6 +94,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
                 <>
                     <div className="flex items-baseline justify-between gap-2 mb-3">
                         <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-[var(--ink)]">{data.personal.name || 'Ihre Arbeitsstunden'} - {selectedYear}</h2>
+                        {detailsLink}
                     </div>
                     {data.personal.required === 0 ? (
                         <div className="p-4 border border-[var(--hairline)] rounded-lg">
@@ -103,13 +115,6 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
                     )}
                 </>
             ) : null}
-            <Link
-                aria-label="Details anzeigen"
-                className="inline-flex mt-4 text-sm font-medium text-[var(--primary)] underline decoration-[var(--primary)]/40 underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
-                to="/dashboard/arbeitsstunden"
-            >
-                Arbeitsstunden Details
-            </Link>
         </section>
     );
 };

@@ -65,8 +65,26 @@ describe('WorkHoursOverviewCard', () => {
         expect(screen.getByRole('progressbar', { name: 'Familien-Fortschritt: 66% abgeschlossen' })).toHaveAttribute('aria-valuenow', '65.625');
     expect(screen.getByText('Anna Mitglied (Sie)')).toBeInTheDocument();
         expect(screen.getByText('6.5 / 8 Std')).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'Details anzeigen' })).toHaveAttribute('href', '/dashboard/arbeitsstunden');
+        expect(screen.getByRole('link', { name: 'Details ansehen' })).toHaveAttribute('href', '/dashboard/arbeitsstunden');
   });
+
+    it('omits the details link when showDetailsLink is false', () => {
+        render(
+            <MemoryRouter>
+                <WorkHoursOverviewCard data={dashboard({ family: {
+                    name: 'Familie Mitglied',
+                    members: [
+                        { id: 'member-1', name: 'Anna Mitglied', email: 'anna@example.com' },
+                        { id: 'member-2', name: 'Bernd Mitglied', email: 'bernd@example.com' },
+                    ],
+                    required: 8, completed: 4, remaining: 4, percentage: 50,
+                    memberContributions: [],
+                } })} selectedYear={2026} showDetailsLink={false} />
+            </MemoryRouter>,
+        );
+
+        expect(screen.queryByRole('link', { name: 'Details ansehen' })).not.toBeInTheDocument();
+    });
 
     it('identifies the current family member by ID and uses one exemption color', () => {
         renderCard(dashboard({
