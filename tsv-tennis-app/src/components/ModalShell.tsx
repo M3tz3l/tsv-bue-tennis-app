@@ -8,6 +8,11 @@ type ModalShellProps = {
   title: ReactNode;
   children: ReactNode;
   footer: ReactNode;
+  footerActions?: {
+    destructive?: ReactNode;
+    secondary?: ReactNode;
+    primary?: ReactNode;
+  };
   disableClose?: boolean;
   widthClassName?: string;
   panelClassName?: string;
@@ -25,6 +30,7 @@ const ModalShell = ({
   title,
   children,
   footer,
+  footerActions,
   disableClose = false,
   widthClassName = 'max-w-lg',
   panelClassName = '',
@@ -65,7 +71,15 @@ const ModalShell = ({
             </button>
           </div>
           {children}
-          {footer && <div className={`flex flex-wrap justify-end gap-3 border-t border-gray-100 px-6 py-4 ${footerClassName}`}>{footer}</div>}
+          {(footer || footerActions) && <div className={`flex flex-wrap justify-end gap-3 border-t border-gray-100 px-6 py-4 ${footerClassName}`}>
+            {footerActions ? (
+              <div role="group" aria-label="Modal-Aktionen" className="contents">
+                {footerActions.destructive && <div className="mr-auto">{footerActions.destructive}</div>}
+                {footerActions.secondary}
+                {footerActions.primary}
+              </div>
+            ) : footer}
+          </div>}
         </DialogPanel>
       </div>
     </Dialog>

@@ -95,13 +95,12 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
       title={data?.event.title ?? 'Veranstaltung'}
       disableClose={pending}
       backdropTestId="modal-backdrop"
-      footer={(
-        <>
-          {signup && <button type="button" onClick={() => void cancelSignup()} disabled={pending} className={`${buttonVariants.destructive} mr-auto`}>Abmelden</button>}
-          <button type="button" onClick={close} disabled={pending} className={buttonVariants.secondary}>Abbrechen</button>
-          {data?.event && <button type="submit" form="event-signup-form" disabled={pending} className={buttonVariants.primary}>{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>}
-        </>
-      )}
+       footer={null}
+       footerActions={{
+         destructive: signup && <button type="button" onClick={() => void cancelSignup()} disabled={pending} className={buttonVariants.destructive}>Abmelden</button>,
+         secondary: <button type="button" onClick={close} disabled={pending} className={buttonVariants.secondary}>Abbrechen</button>,
+         primary: data?.event && <button type="submit" form="event-signup-form" disabled={pending} className={buttonVariants.primary}>{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>,
+       }}
     >
       {isLoading && <p className="p-6 text-gray-600">Wird geladen...</p>}
       {error && <p className="p-6 text-red-600">Fehler beim Laden der Veranstaltung</p>}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import { useCreateEvent, useDeleteEvent, useUpdateEvent } from '../hooks/useEvents';
-import { buttonVariants } from '../styles/tokens';
+import { buttonVariants, stackMdClass } from '../styles/tokens';
 import type { CreateEventRequest, EventSummary, EventType, UpdateEventRequest } from '../types';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import { isOrgaRole } from '../utils/roles';
@@ -69,15 +69,14 @@ const EventFormModal = ({ isOpen, onClose, initialData = null }: Props) => {
       widthClassName="max-w-2xl"
       panelClassName="max-h-[90vh] overflow-y-auto"
       backdropTestId="modal-backdrop"
-      footer={(
-        <>
-          {initialData && <button type="button" onClick={() => setShowDelete(true)} disabled={pending} className={`${buttonVariants.destructive} mr-auto`}>Löschen</button>}
-          <button type="button" onClick={onClose} disabled={pending} className={buttonVariants.secondary}>Abbrechen</button>
-          <button type="submit" form="event-form" disabled={pending} className={buttonVariants.primary}>{initialData ? 'Aktualisieren' : 'Erstellen'}</button>
-        </>
-      )}
+       footer={null}
+       footerActions={{
+         destructive: initialData && <button type="button" onClick={() => setShowDelete(true)} disabled={pending} className={buttonVariants.destructive}>Löschen</button>,
+         secondary: <button type="button" onClick={onClose} disabled={pending} className={buttonVariants.secondary}>Abbrechen</button>,
+         primary: <button type="submit" form="event-form" disabled={pending} className={buttonVariants.primary}>{initialData ? 'Aktualisieren' : 'Erstellen'}</button>,
+       }}
     >
-        <form id="event-form" onSubmit={submit} className="space-y-4 px-6 py-5">
+        <form id="event-form" onSubmit={submit} className={`${stackMdClass} px-6 py-5`}>
           <label className="block text-sm font-medium text-gray-700">Titel<input aria-label="Titel" value={String(value('title'))} onChange={(e) => set('title', e.target.value)} className="mt-1 w-full min-h-[44px] rounded-md border border-gray-300 px-3 py-2" /></label>
           <label className="block text-sm font-medium text-gray-700">Typ<select aria-label="Typ" value={form.type} onChange={(e) => set('type', e.target.value as EventType)} className="mt-1 w-full min-h-[44px] rounded-md border border-gray-300 px-3 py-2"><option value="event">Veranstaltung</option><option value="work-duty">Arbeitsdienst</option></select></label>
           <label className="block text-sm font-medium text-gray-700">Datum<input aria-label="Datum" type="date" value={String(value('event_date'))} onChange={(e) => set('event_date', e.target.value)} className="mt-1 w-full min-h-[44px] rounded-md border border-gray-300 px-3 py-2" /></label>

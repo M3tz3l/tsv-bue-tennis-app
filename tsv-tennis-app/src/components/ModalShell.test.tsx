@@ -38,23 +38,27 @@ describe('ModalShell', () => {
     expect(backdrop?.className).toMatch(/backdrop-blur-sm/);
   });
 
-  it('keeps the supplied footer controls in order after the close control', () => {
+  it('renders footer actions in the enforced destructive, secondary, primary order', () => {
     render(
       <ModalShell
         isOpen
         title="Beispiel"
         onClose={vi.fn()}
-        footer={<><button>Abbrechen</button><button>Speichern</button></>}
+        footer={null}
+        footerActions={{
+          primary: <button>Speichern</button>,
+          destructive: <button>Löschen</button>,
+          secondary: <button>Abbrechen</button>,
+        }}
       >
         <p>Inhalt</p>
       </ModalShell>,
     );
     const buttons = screen.getAllByRole('button');
-    expect(buttons.map((button) => button.textContent)).toEqual([
-      '',
-      'Abbrechen',
-      'Speichern',
-    ]);
-    expect(buttons[1].compareDocumentPosition(buttons[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(buttons.map((button) => button.textContent)).toEqual(['', 'Löschen', 'Abbrechen', 'Speichern']);
+    const footer = screen.getByRole('group', { name: 'Modal-Aktionen' });
+    const destructive = screen.getByRole('button', { name: 'Löschen' });
+    expect(footer).toContainElement(destructive);
+    expect(destructive.parentElement).toHaveClass('mr-auto');
   });
 });

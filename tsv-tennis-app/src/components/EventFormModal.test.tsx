@@ -126,6 +126,7 @@ describe('EventFormModal', () => {
     // Backdrop blur
     const backdrop = screen.getByTestId('modal-backdrop');
     expect(backdrop).toHaveClass('backdrop-blur-sm');
+    expect(document.getElementById('event-form')).toHaveClass('stack-md');
   });
 
   it('uses the destructive token for deleting an existing event', () => {

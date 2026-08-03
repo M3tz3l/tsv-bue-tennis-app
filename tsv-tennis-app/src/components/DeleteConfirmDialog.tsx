@@ -16,12 +16,10 @@ export default function DeleteConfirmDialog({
     onCancel
 }: Props) {
     return (
-        <ModalShell isOpen={isOpen} onClose={onCancel} title="Eintrag löschen" disableClose={isProcessing} widthClassName="max-w-sm" footer={(
-            <>
-                <button type="button" onClick={onCancel} disabled={isProcessing} className={buttonVariants.secondary}>Abbrechen</button>
-                <button type="button" onClick={async () => { await onConfirm(); }} disabled={isProcessing} className={buttonVariants.destructive}>{isProcessing ? 'Löschen...' : 'Löschen'}</button>
-            </>
-        )}>
+        <ModalShell isOpen={isOpen} onClose={onCancel} title="Eintrag löschen" disableClose={isProcessing} widthClassName="max-w-sm" footer={null} footerActions={{
+            destructive: <button type="button" onClick={async () => { await onConfirm(); }} disabled={isProcessing} className={buttonVariants.destructive}>{isProcessing ? 'Löschen...' : 'Löschen'}</button>,
+            secondary: <button type="button" onClick={onCancel} disabled={isProcessing} className={buttonVariants.secondary}>Abbrechen</button>,
+        }}>
                             <div className="p-4 sm:p-6">
                                 <div className="flex items-start space-x-3">
                                     <div className="flex-shrink-0">

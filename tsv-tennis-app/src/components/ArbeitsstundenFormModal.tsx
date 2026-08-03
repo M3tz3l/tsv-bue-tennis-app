@@ -8,7 +8,7 @@ import BackendService from '../services/backendService';
 import { useAuth } from '../context/AuthContext';
 import { DASHBOARD_QUERY_KEY } from '../hooks/useDashboard';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
-import { buttonVariants } from '../styles/tokens';
+import { buttonVariants, stackMdClass } from '../styles/tokens';
 import ModalShell from './ModalShell';
 
 type FormValues = {
@@ -141,13 +141,12 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
             title={initialData ? 'Arbeitsstunden bearbeiten' : 'Neue Arbeitsstunden eintragen'}
             widthClassName="max-w-2xl"
             panelClassName="max-h-[80vh] overflow-y-auto"
-            footer={(
-                <>
-                    {initialData && <div className="mr-auto w-full sm:w-auto"><button type="button" onClick={() => setShowDeleteDialog(true)} className={`${buttonVariants.destructive} ${isDeleting ? 'opacity-60 cursor-not-allowed' : ''}`} disabled={isDeleting || isSubmitting}>Löschen</button></div>}
-                    <button type="button" onClick={onClose} className={buttonVariants.secondary} disabled={isSubmitting || isDeleting}>Abbrechen</button>
-                    <button type="submit" form="work-hours-form" className={`${buttonVariants.primary} ${isSubmitting ? 'cursor-not-allowed' : ''}`} disabled={isSubmitting || isDeleting} style={isSubmitting ? { pointerEvents: 'none' } : {}}>{isSubmitting ? 'Speichern...' : (initialData ? 'Aktualisieren' : 'Erstellen')}</button>
-                </>
-            )}
+            footer={null}
+            footerActions={{
+                destructive: initialData && <button type="button" onClick={() => setShowDeleteDialog(true)} className={`${buttonVariants.destructive} ${isDeleting ? 'opacity-60 cursor-not-allowed' : ''}`} disabled={isDeleting || isSubmitting}>Löschen</button>,
+                secondary: <button type="button" onClick={onClose} className={buttonVariants.secondary} disabled={isSubmitting || isDeleting}>Abbrechen</button>,
+                primary: <button type="submit" form="work-hours-form" className={`${buttonVariants.primary} ${isSubmitting ? 'cursor-not-allowed' : ''}`} disabled={isSubmitting || isDeleting} style={isSubmitting ? { pointerEvents: 'none' } : {}}>{isSubmitting ? 'Speichern...' : (initialData ? 'Aktualisieren' : 'Erstellen')}</button>,
+            }}
         >
 
                     {selectedYear && !initialData && (
@@ -157,7 +156,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                     )}
 
                     <form id="work-hours-form" onSubmit={handleSubmit(onSubmit)} className="px-6 py-4">
-                        <div className="space-y-4">
+                        <div className={stackMdClass}>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Nachname</label>
                                 <input
