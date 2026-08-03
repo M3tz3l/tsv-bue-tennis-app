@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import { useEvent, useEvents } from '../hooks/useEvents';
@@ -47,7 +48,9 @@ const EventCard = ({ event, userId, isOrga, onSelect, onEdit, onSignups }: { eve
 const Events = () => {
   const { user } = useAuth();
   const { data: events, isLoading, error } = useEvents(user?.id);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [searchParams] = useSearchParams();
+  const requestedEventId = Number(searchParams.get('eventId'));
+  const [selectedId, setSelectedId] = useState<number | null>(Number.isInteger(requestedEventId) && requestedEventId > 0 ? requestedEventId : null);
   const isOrga = user?.role?.trim().toLowerCase() === 'orga';
   const [editingEvent, setEditingEvent] = useState<EventSummary | null | undefined>(undefined);
   const [signupsId, setSignupsId] = useState<number | null>(null);

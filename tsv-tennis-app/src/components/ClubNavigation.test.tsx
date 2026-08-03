@@ -135,7 +135,7 @@ describe('ClubNavigation', () => {
 
   it('uses responsive visibility classes and a shared safe-area height for mobile navigation', () => {
     const { rerender } = renderNavigation();
-    expect(screen.getByRole('navigation', { name: 'Clubnavigation' })).toHaveClass('hidden', 'md:flex');
+    expect(screen.getByRole('navigation', { name: 'Clubnavigation' })).toHaveClass('hidden', 'lg:flex');
 
     rerender(
       <MemoryRouter>
@@ -143,7 +143,7 @@ describe('ClubNavigation', () => {
       </MemoryRouter>,
     );
     const navigation = screen.getByRole('navigation', { name: 'Clubnavigation' });
-    expect(navigation).toHaveClass('md:hidden');
+    expect(navigation).toHaveClass('lg:hidden');
     expect(navigation).toHaveAttribute('data-variant', 'mobile');
     expect(navigation).toHaveAttribute('data-safe-area', 'true');
     expect(navigation).toHaveAttribute('data-overflow-safe', 'true');

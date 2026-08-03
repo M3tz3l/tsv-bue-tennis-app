@@ -81,6 +81,12 @@ describe('Events', () => {
     expect(mocks.useEvent).toHaveBeenCalledWith('member-1', 1);
   });
 
+  it('opens the event identified by the eventId query parameter', () => {
+    render(<MemoryRouter initialEntries={['/dashboard/veranstaltungen?eventId=1']}><Events /></MemoryRouter>);
+
+    expect(screen.getByRole('dialog')).toHaveTextContent('Signup modal for 1');
+  });
+
   it('keeps full events visible but does not offer an action', () => {
     mocks.useEvents.mockReturnValue({ data: [event({ capacity: 3, signup_people_count: 3 })], isLoading: false, error: null });
     mocks.useEvent.mockReturnValue({ data: { event: event({ capacity: 3, signup_people_count: 3 }), own_signup: null }, isLoading: false, error: null });

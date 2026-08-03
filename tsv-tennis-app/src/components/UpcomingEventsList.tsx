@@ -37,7 +37,7 @@ const EventRow = ({ event, userId }: { event: EventSummary; userId?: string }) =
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                 <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">{event.type === 'work-duty' ? 'Arbeitsdienst' : 'Veranstaltung'}</p>
-                    <Link className="mt-1 flex min-h-11 items-center text-base font-semibold text-slate-900 underline decoration-slate-300 underline-offset-4 hover:decoration-emerald-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-200" to="/dashboard/veranstaltungen">{event.title}</Link>
+                    <Link className="mt-1 flex min-h-11 items-center text-base font-semibold text-slate-900 underline decoration-slate-300 underline-offset-4 hover:decoration-emerald-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-200" to={`/dashboard/veranstaltungen?eventId=${event.id}`}>{event.title}</Link>
                     <p className="mt-1 text-sm text-slate-600">{formatDate(event.event_date)}{event.start_time ? `, ${event.start_time} Uhr` : ''}</p>
                     {(event.location || event.description) && <p className="mt-1 text-sm text-slate-500">{event.location ?? event.description}</p>}
                 </div>

@@ -108,6 +108,14 @@ describe('EventFormModal', () => {
     expect(screen.getByRole('button', { name: /Abbrechen/i })).toBeDisabled();
   });
 
+  it('uses shared minimum touch and action control classes', () => {
+    render(<EventFormModal isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Schließen' })).toHaveClass('touch-control');
+    expect(screen.getByRole('button', { name: /Abbrechen/i })).toHaveClass('action-control');
+    expect(screen.getByRole('button', { name: /Erstellen/i })).toHaveClass('action-control');
+  });
+
   it('shows mutation errors and keeps the form open', async () => {
     mocks.create.mockRejectedValue(new Error('Serverfehler'));
     const onClose = vi.fn();

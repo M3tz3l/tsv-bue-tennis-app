@@ -34,4 +34,10 @@ describe('EventSignupsModal', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(mocks.useEventSignups).toHaveBeenCalledWith('member-1', 4, false);
   });
+
+  it('uses shared minimum touch and action control classes', () => {
+    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Schließen' })).toHaveClass('touch-control');
+  });
 });

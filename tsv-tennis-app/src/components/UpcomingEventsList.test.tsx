@@ -58,7 +58,7 @@ describe('UpcomingEventsList', () => {
     expect(screen.queryByText('Später')).not.toBeInTheDocument();
     expect(screen.queryByText('Entwurf')).not.toBeInTheDocument();
     expect(screen.queryByText('Vergangen')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Früher/ })).toHaveAttribute('href', '/dashboard/veranstaltungen');
+    expect(screen.getByRole('link', { name: /Früher/ })).toHaveAttribute('href', '/dashboard/veranstaltungen?eventId=2');
     expect(screen.getAllByRole('article')[0]).toHaveTextContent('10. August 2099');
   });
 

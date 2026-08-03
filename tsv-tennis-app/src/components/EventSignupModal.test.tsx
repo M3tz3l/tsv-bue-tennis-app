@@ -112,6 +112,14 @@ describe('EventSignupModal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('uses shared minimum touch and action control classes', () => {
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Schließen' })).toHaveClass('touch-control');
+    expect(screen.getByRole('button', { name: /Abbrechen/i })).toHaveClass('action-control');
+    expect(screen.getByRole('button', { name: /Anmelden/i })).toHaveClass('action-control');
+  });
+
   it('shows API errors through a toast and keeps the modal open', async () => {
     const onClose = vi.fn();
     const user = userEvent.setup();

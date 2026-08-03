@@ -35,7 +35,7 @@ select:focus-visible {
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   body:has(.club-navigation-mobile) {
     padding-bottom: var(--club-nav-height);
   }

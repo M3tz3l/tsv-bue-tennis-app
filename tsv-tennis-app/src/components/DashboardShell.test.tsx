@@ -47,7 +47,7 @@ describe('DashboardShell', () => {
     expect(screen.getAllByRole('button', { name: 'Rundmail' })).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: 'Abmelden' })).toHaveLength(2);
     expect(screen.getByText('Arbeitsstunden-Inhalt')).toBeInTheDocument();
-    expect(screen.getByText('Willkommen, member@example.com')).toBeInTheDocument();
+    expect(screen.getByText('Willkommen, Orga')).toBeInTheDocument();
   });
 
   it('calls the page callback from either navigation and preserves responsive visibility', () => {
@@ -68,8 +68,8 @@ describe('DashboardShell', () => {
     expect(screen.getByTestId('dashboard-shell-content')).toHaveClass('pb-[var(--club-nav-height)]', 'min-w-0');
     expect(screen.getByTestId('dashboard-shell-content')).toHaveAttribute('data-mobile-safe-spacing', 'true');
     const navigations = screen.getAllByRole('navigation', { name: 'Clubnavigation' });
-    expect(navigations[0]).toHaveClass('hidden', 'md:flex');
-    expect(navigations[1]).toHaveClass('md:hidden');
+    expect(navigations[0]).toHaveClass('hidden', 'lg:flex');
+    expect(navigations[1]).toHaveClass('lg:hidden');
     screen.getAllByRole('button', { name: 'Rundmail' }).forEach((button) => button.click());
     expect(onOpenMailComposer).toHaveBeenCalledTimes(2);
   });

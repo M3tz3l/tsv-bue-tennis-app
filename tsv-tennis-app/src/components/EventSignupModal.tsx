@@ -82,7 +82,7 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
         <DialogPanel className="w-full max-w-lg rounded-lg bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
             <DialogTitle className="text-lg font-medium text-gray-900">{data?.event.title ?? 'Veranstaltung'}</DialogTitle>
-            <button aria-label="Schließen" onClick={close} disabled={pending}><XMarkIcon className="h-6 w-6 text-gray-400" /></button>
+             <button aria-label="Schließen" onClick={close} disabled={pending} className="touch-control"><XMarkIcon className="h-6 w-6 text-gray-400" /></button>
           </div>
           {isLoading && <p className="p-6 text-gray-600">Wird geladen...</p>}
           {error && <p className="p-6 text-red-600">Fehler beim Laden der Veranstaltung</p>}
@@ -102,8 +102,8 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
               </label>
               <div className="flex flex-wrap justify-end gap-3">
                 {signup && <button type="button" onClick={() => void cancelSignup()} disabled={pending} className="mr-auto rounded-md border border-red-300 px-4 py-2 text-sm text-red-700">Abmelden</button>}
-                <button type="button" onClick={close} disabled={pending} className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700">Abbrechen</button>
-                <button type="submit" disabled={pending} className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white disabled:bg-gray-400">{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>
+                 <button type="button" onClick={close} disabled={pending} className="action-control rounded-md border border-gray-300 text-sm text-gray-700">Abbrechen</button>
+                 <button type="submit" disabled={pending} className="action-control rounded-md bg-green-600 text-sm font-medium text-white disabled:bg-gray-400">{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>
               </div>
             </form>
           )}
