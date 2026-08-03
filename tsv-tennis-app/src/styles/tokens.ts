@@ -10,7 +10,7 @@ export const buttonVariants = {
   // Secondary/neutral action (cancel, close, edit) — white card pill with a
   // hairline border, per the editorial "hairline-only depth" rule.
   secondary:
-    'action-control rounded-md border border-[var(--hairline-strong)] text-sm font-medium text-[var(--ink)] hover:bg-[var(--canvas-soft)]',
+    'action-control rounded-md border border-[var(--hairline-strong)] text-sm font-medium text-[var(--ink)] hover:bg-[var(--hairline-soft)]',
   // Destructive action (delete signup, remove event). Error red, muted.
   destructive:
     'action-control rounded-md border border-[var(--error)]/40 text-sm font-medium text-[var(--error)] hover:bg-[var(--error)]/5',

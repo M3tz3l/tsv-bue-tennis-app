@@ -41,7 +41,6 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
                 <>
                     <div className="flex items-baseline justify-between gap-2 mb-3">
                         <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-[var(--ink)]">Familie - {selectedYear}</h2>
-                        <span className="text-sm text-[var(--muted)]">{Math.round(Math.min(100, Math.max(0, data.family.percentage)))}% abgeschlossen</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 text-sm text-[var(--body)] mb-1">
                         <span>Familien-Fortschritt</span>
@@ -84,9 +83,6 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
                 <>
                     <div className="flex items-baseline justify-between gap-2 mb-3">
                         <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-[var(--ink)]">{data.personal.name || 'Ihre Arbeitsstunden'} - {selectedYear}</h2>
-                        {data.personal.required > 0 && (
-                            <span className="text-sm text-[var(--muted)]">{Math.round(Math.min(100, Math.max(0, getProgressPercentage(data.personal.hours, data.personal.required))))}% abgeschlossen</span>
-                        )}
                     </div>
                     {data.personal.required === 0 ? (
                         <div className="p-4 border border-[var(--hairline)] rounded-lg">

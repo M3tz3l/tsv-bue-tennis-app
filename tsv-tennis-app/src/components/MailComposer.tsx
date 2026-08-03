@@ -372,7 +372,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
               <span className="text-sm text-[var(--muted)]">An {currentRecipientCount} {recipientFilter === 'all' ? 'Mitglieder' : 'Ausschuss-Mitglieder'} senden?</span>
               <button onClick={() => setConfirmSend(false)} disabled={isBusy} className={buttonVariants.secondary}>Zurück</button>
               <button onClick={handleSendBulk} disabled={isBusy} className={`${buttonVariants.primary} inline-flex items-center justify-center`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />Jetzt senden</button>
-            </> : <button onClick={() => isFormValid && setConfirmSend(true)} disabled={isBusy || !isFormValid} className={`${buttonVariants.primary} inline-flex items-center justify-center`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />{isLoading ? 'Wird gestartet...' : 'Versenden'}{currentRecipientCount !== null && <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-[var(--primary)]/50/20 text-[var(--primary)]">{currentRecipientCount}</span>}</button>}
+            </> : <button onClick={() => isFormValid && setConfirmSend(true)} disabled={isBusy || !isFormValid} className={`${buttonVariants.primary} inline-flex items-center justify-center`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />{isLoading ? 'Wird gestartet...' : 'Versenden'}{currentRecipientCount !== null && <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold rounded-full bg-[var(--on-primary)]/25 text-[var(--on-primary)]">{currentRecipientCount}</span>}</button>}
           </div>
         </>
       )}
@@ -407,7 +407,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                       className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
                         recipientFilter === 'all'
                           ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary)]'
-                          : 'border-[var(--hairline)] hover:border-[var(--primary)] text-[var(--body)]'
+                          : 'border-[var(--hairline)] hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 text-[var(--body)]'
                       } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
                       <UsersIcon className="h-4 w-4" />
@@ -431,7 +431,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                       className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
                         recipientFilter === 'orga'
                           ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary)]'
-                          : 'border-[var(--hairline)] hover:border-[var(--primary)] text-[var(--body)]'
+                          : 'border-[var(--hairline)] hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 text-[var(--body)]'
                       } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
                       <UserGroupIcon className="h-4 w-4" />
