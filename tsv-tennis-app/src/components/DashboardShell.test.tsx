@@ -73,6 +73,25 @@ describe('DashboardShell', () => {
     expect(onOpenMailComposer).toHaveBeenCalledTimes(2);
   });
 
+  it('provides only the shared navigation without legacy dashboard switches', () => {
+    render(
+      <MemoryRouter initialEntries={['/dashboard/veranstaltungen']}>
+        <DashboardShell
+          title="Veranstaltungen"
+          onOpenMailComposer={vi.fn()}
+          isMailComposerOpen={false}
+          onCloseMailComposer={vi.fn()}
+        >
+          <p>Events</p>
+        </DashboardShell>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getAllByRole('navigation', { name: 'Clubnavigation' })).toHaveLength(2);
+    expect(screen.queryByRole('navigation', { name: 'Dashboard-Bereiche' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Veranstaltungen' })).toHaveLength(2);
+  });
+
   it('passes controlled MailComposer state through and exposes its close callback', () => {
     const onCloseMailComposer = vi.fn();
     render(

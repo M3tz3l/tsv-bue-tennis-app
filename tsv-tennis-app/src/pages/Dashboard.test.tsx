@@ -61,5 +61,6 @@ describe('Dashboard navigation', () => {
     expect(screen.getAllByRole('link', { name: /arbeitsstunden/i })).toHaveLength(2);
     expect(screen.getAllByRole('link', { name: /arbeitsstunden/i })[0]).toHaveAttribute('href', '/dashboard/arbeitsstunden');
     expect(screen.getAllByRole('link', { name: /veranstaltungen/i })[0]).toHaveAttribute('href', '/dashboard/veranstaltungen');
+    expect(screen.queryByRole('navigation', { name: 'Dashboard-Bereiche' })).not.toBeInTheDocument();
   });
 });

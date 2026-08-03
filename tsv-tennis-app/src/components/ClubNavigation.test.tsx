@@ -160,4 +160,19 @@ describe('ClubNavigation', () => {
     expect(navigation).toHaveClass('club-navigation-motion');
     expect(indexCss).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.club-navigation-motion,\s*\.club-navigation-motion \*/);
   });
+
+  it('keeps navigation controls touch-sized and keyboard-focusable', () => {
+    renderNavigation();
+
+    [...screen.getAllByRole('link'), ...screen.getAllByRole('button')].forEach((control) => {
+      expect(control).toHaveClass('min-h-11', 'min-w-11', 'focus-visible:outline-2');
+    });
+  });
+
+  it('documents overflow-safe layout assumptions for narrow screens', () => {
+    renderNavigation();
+    expect(indexCss).toContain('box-sizing: border-box');
+    expect(indexCss).toContain('min-width: 0');
+    expect(indexCss).toContain('overflow-x: hidden');
+  });
 });
