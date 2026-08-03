@@ -128,6 +128,19 @@ describe('Events', () => {
     expect(screen.getAllByRole('button', { name: /Anmeldungen anzeigen/i })).not.toHaveLength(0);
   });
 
+  it('lets Orga members sign up while retaining management controls', async () => {
+    const user = userEvent.setup();
+    mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
+    mocks.useEvents.mockReturnValue({ data: [event()], isLoading: false, error: null });
+    mocks.useEvent.mockReturnValue({ data: { event: event(), own_signup: null }, isLoading: false, error: null });
+    renderEvents();
+
+    expect(screen.getByRole('button', { name: /Bearbeiten/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Anmeldungen anzeigen/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Anmelden$/i }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Signup modal for 1');
+  });
+
   it('marks events as active and keeps the work-hours tab available', () => {
     render(
       <MemoryRouter initialEntries={['/dashboard/veranstaltungen']}>

@@ -41,7 +41,8 @@ const EventCard = ({ event, userId, isOrga, onSelect, onEdit, onSignups }: { eve
     </dl>
     {ownSignup && <p className="mt-4 text-sm font-medium text-green-700">Ihre Anmeldung: {ownSignup.people_count} Personen</p>}
     <div className="mt-5 flex-1" />
-    {isOrga ? <div className="flex gap-2"><button onClick={() => onEdit(event)} className="action-control rounded-md border border-gray-300 text-sm">Bearbeiten</button><button onClick={() => onSignups(event.id)} className="action-control rounded-md border border-gray-300 text-sm">Anmeldungen anzeigen</button></div> : ownSignup ? <button onClick={() => onSelect(event.id)} className="action-control rounded-md bg-green-600 font-medium text-white hover:bg-green-700">Anmeldung bearbeiten</button> : unavailable ? <p className="rounded-md bg-gray-100 px-3 py-2 text-center text-sm font-medium text-gray-600">{full ? 'Ausgebucht' : 'Anmeldeschluss erreicht'}</p> : <button onClick={() => onSelect(event.id)} className="action-control rounded-md bg-green-600 font-medium text-white hover:bg-green-700">Anmelden</button>}
+    {isOrga && <div className="flex gap-2"><button onClick={() => onEdit(event)} className="action-control rounded-md border border-gray-300 text-sm">Bearbeiten</button><button onClick={() => onSignups(event.id)} className="action-control rounded-md border border-gray-300 text-sm">Anmeldungen anzeigen</button></div>}
+    {ownSignup ? <button onClick={() => onSelect(event.id)} className="action-control rounded-md bg-green-600 font-medium text-white hover:bg-green-700">Anmeldung bearbeiten</button> : unavailable ? <p className="rounded-md bg-gray-100 px-3 py-2 text-center text-sm font-medium text-gray-600">{full ? 'Ausgebucht' : 'Anmeldeschluss erreicht'}</p> : <button onClick={() => onSelect(event.id)} className="action-control rounded-md bg-green-600 font-medium text-white hover:bg-green-700">Anmelden</button>}
   </article>;
 };
 
