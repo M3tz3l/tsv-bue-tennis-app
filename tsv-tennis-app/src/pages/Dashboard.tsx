@@ -8,11 +8,10 @@ import type { WorkHourEntry, CreateWorkHourRequest, MemberContribution } from '.
 import useDashboard, { DASHBOARD_QUERY_KEY } from '../hooks/useDashboard';
 import ArbeitsstundenFormModal from '../components/ArbeitsstundenFormModal';
 import DashboardShell from '../components/DashboardShell';
+import WorkHoursOverviewCard from '../components/WorkHoursOverviewCard';
 import {
     getCurrentYear,
     getMemberEntries,
-    getProgressColor,
-    getProgressPercentage,
     hasDuplicateEntry,
     formatHours,
     sortEntriesByDate,
@@ -307,127 +306,7 @@ const Dashboard = () => {
                     </select>
                 </div>
 
-                {/* Work Hours Status Card - Shows family info if multiple members, otherwise single member */}
-                {(dashboardData?.family || dashboardData?.personal) && (
-                    <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mb-6 sm:mb-8">
-                        {dashboardData?.family && dashboardData.family.members.length > 1 ? (
-                            // Multiple family members - show family view
-                            <>
-                                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
-                                    🏠 Familie - {selectedYear}
-                                </h2>
-
-                                {/* Family Progress Bar */}
-                                <div className="mb-4">
-                                    <div className="flex flex-col sm:flex-row sm:justify-between text-sm text-gray-600 mb-1 space-y-1 sm:space-y-0">
-                                        <span>Familien-Fortschritt</span>
-                                        <span><span className="font-bold">{formatHours(dashboardData.family.completed)} Std</span> von <span className="font-bold">{formatHours(dashboardData.family.required)} Std</span></span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-3">
-                                        <div
-                                        className={`h-3 rounded-full transition-all duration-300 ${getProgressColor(dashboardData.family.percentage)}`}
-                                            style={{ width: `${Math.min(100, dashboardData.family.percentage)}%` }}
-                                        ></div>
-                                    </div>
-                                    <div className="text-right text-sm text-gray-600 mt-1">
-                                        {Math.round(Math.min(100, dashboardData.family.percentage))}% abgeschlossen
-                                    </div>
-                                </div>
-
-                                {/* Family Members Contributions */}
-                                <div className="space-y-3">
-                                    <h3 className="font-medium text-gray-800">Familienmitglieder:</h3>
-                                        {[...dashboardData.family.memberContributions]
-                                        .sort((a: MemberContribution, b: MemberContribution) => a.name.localeCompare(b.name, 'de'))
-                                        .map((member: MemberContribution, index: number) => {
-                                            const isCurrentUser = user?.name === member.name;
-
-                                            return (
-                                                <div
-                                                    key={index}
-                                                    className={`flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 px-3 rounded space-y-1 sm:space-y-0 ${isCurrentUser
-                                                        ? 'bg-blue-100 border-2 border-blue-300'
-                                                        : 'bg-gray-50'
-                                                        }`}
-                                                >
-                                                    <div className="flex flex-col">
-                                                        <span className={`font-medium ${isCurrentUser ? 'text-blue-800' : ''}`}>
-                                                            {member.name} {isCurrentUser ? '(Sie)' : ''}
-                                                        </span>
-                                                        {member.exemption_reason && (
-                                                            <span className="text-xs text-gray-600 italic">
-                                                                Befreit: {member.exemption_reason}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <span className={`font-bold text-sm sm:text-base ${isCurrentUser ? 'text-blue-700' : 'text-blue-600'
-                                                        } ${member.exemption_reason ? 'text-green-600' : ''}`}>
-                                                        {member.exemption_reason ?
-                                                            (member.hours > 0 ? `${formatHours(member.hours)} Std / Befreit` : 'Befreit')
-                                                            : `${formatHours(member.hours)} / ${formatHours(member.required)} Std`}
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
-                                    {dashboardData.family.remaining > 0 && (
-                                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 px-3 bg-red-50 rounded border border-red-200 space-y-1 sm:space-y-0">
-                                            <span className="font-medium text-red-700">Noch zu erledigen</span>
-                                            <span className="text-red-600 font-bold">{formatHours(dashboardData.family.remaining)} Std</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </>
-                        ) : (
-                            // Single member - show simplified personal view with progress bar
-                            <>
-                                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                                    👤 {dashboardData?.personal?.name || 'Ihre Arbeitsstunden'} - {selectedYear}
-                                </h2>
-
-                                {/* Check if user is exempt */}
-                                {dashboardData?.personal?.required === 0 ? (
-                                    <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-green-600 font-semibold text-lg">✓ Befreit von Arbeitsstunden</span>
-                                            {dashboardData?.personal?.hours > 0 && (
-                                                <span className="text-green-700 font-bold">
-                                                    {formatHours(dashboardData.personal.hours)} Std geleistet
-                                                </span>
-                                            )}
-                                        </div>
-                                        {dashboardData.personal.exemption_reason && (
-                                            <p className="text-sm text-green-700 mt-1">
-                                                Grund: {dashboardData.personal.exemption_reason}
-                                            </p>
-                                        )}
-                                    </div>
-                                ) : (
-                                    /* Personal Progress Bar */
-                                    <div className="mb-4">
-                                        <div className="flex justify-between text-sm text-gray-600 mb-1">
-                                            <span>Ihr Fortschritt</span>
-                                            <span>
-                                                <span className="font-bold">{formatHours(dashboardData?.personal?.hours || 0)} Std</span> von{' '}
-                                                <span className="font-bold">{formatHours(dashboardData?.personal?.required || 8)} Std</span>
-                                            </span>
-                                        </div>
-                                        <div className="w-full bg-gray-200 rounded-full h-3">
-                                            <div
-                                                    className={`h-3 rounded-full ${getProgressColor(getProgressPercentage(dashboardData.personal?.hours || 0, dashboardData.personal?.required || 8))}`}
-                                                style={{
-                                                    width: `${getProgressPercentage(dashboardData.personal?.hours || 0, dashboardData.personal?.required || 8)}%`
-                                                }}
-                                            ></div>
-                                        </div>
-                                        <div className="text-right text-sm text-gray-600 mt-1">
-                                            {Math.round(getProgressPercentage(dashboardData.personal?.hours || 0, dashboardData.personal?.required || 8))}% abgeschlossen
-                                        </div>
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </div>
-                )}
+                {dashboardData && <WorkHoursOverviewCard data={dashboardData} selectedYear={selectedYear} />}
 
                 {/* Arbeitsstunden Table */}
                 {renderArbeitsstundenTable()}
