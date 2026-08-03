@@ -122,7 +122,7 @@ describe('WorkHoursOverviewCard', () => {
         expect(screen.getByText('4 Std von 8 Std')).toBeInTheDocument();
         expect(screen.getByText('50% abgeschlossen')).toBeInTheDocument();
         expect(screen.getByRole('progressbar', { name: 'Ihr Fortschritt: 50% abgeschlossen' })).toHaveAttribute('aria-valuenow', '50');
-        expect(screen.getByRole('progressbar').firstElementChild).toHaveClass('bg-[var(--success)]');
+        expect(screen.getByRole('progressbar').firstElementChild).toHaveClass('bg-[var(--primary)]');
         expect(screen.getByRole('progressbar').firstElementChild).toHaveStyle({ width: '50%' });
     });
 
@@ -142,7 +142,7 @@ describe('WorkHoursOverviewCard', () => {
         expect(progress).toHaveAttribute('aria-valuemin', '0');
         expect(progress).toHaveAttribute('aria-valuemax', '100');
         expect(progress).toHaveAttribute('aria-valuenow', '100');
-        expect(progress.firstElementChild).toHaveClass('bg-[var(--success)]');
+        expect(progress.firstElementChild).toHaveClass('bg-[var(--primary)]');
         expect(progress.firstElementChild).toHaveStyle({ width: '100%' });
     });
 

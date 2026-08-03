@@ -28,7 +28,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
                 role="progressbar"
             >
                 <div
-                    className="h-2.5 rounded-full transition-all duration-300 bg-[var(--success)]"
+                    className="h-2.5 rounded-full transition-all duration-300 bg-[var(--primary)]"
                     style={{ width: `${clampedPercentage}%` }}
                 />
             </div>
