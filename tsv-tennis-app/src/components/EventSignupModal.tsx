@@ -19,9 +19,11 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
   const [saladCount, setSaladCount] = useState('0');
   const [cakeCount, setCakeCount] = useState('0');
   const [comment, setComment] = useState('');
+  const [errors, setErrors] = useState<{ peopleCount?: string; contributions?: string }>({});
   const pending = createSignup.isPending || updateSignup.isPending || deleteSignup.isPending;
 
   useEffect(() => {
+    setErrors({});
     if (signup) {
       setPeopleCount(String(signup.people_count));
       setSaladCount(String(signup.salad_count));
@@ -37,20 +39,31 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    setErrors({});
     const payload: SignupRequest = {
       people_count: Number(peopleCount),
       salad_count: Number(saladCount),
       cake_count: Number(cakeCount),
       comment: comment.trim() || null,
     };
+    
+    let hasError = false;
+    const newErrors: { peopleCount?: string; contributions?: string } = {};
+
     if (!Number.isInteger(payload.people_count) || payload.people_count < 1) {
-      toast.error('Die Anzahl der Personen muss mindestens 1 sein');
-      return;
+      newErrors.peopleCount = 'Die Anzahl der Personen muss mindestens 1 sein';
+      hasError = true;
     }
     if (![payload.salad_count, payload.cake_count].every((count) => Number.isInteger(count) && count >= 0)) {
-      toast.error('Beiträge dürfen nicht negativ sein');
+      newErrors.contributions = 'Beiträge dürfen nicht negativ sein';
+      hasError = true;
+    }
+
+    if (hasError) {
+      setErrors(newErrors);
       return;
     }
+
     try {
       if (signup) await updateSignup.mutateAsync({ id: eventId, payload });
       else await createSignup.mutateAsync({ id: eventId, payload });
@@ -77,7 +90,7 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
 
   return (
     <Dialog open={isOpen} onClose={close} className="relative z-50">
-      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+      <div data-testid="modal-backdrop" className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel className="w-full max-w-lg rounded-lg bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
@@ -88,22 +101,37 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
           {error && <p className="p-6 text-red-600">Fehler beim Laden der Veranstaltung</p>}
           {data?.event && (
             <form onSubmit={submit} className="space-y-4 px-6 py-5">
-              <label className="block text-sm font-medium text-gray-700">Personen
-                <input aria-label="Personen" type="number" step="1" value={peopleCount} onChange={(e) => setPeopleCount(e.target.value)} disabled={pending} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2" />
-              </label>
-              {data.event.allow_salad && <label className="block text-sm font-medium text-gray-700">Salat
-                <input aria-label="Salat" type="number" step="1" value={saladCount} onChange={(e) => setSaladCount(e.target.value)} disabled={pending} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2" />
-              </label>}
-              {data.event.allow_cake && <label className="block text-sm font-medium text-gray-700">Kuchen
-                <input aria-label="Kuchen" type="number" step="1" value={cakeCount} onChange={(e) => setCakeCount(e.target.value)} disabled={pending} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2" />
-              </label>}
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Personen
+                  <input aria-label="Personen" type="number" step="1" value={peopleCount} onChange={(e) => setPeopleCount(e.target.value)} disabled={pending} className={`mt-1 w-full min-h-[44px] rounded-md border px-3 py-2 ${errors.peopleCount ? 'border-red-500' : 'border-gray-300'}`} />
+                </label>
+                {errors.peopleCount && <p className="mt-1 text-sm text-red-500">{errors.peopleCount}</p>}
+              </div>
+              
+              {data.event.allow_salad && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Salat
+                    <input aria-label="Salat" type="number" step="1" value={saladCount} onChange={(e) => setSaladCount(e.target.value)} disabled={pending} className={`mt-1 w-full min-h-[44px] rounded-md border px-3 py-2 ${errors.contributions ? 'border-red-500' : 'border-gray-300'}`} />
+                  </label>
+                </div>
+              )}
+              
+              {data.event.allow_cake && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Kuchen
+                    <input aria-label="Kuchen" type="number" step="1" value={cakeCount} onChange={(e) => setCakeCount(e.target.value)} disabled={pending} className={`mt-1 w-full min-h-[44px] rounded-md border px-3 py-2 ${errors.contributions ? 'border-red-500' : 'border-gray-300'}`} />
+                  </label>
+                </div>
+              )}
+              {errors.contributions && <p className="text-sm text-red-500">{errors.contributions}</p>}
+              
               <label className="block text-sm font-medium text-gray-700">Kommentar
-                <textarea value={comment} onChange={(e) => setComment(e.target.value)} disabled={pending} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2" />
+                <textarea value={comment} onChange={(e) => setComment(e.target.value)} disabled={pending} className="mt-1 w-full min-h-[44px] rounded-md border border-gray-300 px-3 py-2" />
               </label>
-              <div className="flex flex-wrap justify-end gap-3">
+              <div className="flex flex-wrap justify-end gap-3 pt-2">
                 {signup && <button type="button" onClick={() => void cancelSignup()} disabled={pending} className="mr-auto rounded-md border border-red-300 px-4 py-2 text-sm text-red-700">Abmelden</button>}
                  <button type="button" onClick={close} disabled={pending} className="action-control rounded-md border border-gray-300 text-sm text-gray-700">Abbrechen</button>
-                 <button type="submit" disabled={pending} className="action-control rounded-md bg-green-600 text-sm font-medium text-white disabled:bg-gray-400">{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>
+                 <button type="submit" disabled={pending} className="action-control rounded-md bg-emerald-700 hover:bg-emerald-800 text-sm font-medium text-white disabled:bg-gray-400">{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>
               </div>
             </form>
           )}

@@ -53,7 +53,7 @@ describe('EventSignupModal', () => {
     expect(screen.getByLabelText(/Kuchen/i)).toBeInTheDocument();
   });
 
-  it('hides disabled contribution fields and rejects fewer than one person', async () => {
+  it('hides disabled contribution fields and rejects fewer than one person with an inline error', async () => {
     const user = userEvent.setup();
     mocks.useEvent.mockReturnValue({ data: detail({ event: { ...detail().event, allow_salad: false, allow_cake: false } }), isLoading: false, error: null });
     render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
@@ -62,11 +62,17 @@ describe('EventSignupModal', () => {
     await user.clear(screen.getByLabelText(/Personen/i));
     await user.type(screen.getByLabelText(/Personen/i), '0');
     await user.click(screen.getByRole('button', { name: /Anmelden/i }));
+    
     expect(mocks.create).not.toHaveBeenCalled();
-    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringMatching(/mindestens 1/i));
+    expect(mocks.toastError).not.toHaveBeenCalledWith(expect.stringMatching(/mindestens 1/i));
+    
+    const errorText = screen.getByText(/Die Anzahl der Personen muss mindestens 1 sein/i);
+    expect(errorText).toBeInTheDocument();
+    expect(errorText).toHaveClass('text-red-500');
+    expect(screen.getByLabelText(/Personen/i)).toHaveClass('border-red-500');
   });
 
-  it('rejects negative contribution quantities', async () => {
+  it('rejects negative contribution quantities with an inline error', async () => {
     const user = userEvent.setup();
     render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
     await user.clear(screen.getByLabelText(/Salat/i));
@@ -74,7 +80,12 @@ describe('EventSignupModal', () => {
     await user.click(screen.getByRole('button', { name: /Anmelden/i }));
 
     expect(mocks.create).not.toHaveBeenCalled();
-    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringMatching(/nicht negativ/i));
+    expect(mocks.toastError).not.toHaveBeenCalledWith(expect.stringMatching(/nicht negativ/i));
+
+    const errorText = screen.getByText(/Beiträge dürfen nicht negativ sein/i);
+    expect(errorText).toBeInTheDocument();
+    expect(errorText).toHaveClass('text-red-500');
+    expect(screen.getByLabelText(/Salat/i)).toHaveClass('border-red-500');
   });
 
   it('creates a signup with the form values', async () => {
@@ -112,12 +123,24 @@ describe('EventSignupModal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('uses shared minimum touch and action control classes', () => {
-    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+  it('uses shared minimum touch and action control classes and accessibility styles', () => {
+    const { container } = render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Schließen' })).toHaveClass('touch-control');
     expect(screen.getByRole('button', { name: /Abbrechen/i })).toHaveClass('action-control');
-    expect(screen.getByRole('button', { name: /Anmelden/i })).toHaveClass('action-control');
+    
+    const submitBtn = screen.getByRole('button', { name: /Anmelden/i });
+    expect(submitBtn).toHaveClass('action-control');
+    expect(submitBtn).toHaveClass('bg-emerald-700');
+    expect(submitBtn).toHaveClass('hover:bg-emerald-800');
+
+    // Inputs have touch targets
+    const personInput = screen.getByLabelText(/Personen/i);
+    expect(personInput).toHaveClass('min-h-[44px]');
+    
+    // Backdrop blur
+    const backdrop = screen.getByTestId('modal-backdrop');
+    expect(backdrop).toHaveClass('backdrop-blur-sm');
   });
 
   it('shows API errors through a toast and keeps the modal open', async () => {

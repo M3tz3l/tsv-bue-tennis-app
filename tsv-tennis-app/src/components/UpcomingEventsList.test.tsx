@@ -99,13 +99,23 @@ describe('UpcomingEventsList', () => {
     expect(screen.getByRole('link', { name: 'Sommerfest' })).toHaveClass('min-h-11', 'focus-visible:outline-2', 'focus-visible:ring-2');
   });
 
-  it('renders empty, loading, and error states', () => {
+  it('renders empty, loading, and error states with correct visual elements', () => {
     const { rerender } = render(<MemoryRouter><UpcomingEventsList events={[]} /></MemoryRouter>);
     expect(screen.getByText(/keine anstehenden Veranstaltungen veröffentlicht/i)).toBeInTheDocument();
+    
+    // CalendarIcon for empty state
+    const emptyIcon = screen.getByTestId('empty-events-icon');
+    expect(emptyIcon).toBeInTheDocument();
+    expect(emptyIcon).toHaveClass('text-slate-200', 'h-12', 'w-12');
+    
     expect(screen.getAllByRole('link', { name: /Veranstaltungen/i }).some((link) => link.getAttribute('href') === '/dashboard/veranstaltungen')).toBe(true);
 
     rerender(<MemoryRouter><UpcomingEventsList events={undefined} isLoading /></MemoryRouter>);
-    expect(screen.getByText(/Veranstaltungen werden geladen/i)).toBeInTheDocument();
+    // Skeleton UI
+    const skeletons = screen.getAllByTestId('event-skeleton');
+    expect(skeletons).toHaveLength(3);
+    expect(skeletons[0]).toHaveClass('bg-slate-200', 'animate-pulse', 'h-16', 'w-full', 'rounded-md');
+    expect(screen.queryByText(/Veranstaltungen werden geladen/i)).not.toBeInTheDocument();
 
     rerender(<MemoryRouter><UpcomingEventsList events={undefined} error={new Error('failed')} /></MemoryRouter>);
     expect(screen.getByText('failed')).toBeInTheDocument();

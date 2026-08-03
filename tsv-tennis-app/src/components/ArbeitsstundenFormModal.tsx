@@ -258,7 +258,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                             </button>
                             <button
                                 type="submit"
-                                className={`px-4 py-2 border border-transparent rounded-md text-sm font-medium transition-colors ${isSubmitting ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
+                                className={`px-4 py-2 border border-transparent rounded-md text-sm font-medium transition-colors ${isSubmitting ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-emerald-700 text-white hover:bg-emerald-800'}`}
                                 disabled={isSubmitting || isDeleting}
                                 style={isSubmitting ? { pointerEvents: 'none' } : {}}
                             >

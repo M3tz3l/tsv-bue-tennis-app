@@ -1,3 +1,4 @@
+import { CalendarIcon } from '@heroicons/react/24/outline';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useEvent } from '../hooks/useEvents';
@@ -52,7 +53,16 @@ const UpcomingEventsList = ({ events, limit = 3, isLoading = false, error }: Upc
     const upcomingEvents = (events ?? []).filter(isFutureEvent).sort((a, b) => eventTimestamp(a) - eventTimestamp(b)).slice(0, limit);
 
     if (isLoading) {
-        return <section aria-label="Als Nächstes" className="min-h-56 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6"><h2 className="text-lg font-semibold text-slate-900">Als Nächstes</h2><p className="mt-5 animate-pulse text-sm text-slate-500">Veranstaltungen werden geladen...</p></section>;
+        return (
+            <section aria-label="Als Nächstes" className="min-h-56 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+                <h2 className="text-lg font-semibold text-slate-900">Als Nächstes</h2>
+                <div className="mt-4 space-y-4">
+                    <div data-testid="event-skeleton" className="bg-slate-200 animate-pulse h-16 w-full rounded-md"></div>
+                    <div data-testid="event-skeleton" className="bg-slate-200 animate-pulse h-16 w-full rounded-md"></div>
+                    <div data-testid="event-skeleton" className="bg-slate-200 animate-pulse h-16 w-full rounded-md"></div>
+                </div>
+            </section>
+        );
     }
 
     if (error) {
@@ -65,7 +75,13 @@ const UpcomingEventsList = ({ events, limit = 3, isLoading = false, error }: Upc
                 <h2 className="text-lg font-semibold text-slate-900">Als Nächstes</h2>
                 <Link className="text-sm font-medium text-emerald-700 underline underline-offset-4" to="/dashboard/veranstaltungen">Alle Veranstaltungen</Link>
             </div>
-            {upcomingEvents.length === 0 ? <div className="mt-8 text-sm text-slate-600"><p>Keine anstehenden Veranstaltungen veröffentlicht.</p><Link className="mt-2 inline-block font-medium text-emerald-700 underline underline-offset-4" to="/dashboard/veranstaltungen">Zu den Veranstaltungen</Link></div> : <div className="mt-4">{upcomingEvents.map((event) => <EventRow key={event.id} event={event} userId={user?.id} />)}</div>}
+            {upcomingEvents.length === 0 ? (
+                <div className="mt-8 flex flex-col items-center text-center text-sm text-slate-600">
+                    <CalendarIcon data-testid="empty-events-icon" className="mb-3 text-slate-200 h-12 w-12" />
+                    <p>Keine anstehenden Veranstaltungen veröffentlicht.</p>
+                    <Link className="mt-2 inline-block font-medium text-emerald-700 underline underline-offset-4" to="/dashboard/veranstaltungen">Zu den Veranstaltungen</Link>
+                </div>
+            ) : <div className="mt-4">{upcomingEvents.map((event) => <EventRow key={event.id} event={event} userId={user?.id} />)}</div>}
         </section>
     );
 };

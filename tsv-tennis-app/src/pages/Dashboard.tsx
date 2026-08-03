@@ -136,7 +136,7 @@ const Dashboard = () => {
                     <div className="mt-6">
                         <button
                             onClick={() => setShowAddForm(true)}
-                            className="action-control inline-flex items-center border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                            className="action-control inline-flex items-center border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-emerald-700 hover:bg-emerald-800"
                         >
                             <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
                             Arbeitsstunden eintragen
@@ -176,7 +176,7 @@ const Dashboard = () => {
                     </div>
                     <button
                         onClick={() => setShowAddForm(true)}
-                        className="action-control inline-flex items-center justify-center border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 w-full sm:w-auto"
+                        className="action-control inline-flex items-center justify-center border border-transparent text-sm font-medium rounded-md text-white bg-emerald-700 hover:bg-emerald-800 w-full sm:w-auto"
                     >
                         <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
                         Eintragen

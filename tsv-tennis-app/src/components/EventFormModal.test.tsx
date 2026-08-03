@@ -108,12 +108,24 @@ describe('EventFormModal', () => {
     expect(screen.getByRole('button', { name: /Abbrechen/i })).toBeDisabled();
   });
 
-  it('uses shared minimum touch and action control classes', () => {
-    render(<EventFormModal isOpen onClose={vi.fn()} />);
+  it('uses shared minimum touch and action control classes and accessibility styles', () => {
+    const { container } = render(<EventFormModal isOpen onClose={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Schließen' })).toHaveClass('touch-control');
     expect(screen.getByRole('button', { name: /Abbrechen/i })).toHaveClass('action-control');
-    expect(screen.getByRole('button', { name: /Erstellen/i })).toHaveClass('action-control');
+    
+    const submitBtn = screen.getByRole('button', { name: /Erstellen/i });
+    expect(submitBtn).toHaveClass('action-control');
+    expect(submitBtn).toHaveClass('bg-emerald-700');
+    expect(submitBtn).toHaveClass('hover:bg-emerald-800');
+
+    // Inputs have touch targets
+    const titleInput = screen.getByLabelText(/Titel/i);
+    expect(titleInput).toHaveClass('min-h-[44px]');
+    
+    // Backdrop blur
+    const backdrop = screen.getByTestId('modal-backdrop');
+    expect(backdrop).toHaveClass('backdrop-blur-sm');
   });
 
   it('shows mutation errors and keeps the form open', async () => {

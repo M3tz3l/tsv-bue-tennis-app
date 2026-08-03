@@ -35,9 +35,13 @@ describe('EventSignupsModal', () => {
     expect(mocks.useEventSignups).toHaveBeenCalledWith('member-1', 4, false);
   });
 
-  it('uses shared minimum touch and action control classes', () => {
+  it('uses shared minimum touch and action control classes and accessibility styles', () => {
     render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Schließen' })).toHaveClass('touch-control');
+
+    // Backdrop blur
+    const backdrop = screen.getByTestId('modal-backdrop');
+    expect(backdrop).toHaveClass('backdrop-blur-sm');
   });
 });
