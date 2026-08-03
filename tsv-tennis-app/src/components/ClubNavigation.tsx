@@ -35,8 +35,8 @@ const ClubNavigation = ({ variant, onRundmail }: ClubNavigationProps) => {
         <nav
             aria-label="Clubnavigation"
             className={isMobile
-                ? 'club-navigation-mobile fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur md:hidden'
-                : `club-navigation-desktop hidden min-h-screen flex-col border-r border-slate-200 bg-slate-950 px-3 py-5 text-white transition-[width] duration-200 md:flex ${isExpanded ? 'w-64' : 'w-20'}`}
+                ? 'club-navigation-mobile club-navigation-motion fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-2 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur md:hidden'
+                : `club-navigation-desktop club-navigation-motion hidden min-h-screen flex-col border-r border-slate-200 bg-slate-950 px-3 py-5 text-white transition-[width] duration-200 md:flex ${isExpanded ? 'w-64' : 'w-20'}`}
         >
             {!isMobile && (
                 <button

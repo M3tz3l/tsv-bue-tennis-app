@@ -110,6 +110,8 @@ describe('ClubNavigation', () => {
       expect(control).toHaveClass('min-h-11', 'min-w-11', 'focus-visible:outline-2');
     });
     expect(screen.getByText('Mitglied')).toBeInTheDocument();
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /navigation einklappen/i }));
     await user.click(screen.getByRole('button', { name: 'Abmelden' }));
     expect(logout).toHaveBeenCalledOnce();
   });
@@ -124,12 +126,17 @@ describe('ClubNavigation', () => {
       </MemoryRouter>,
     );
     expect(screen.getByRole('navigation', { name: 'Clubnavigation' })).toHaveClass('md:hidden');
-    expect(indexCss).toContain('--club-nav-height');
+    expect(indexCss.match(/env\(safe-area-inset-bottom\)/g)).toHaveLength(1);
+    expect(indexCss).toContain('--club-nav-height: calc(4rem + env(safe-area-inset-bottom))');
+    expect(indexCss).toContain('height: var(--club-nav-height)');
     expect(indexCss).toContain('padding-bottom: var(--club-nav-height)');
+    expect(screen.getByRole('navigation', { name: 'Clubnavigation' })).not.toHaveClass('pb-[env(safe-area-inset-bottom)]');
   });
 
   it('provides reduced-motion CSS support', () => {
-    expect(indexCss).toContain('@media (prefers-reduced-motion: reduce)');
-    expect(indexCss).toContain('transition-duration: 0.01ms');
+    renderNavigation();
+    const navigation = screen.getByRole('navigation', { name: 'Clubnavigation' });
+    expect(navigation).toHaveClass('club-navigation-motion');
+    expect(indexCss).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.club-navigation-motion,\s*\.club-navigation-motion \*/);
   });
 });
