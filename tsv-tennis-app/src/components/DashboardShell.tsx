@@ -1,4 +1,3 @@
-import TSV_Logo from '../assets/TSV_Tennis.svg';
 import { useAuth } from '../context/AuthContext';
 import TopbarNavigation from './TopbarNavigation';
 import MailComposer from './MailComposer';
@@ -20,10 +19,7 @@ const DashboardShell = ({ children, title, onOpenMailComposer, isMailComposerOpe
       <div data-testid="dashboard-shell-content" className="min-w-0 pt-16">
         <header className="border-b border-gray-200 bg-white shadow-sm">
           <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-4 sm:flex-row sm:px-6 lg:px-8">
-            <div className="flex items-center gap-4">
-              <img src={TSV_Logo} alt="TSV BÜ Tennis Logo" className="h-16 w-auto drop-shadow-sm sm:h-20" />
-              <h1 className="text-center text-lg font-bold text-gray-900 sm:text-left sm:text-2xl">{title}</h1>
-            </div>
+            <h1 className="text-center text-lg font-bold text-gray-900 sm:text-left sm:text-2xl">{title}</h1>
             <span className="text-center text-xs text-gray-600 sm:text-sm">Willkommen, {user?.name || user?.email || 'Benutzer'}</span>
           </div>
         </header>

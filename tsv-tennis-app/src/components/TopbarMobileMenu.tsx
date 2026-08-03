@@ -1,5 +1,5 @@
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
-import { EnvelopeIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isOrgaRole } from '../utils/roles';
@@ -32,19 +32,18 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
             </button>
           </div>
           <div className="flex flex-col gap-1 overflow-y-auto px-2 py-4">
-            {routes.map(({ label, to, Icon, end }) => (
+            {routes.map(({ label, to, end }) => (
               <NavLink
                 key={to}
                 to={to}
                 end={end}
                 onClick={onClose}
                 className={({ isActive }) =>
-                  `touch-control flex items-center gap-3 border-l-2 px-3 text-sm font-semibold uppercase tracking-wide ${
+                  `touch-control flex items-center border-l-2 px-3 text-sm font-semibold uppercase tracking-wide ${
                     isActive ? 'border-green-700 bg-green-50 text-green-900' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'
                   } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400`
                 }
               >
-                <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
                 {label}
               </NavLink>
             ))}
@@ -55,9 +54,8 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
                   onClose();
                   onOpenMailComposer();
                 }}
-                className="touch-control flex items-center gap-3 border-l-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-purple-700 hover:bg-slate-50 hover:text-purple-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                className="touch-control flex items-center border-l-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-purple-700 hover:bg-slate-50 hover:text-purple-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
               >
-                <EnvelopeIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
                 Rundmail
               </button>
             )}

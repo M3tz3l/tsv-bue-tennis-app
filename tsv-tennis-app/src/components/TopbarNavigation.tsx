@@ -1,14 +1,11 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import {
-  ArrowRightOnRectangleIcon,
-  Bars3Icon,
-  EnvelopeIcon,
-} from '@heroicons/react/24/outline';
+import { ArrowRightOnRectangleIcon, Bars3Icon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { isOrgaRole } from '../utils/roles';
 import { routes } from './navigationRoutes';
 import TopbarMobileMenu from './TopbarMobileMenu';
+import TSV_Logo from '../assets/TSV_Tennis.svg';
 
 interface TopbarNavigationProps {
   onOpenMailComposer: () => void;
@@ -36,36 +33,30 @@ const TopbarNavigation = ({ onOpenMailComposer }: TopbarNavigationProps) => {
             >
               <Bars3Icon className="h-6 w-6" aria-hidden="true" />
             </button>
-            <span className="truncate text-base font-bold uppercase tracking-wide text-gray-900">TSV BÜ Tennis</span>
+            <img src={TSV_Logo} alt="TSV BÜ Tennis Logo" className="h-10 w-auto" />
           </div>
 
-          <div className="hidden items-stretch gap-1 lg:flex">
-            {routes.map(({ label, to, Icon, end }) => (
+          <div className="hidden items-stretch gap-1 self-stretch lg:flex">
+            {routes.map(({ label, to, end }) => (
               <NavLink
                 key={to}
                 to={to}
                 end={end}
                 className={({ isActive }) =>
-                  `touch-control inline-flex items-center gap-2 border-b-2 px-3 text-sm font-semibold uppercase tracking-wide ${
+                  `touch-control inline-flex items-center border-b-2 px-3 text-sm font-semibold uppercase tracking-wide ${
                     isActive ? 'border-green-700 text-green-900' : 'border-transparent text-slate-600 hover:text-slate-900'
                   } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400`
                 }
               >
-                {() => (
-                  <>
-                    <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                    <span>{label}</span>
-                  </>
-                )}
+                {label}
               </NavLink>
             ))}
             {isOrga && (
               <button
                 type="button"
                 onClick={onOpenMailComposer}
-                className="touch-control inline-flex items-center gap-2 border-b-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-purple-700 hover:text-purple-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                className="touch-control inline-flex items-center border-b-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-purple-700 hover:text-purple-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
               >
-                <EnvelopeIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
                 Rundmail
               </button>
             )}
