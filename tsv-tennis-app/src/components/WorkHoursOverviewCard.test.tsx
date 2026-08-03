@@ -24,7 +24,7 @@ const renderCard = (data: DashboardResponse) => render(
 );
 
 describe('WorkHoursOverviewCard', () => {
-    it('uses the shared card shell and stack rhythm', () => {
+    it('uses the shared card shell for the section surface', () => {
         const { container } = renderCard(dashboard({
             family: {
                 name: 'Familie Mitglied',
@@ -38,7 +38,7 @@ describe('WorkHoursOverviewCard', () => {
         }));
 
         expect(container.querySelector('section')).toHaveClass('card-shell');
-        expect(container.querySelector('.stack-md')).toBeInTheDocument();
+        expect(container.querySelector('.stack-md')).not.toBeInTheDocument();
     });
 
     it('shows family progress, member values, accessible progress, and the detail link', () => {
