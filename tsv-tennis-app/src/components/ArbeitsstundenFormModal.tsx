@@ -151,51 +151,51 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
 
                     {selectedYear && !initialData && (
                         <div className="px-6 pt-2">
-                            <p className="text-sm text-gray-600">Bitte beachten Sie die Zeiträume für die Eingabe von Arbeitsstunden.</p>
+                            <p className="text-sm text-[var(--muted)]">Bitte beachten Sie die Zeiträume für die Eingabe von Arbeitsstunden.</p>
                         </div>
                     )}
 
                     <form id="work-hours-form" onSubmit={handleSubmit(onSubmit)} className="px-6 py-5">
                         <div className={stackMdClass}>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Nachname</label>
+                                <label className="block text-sm font-medium text-[var(--body)] mb-1">Nachname</label>
                                 <input
                                     type="text"
                                     {...register('Nachname', { required: 'Nachname ist erforderlich' })}
                                     readOnly
-                                    className={`${fieldControl} bg-gray-50 text-gray-500 cursor-not-allowed`}
+                                    className={`${fieldControl} bg-[var(--canvas-soft)] text-[var(--muted)] cursor-not-allowed`}
                                 />
-                                {errors.Nachname && <p className="text-xs text-red-600 mt-1">{errors.Nachname.message}</p>}
+                                {errors.Nachname && <p className="text-xs text-[var(--error)] mt-1">{errors.Nachname.message}</p>}
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Vorname</label>
+                                <label className="block text-sm font-medium text-[var(--body)] mb-1">Vorname</label>
                                 <input
                                     type="text"
                                     {...register('Vorname', { required: 'Vorname ist erforderlich' })}
                                     readOnly
-                                    className={`${fieldControl} bg-gray-50 text-gray-500 cursor-not-allowed`}
+                                    className={`${fieldControl} bg-[var(--canvas-soft)] text-[var(--muted)] cursor-not-allowed`}
                                 />
-                                {errors.Vorname && <p className="text-xs text-red-600 mt-1">{errors.Vorname.message}</p>}
+                                {errors.Vorname && <p className="text-xs text-[var(--error)] mt-1">{errors.Vorname.message}</p>}
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Datum</label>
+                                <label className="block text-sm font-medium text-[var(--body)] mb-1">Datum</label>
                                 <input
                                     type="date"
                                     {...register('Datum', { required: 'Datum ist erforderlich' })}
                                     min={minDate}
                                     max={today}
-                                    className={`${fieldControl} border-gray-300`}
+                                    className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     lang="de"
                                     aria-invalid={!!errors.Datum}
                                 />
-                                {errors.Datum && <p className="text-xs text-red-600 mt-1">{errors.Datum.message}</p>}
-                                <p className="text-xs text-gray-500 mt-1">Datum darf nicht in der Zukunft liegen. {currentMonth === 0 ? `Nur ${currentYear} oder ${currentYear - 1} (Nachfrist bis Ende Januar) erlaubt.` : `Nur ${currentYear} erlaubt.`}</p>
+                                {errors.Datum && <p className="text-xs text-[var(--error)] mt-1">{errors.Datum.message}</p>}
+                                <p className="text-xs text-[var(--muted)] mt-1">Datum darf nicht in der Zukunft liegen. {currentMonth === 0 ? `Nur ${currentYear} oder ${currentYear - 1} (Nachfrist bis Ende Januar) erlaubt.` : `Nur ${currentYear} erlaubt.`}</p>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Stunden</label>
+                                <label className="block text-sm font-medium text-[var(--body)] mb-1">Stunden</label>
                                 <input
                                     type="number"
                                     step="0.25"
@@ -213,23 +213,23 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                             return true;
                                         }
                                     })}
-                                    className={`${fieldControl} border-gray-300`}
+                                    className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     placeholder="z.B. 2.75"
                                 />
-                                {errors.Stunden && <p className="text-xs text-red-600 mt-1">{errors.Stunden.message}</p>}
-                                <p className="text-xs text-gray-500 mt-1">Zwischen 0.25 und 24 Stunden (in 0.25er Schritten)</p>
+                                {errors.Stunden && <p className="text-xs text-[var(--error)] mt-1">{errors.Stunden.message}</p>}
+                                <p className="text-xs text-[var(--muted)] mt-1">Zwischen 0.25 und 24 Stunden (in 0.25er Schritten)</p>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Tätigkeit</label>
+                                <label className="block text-sm font-medium text-[var(--body)] mb-1">Tätigkeit</label>
                                 <input
                                     type="text"
                                     {...register('Tätigkeit', { required: 'Tätigkeit ist erforderlich', maxLength: { value: 40, message: 'Maximal 40 Zeichen' } })}
-                                    className={`${fieldControl} border-gray-300`}
+                                    className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     placeholder="z.B. Platzpflege, Dienst..."
                                 />
-                                <div className="text-xs text-gray-500 mt-1">{/* length shown by API consumer if needed */}</div>
-                                {errors.Tätigkeit && <p className="text-xs text-red-600 mt-1">{errors.Tätigkeit.message}</p>}
+                                <div className="text-xs text-[var(--muted)] mt-1">{/* length shown by API consumer if needed */}</div>
+                                {errors.Tätigkeit && <p className="text-xs text-[var(--error)] mt-1">{errors.Tätigkeit.message}</p>}
                             </div>
                         </div>
 

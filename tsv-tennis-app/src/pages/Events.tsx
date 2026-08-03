@@ -31,20 +31,20 @@ const EventCard = ({ event, userId, isOrga, onSelect, onEdit, onSignups }: { eve
   const unavailable = full || deadlinePassed;
 
   return <article className={`flex flex-col ${cardShellClass}`}>
-    <p className="text-sm font-semibold uppercase tracking-wide text-green-700">{event.type === 'work-duty' ? 'Arbeitsdienst' : 'Veranstaltung'}</p>
-    <h2 className="mt-1 text-xl font-bold text-gray-900">{event.title}</h2>
-    {event.description && <p className="mt-2 text-sm text-gray-600">{event.description}</p>}
-    <dl className={`${stackMdClass} mt-4 text-sm text-gray-700`}>
+    <p className="text-sm font-semibold uppercase tracking-wide text-[var(--primary)]">{event.type === 'work-duty' ? 'Arbeitsdienst' : 'Veranstaltung'}</p>
+    <h2 className="mt-1 text-xl font-bold text-[var(--ink)]">{event.title}</h2>
+    {event.description && <p className="mt-2 text-sm text-[var(--muted)]">{event.description}</p>}
+    <dl className={`${stackMdClass} mt-4 text-sm text-[var(--body)]`}>
       <div><dt className="inline font-medium">Datum: </dt><dd className="inline">{formatDate(event.event_date)}</dd></div>
       {(event.start_time || event.end_time) && <div><dt className="inline font-medium">Zeit: </dt><dd className="inline">{event.start_time ?? ''}{event.end_time ? ` - ${event.end_time}` : ''}</dd></div>}
       {event.location && <div><dt className="inline font-medium">Ort: </dt><dd className="inline">{event.location}</dd></div>}
       <div><dt className="inline font-medium">Plätze: </dt><dd className="inline">{event.signup_people_count}{event.capacity === null ? '' : ` / ${event.capacity}`} Personen</dd></div>
       {event.signup_deadline && <div><dt className="inline font-medium">Anmeldung bis: </dt><dd className="inline">{formatDate(event.signup_deadline)}</dd></div>}
     </dl>
-    {ownSignup && <p className="mt-4 text-sm font-medium text-green-700">Ihre Anmeldung: {ownSignup.people_count} Personen</p>}
+    {ownSignup && <p className="mt-4 text-sm font-medium text-[var(--primary)]">Ihre Anmeldung: {ownSignup.people_count} Personen</p>}
     <div className="mt-5 flex-1" />
     {isOrga && <div className="flex gap-2"><button onClick={() => onEdit(event)} className={buttonVariants.secondary}>Bearbeiten</button><button onClick={() => onSignups(event.id)} className={buttonVariants.secondary}>Anmeldungen anzeigen</button></div>}
-    {ownSignup ? <button onClick={() => onSelect(event.id)} className={buttonVariants.primary}>Anmeldung bearbeiten</button> : unavailable ? <p className="rounded-md bg-gray-100 px-3 py-2 text-center text-sm font-medium text-gray-600">{full ? 'Ausgebucht' : 'Anmeldeschluss erreicht'}</p> : <button onClick={() => onSelect(event.id)} className={buttonVariants.primary}>Anmelden</button>}
+    {ownSignup ? <button onClick={() => onSelect(event.id)} className={buttonVariants.primary}>Anmeldung bearbeiten</button> : unavailable ? <p className="rounded-md bg-[var(--canvas-soft)] px-3 py-2 text-center text-sm font-medium text-[var(--muted)]">{full ? 'Ausgebucht' : 'Anmeldeschluss erreicht'}</p> : <button onClick={() => onSelect(event.id)} className={buttonVariants.primary}>Anmelden</button>}
   </article>;
 };
 
@@ -62,15 +62,15 @@ const Events = () => {
     if (error) toast.error(error instanceof Error ? error.message : 'Veranstaltungen konnten nicht geladen werden');
   }, [error]);
 
-  if (isLoading) return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><div className="text-center text-gray-600">Veranstaltungen werden geladen...</div></DashboardShell>;
+  if (isLoading) return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><div className="text-center text-[var(--muted)]">Veranstaltungen werden geladen...</div></DashboardShell>;
   if (error) {
-    return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><div className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-700">Fehler beim Laden der Veranstaltungen</div></DashboardShell>;
+    return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><div className="rounded-lg border border-[var(--error)]/30 bg-[var(--error)]/5 p-6 text-[var(--error)]">Fehler beim Laden der Veranstaltungen</div></DashboardShell>;
   }
 
   return (
     <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}>
         <div className="mb-6 flex items-center justify-between">{isOrga && <button onClick={() => setEditingEvent(null)} className={buttonVariants.primary}>Veranstaltung erstellen</button>}</div>
-        {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-gray-600 shadow-lg">Keine anstehenden Veranstaltungen</div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((event) => <EventCard key={event.id} event={event} userId={user?.id} isOrga={isOrga} onSelect={signupModal.open} onEdit={setEditingEvent} onSignups={setSignupsId} />)}</div>}
+        {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-[var(--muted)]">Keine anstehenden Veranstaltungen</div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((event) => <EventCard key={event.id} event={event} userId={user?.id} isOrga={isOrga} onSelect={signupModal.open} onEdit={setEditingEvent} onSignups={setSignupsId} />)}</div>}
       {signupModal.value !== null && <EventSignupModal eventId={signupModal.value} isOpen onClose={signupModal.close} />}
       {editingEvent !== undefined && <EventFormModal initialData={editingEvent} isOpen onClose={() => setEditingEvent(undefined)} />}
       {signupsId !== null && <EventSignupsModal eventId={signupsId} isOpen onClose={() => setSignupsId(null)} />}

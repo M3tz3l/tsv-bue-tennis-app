@@ -1,7 +1,27 @@
 @import "tailwindcss";
 
+:root {
+  /* Cursor-style design tokens — warm cream canvas, warm ink, single orange voltage */
+  --canvas: #f7f7f4;
+  --canvas-soft: #fafaf7;
+  --ink: #26251e;
+  --body: #5a5852;
+  --muted: #807d72;
+  --muted-soft: #a09c92;
+  --hairline: #e6e5e0;
+  --hairline-soft: #efeee8;
+  --hairline-strong: #cfcdc4;
+  --primary: #f54e00;
+  --primary-active: #d04200;
+  --on-primary: #ffffff;
+  --success: #1f8a65;
+  --error: #cf2d56;
+}
+
 body {
   overflow-x: hidden;
+  background-color: var(--canvas);
+  color: var(--ink);
 }
 
 .touch-control {
@@ -15,10 +35,9 @@ body {
 }
 
 .card-shell {
-  border-radius: 0.5rem;
-  border: 1px solid rgb(226 232 240);
-  background-color: white;
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  border-radius: 0.75rem;
+  border: 1px solid var(--hairline);
+  background-color: #ffffff;
   padding: 1.25rem;
 }
 
@@ -39,7 +58,7 @@ a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid rgb(52 211 153);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 

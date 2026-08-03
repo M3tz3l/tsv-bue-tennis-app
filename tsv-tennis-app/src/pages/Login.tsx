@@ -89,21 +89,21 @@ const Login = () => {
 
     return (
         <>
-            <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-gradient-to-br from-green-50 to-blue-50">
+            <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-[var(--canvas)]">
                 <div className="max-w-md w-full">
-                    <div className="bg-white rounded-xl shadow-xl p-8 backdrop-blur-sm border border-white/20 ring-1 ring-black/5">
+                    <div className="bg-white rounded-xl border border-[var(--hairline)] p-8">
                         <div className="flex flex-col items-center">
                             <div className="mx-auto flex items-center justify-center mb-4">
                                 <img
                                     src={TSVLogo}
                                     alt="TSV Tennis Logo"
-                                    className="h-20 w-auto drop-shadow-md hover:drop-shadow-lg transition-all duration-300"
+                                    className="h-20 w-auto "
                                 />
                             </div>
-                            <h2 className="mt-2 text-center text-3xl font-bold text-gray-900">
+                            <h2 className="mt-2 text-center text-2xl font-semibold tracking-tight text-[var(--ink)]">
                                 Willkommen
                             </h2>
-                            <p className="mt-2 text-center text-sm text-gray-600">
+                            <p className="mt-2 text-center text-sm text-[var(--muted)]">
                                 Melden Sie sich in Ihrem TSV BÜ Tennis Konto zur Arbeitsstundendokumentation an.
                             </p>
 
@@ -130,7 +130,7 @@ const Login = () => {
                             <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
                                 <div className="space-y-4">
                                     <div>
-                                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                                        <label htmlFor="email" className="block text-sm font-medium text-[var(--body)] mb-2">
                                             E-Mail-Adresse
                                         </label>
                                         <input
@@ -140,18 +140,18 @@ const Login = () => {
                                             autoComplete="email"
                                             required
                                             autoFocus
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white shadow-sm transition-all duration-200 placeholder:text-gray-400"
+                                            className="w-full px-4 py-3 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)] bg-white transition-all duration-200 placeholder:text-[var(--muted-soft)]"
                                             placeholder="Ihre E-Mail-Adresse eingeben"
                                         />
                                     </div>
                                     <div>
                                         <div className="flex items-center mb-2">
-                                            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                                            <label htmlFor="password" className="block text-sm font-medium text-[var(--body)]">
                                                 Passwort
                                             </label>
                                             <div className="relative ml-2">
                                                 <InformationCircleIcon
-                                                    className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                                    className="h-4 w-4 text-[var(--muted-soft)] hover:text-[var(--muted)] cursor-pointer"
                                                     onClick={() => setShowTooltip(!showTooltip)}
                                                     {...(hoverEnabled ? {
                                                         onMouseEnter: () => setShowTooltip(true),
@@ -159,12 +159,12 @@ const Login = () => {
                                                     } : {})}
                                                 />
                                                 {showTooltip && (
-                                                    <div className="absolute left-0 top-6 w-64 p-2 bg-gray-800 text-white text-xs rounded-md shadow-lg z-10">
+                                                    <div className="absolute left-0 top-6 w-64 p-2 bg-[var(--ink)] text-white text-xs rounded-md z-10">
                                                         <div className="flex justify-between items-start">
                                                             <span>Bitte setzen Sie Ihr Passwort zurück, bevor Sie sich zum ersten Mal anmelden.</span>
                                                             <button
                                                                 onClick={() => setShowTooltip(false)}
-                                                                className="ml-2 text-gray-400 hover:text-white"
+                                                                className="ml-2 text-[var(--muted-soft)] hover:text-white"
                                                             >
                                                                 <XMarkIcon className="h-4 w-4" />
                                                             </button>
@@ -180,13 +180,13 @@ const Login = () => {
                                                 type={showPassword ? 'text' : 'password'}
                                                 autoComplete="current-password"
                                                 required
-                                                className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white shadow-sm transition-all duration-200 placeholder:text-gray-400"
+                                                className="w-full px-4 py-3 pr-12 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)] bg-white transition-all duration-200 placeholder:text-[var(--muted-soft)]"
                                                 placeholder="Ihr Passwort eingeben"
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600"
+                                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--muted-soft)] hover:text-[var(--muted)] focus:outline-none focus:text-[var(--muted)]"
                                                 aria-label={showPassword ? 'Passwort verbergen' : 'Passwort anzeigen'}
                                             >
                                                 {showPassword ? (
@@ -203,7 +203,7 @@ const Login = () => {
                                     <button
                                         type="submit"
                                         disabled={isLoading}
-                                        className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                                        className="w-full bg-[var(--primary)] hover:bg-[var(--primary-active)] disabled:bg-[var(--muted-soft)] text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
                                     >
                                         {isLoading ? (
                                             <div className="flex items-center justify-center">
@@ -219,7 +219,7 @@ const Login = () => {
                                 <div className="text-center">
                                     <Link
                                         to="/forgotPassword"
-                                        className="inline-flex items-center text-base font-semibold text-green-600 hover:text-green-700 transition-colors duration-200 hover:underline"
+                                        className="inline-flex items-center text-base font-semibold text-[var(--primary)] hover:text-[var(--primary-active)] transition-colors duration-200 hover:underline"
                                     >
                                         <KeyIcon className="h-5 w-5 mr-2" />
                                         Passwort zurücksetzen

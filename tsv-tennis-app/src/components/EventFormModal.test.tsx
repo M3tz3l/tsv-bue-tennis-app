@@ -116,8 +116,8 @@ describe('EventFormModal', () => {
     
     const submitBtn = screen.getByRole('button', { name: /Erstellen/i });
     expect(submitBtn).toHaveClass('action-control');
-    expect(submitBtn).toHaveClass('bg-emerald-700');
-    expect(submitBtn).toHaveClass('hover:bg-emerald-800');
+    expect(submitBtn).toHaveClass('bg-[var(--primary)]');
+    expect(submitBtn).toHaveClass('hover:bg-[var(--primary-active)]');
 
     // Inputs have touch targets
     const titleInput = screen.getByLabelText(/Titel/i);

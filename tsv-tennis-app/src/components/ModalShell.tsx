@@ -56,10 +56,10 @@ const ModalShell = ({
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel
           {...panelProps}
-          className={`w-full ${widthClassName} rounded-lg bg-white shadow-xl ${panelClassName}`}
+          className={`w-full ${widthClassName} rounded-xl border border-[var(--hairline)] bg-white ${panelClassName}`}
         >
-          <div className={`flex items-center justify-between border-b border-gray-200 px-6 py-4 ${headerClassName}`}>
-            {headerContent ?? <DialogTitle className="text-lg font-medium text-gray-900">{title}</DialogTitle>}
+          <div className={`flex items-center justify-between border-b border-[var(--hairline)] px-6 py-4 ${headerClassName}`}>
+            {headerContent ?? <DialogTitle className="text-lg font-medium text-[var(--ink)]">{title}</DialogTitle>}
             <button
               type="button"
               aria-label="Schließen"
@@ -67,11 +67,11 @@ const ModalShell = ({
               disabled={disableClose}
               className="touch-control"
             >
-              <XMarkIcon className="h-6 w-6 text-gray-400" />
+              <XMarkIcon className="h-6 w-6 text-[var(--muted-soft)]" />
             </button>
           </div>
           {children}
-          {(footer || footerActions) && <div className={`flex flex-wrap justify-end gap-3 border-t border-gray-100 px-6 py-4 ${footerClassName}`}>
+          {(footer || footerActions) && <div className={`flex flex-wrap justify-end gap-3 border-t border-[var(--hairline-soft)] px-6 py-4 ${footerClassName}`}>
             {footerActions ? (
               <div role="group" aria-label="Modal-Aktionen" className="contents">
                 {footerActions.destructive && <div className="mr-auto w-full sm:w-auto">{footerActions.destructive}</div>}

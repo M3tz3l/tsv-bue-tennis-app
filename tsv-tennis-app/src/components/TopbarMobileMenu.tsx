@@ -19,14 +19,14 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
     <Dialog open={isOpen} onClose={onClose} className="relative z-50">
       <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
       <div className="fixed inset-0 flex justify-start">
-        <DialogPanel className="club-navigation-motion flex h-full w-72 max-w-[85vw] flex-col bg-white shadow-xl">
-          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-            <DialogTitle className="text-base font-bold text-gray-900">Menü</DialogTitle>
+        <DialogPanel className="club-navigation-motion flex h-full w-72 max-w-[85vw] flex-col border-r border-[var(--hairline)] bg-white">
+          <div className="flex items-center justify-between border-b border-[var(--hairline)] px-4 py-3">
+            <DialogTitle className="text-base font-semibold text-[var(--ink)]">Menü</DialogTitle>
             <button
               type="button"
               aria-label="Schließen"
               onClick={onClose}
-              className="touch-control rounded-md text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+              className="touch-control rounded-md text-[var(--body)] hover:bg-[var(--canvas-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
             >
               <XMarkIcon className="h-6 w-6" aria-hidden="true" />
             </button>
@@ -40,8 +40,8 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
                 onClick={onClose}
                 className={({ isActive }) =>
                   `touch-control flex items-center border-l-2 px-3 text-sm font-semibold uppercase tracking-wide ${
-                    isActive ? 'border-green-700 bg-green-50 text-green-900' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'
-                  } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400`
+                    isActive ? 'border-[var(--primary)] bg-[var(--canvas-soft)] text-[var(--primary)]' : 'border-transparent text-[var(--body)] hover:bg-[var(--canvas-soft)] hover:text-[var(--ink)]'
+                  } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]`
                 }
               >
                 {label}
@@ -54,7 +54,7 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
                   onClose();
                   onOpenMailComposer();
                 }}
-                className="touch-control flex items-center border-l-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-purple-700 hover:bg-slate-50 hover:text-purple-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                className="touch-control flex items-center border-l-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-[var(--body)] hover:bg-[var(--canvas-soft)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
               >
                 Rundmail
               </button>

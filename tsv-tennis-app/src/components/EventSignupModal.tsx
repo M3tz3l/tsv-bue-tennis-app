@@ -102,36 +102,36 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
          primary: data?.event && <button type="submit" form="event-signup-form" disabled={pending} className={buttonVariants.primary}>{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>,
        }}
     >
-      {isLoading && <p className="p-6 text-gray-600">Wird geladen...</p>}
-      {error && <p className="p-6 text-red-600">Fehler beim Laden der Veranstaltung</p>}
+      {isLoading && <p className="p-6 text-[var(--muted)]">Wird geladen...</p>}
+      {error && <p className="p-6 text-[var(--error)]">Fehler beim Laden der Veranstaltung</p>}
       {data?.event && (
         <form id="event-signup-form" onSubmit={submit} className={`${stackMdClass} px-6 py-5`}>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Personen
-                  <input aria-label="Personen" type="number" step="1" value={peopleCount} onChange={(e) => setPeopleCount(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 ${errors.peopleCount ? 'border-red-500' : 'border-gray-300'}`} />
+                <label className="block text-sm font-medium text-[var(--body)]">Personen
+                  <input aria-label="Personen" type="number" step="1" value={peopleCount} onChange={(e) => setPeopleCount(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 ${errors.peopleCount ? 'border-[var(--error)]' : 'border-[var(--hairline-strong)]'}`} />
                 </label>
-                {errors.peopleCount && <p className="mt-1 text-sm text-red-500">{errors.peopleCount}</p>}
+                {errors.peopleCount && <p className="mt-1 text-sm text-[var(--error)]">{errors.peopleCount}</p>}
               </div>
               
               {data.event.allow_salad && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Salat
-                    <input aria-label="Salat" type="number" step="1" value={saladCount} onChange={(e) => setSaladCount(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 ${errors.contributions ? 'border-red-500' : 'border-gray-300'}`} />
+                  <label className="block text-sm font-medium text-[var(--body)]">Salat
+                    <input aria-label="Salat" type="number" step="1" value={saladCount} onChange={(e) => setSaladCount(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 ${errors.contributions ? 'border-[var(--error)]' : 'border-[var(--hairline-strong)]'}`} />
                   </label>
                 </div>
               )}
               
               {data.event.allow_cake && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Kuchen
-                    <input aria-label="Kuchen" type="number" step="1" value={cakeCount} onChange={(e) => setCakeCount(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 ${errors.contributions ? 'border-red-500' : 'border-gray-300'}`} />
+                  <label className="block text-sm font-medium text-[var(--body)]">Kuchen
+                    <input aria-label="Kuchen" type="number" step="1" value={cakeCount} onChange={(e) => setCakeCount(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 ${errors.contributions ? 'border-[var(--error)]' : 'border-[var(--hairline-strong)]'}`} />
                   </label>
                 </div>
               )}
-              {errors.contributions && <p className="text-sm text-red-500">{errors.contributions}</p>}
+              {errors.contributions && <p className="text-sm text-[var(--error)]">{errors.contributions}</p>}
               
-              <label className="block text-sm font-medium text-gray-700">Kommentar
-                <textarea value={comment} onChange={(e) => setComment(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 border-gray-300`} />
+              <label className="block text-sm font-medium text-[var(--body)]">Kommentar
+                <textarea value={comment} onChange={(e) => setComment(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 border-[var(--hairline-strong)]`} />
               </label>
         </form>
       )}

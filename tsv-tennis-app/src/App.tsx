@@ -33,7 +33,7 @@ const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
             <AuthProvider>
-                <div className="min-h-screen bg-[#F6F8F7] flex flex-col">
+                <div className="min-h-screen bg-[var(--canvas)] flex flex-col">
                     <ToastContainer
                         position="top-right"
                         autoClose={5000}

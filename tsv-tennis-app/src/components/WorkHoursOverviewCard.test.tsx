@@ -86,8 +86,8 @@ describe('WorkHoursOverviewCard', () => {
 
         expect(screen.getByText('Alter Name (Sie)')).toBeInTheDocument();
         const exemptValue = screen.getByText('Befreit');
-        expect(exemptValue).toHaveClass('text-emerald-600');
-        expect(exemptValue).not.toHaveClass('text-emerald-700');
+        expect(exemptValue).toHaveClass('text-[var(--success)]');
+        expect(exemptValue).not.toHaveClass('text-[var(--primary)]');
     });
 
     it('shows the personal exemption state without rendering a progress bar', () => {
@@ -122,7 +122,7 @@ describe('WorkHoursOverviewCard', () => {
         expect(screen.getByText('4 Std von 8 Std')).toBeInTheDocument();
         expect(screen.getByText('50% abgeschlossen')).toBeInTheDocument();
         expect(screen.getByRole('progressbar', { name: 'Ihr Fortschritt: 50% abgeschlossen' })).toHaveAttribute('aria-valuenow', '50');
-        expect(screen.getByRole('progressbar').firstElementChild).toHaveClass('bg-emerald-500');
+        expect(screen.getByRole('progressbar').firstElementChild).toHaveClass('bg-[var(--success)]');
         expect(screen.getByRole('progressbar').firstElementChild).toHaveStyle({ width: '50%' });
     });
 
@@ -142,7 +142,7 @@ describe('WorkHoursOverviewCard', () => {
         expect(progress).toHaveAttribute('aria-valuemin', '0');
         expect(progress).toHaveAttribute('aria-valuemax', '100');
         expect(progress).toHaveAttribute('aria-valuenow', '100');
-        expect(progress.firstElementChild).toHaveClass('bg-emerald-500');
+        expect(progress.firstElementChild).toHaveClass('bg-[var(--success)]');
         expect(progress.firstElementChild).toHaveStyle({ width: '100%' });
     });
 

@@ -97,7 +97,7 @@ const Dashboard = () => {
         if (isLoading) {
             return (
                 <div className="flex justify-center items-center py-12">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary)]"></div>
                 </div>
             );
         }
@@ -105,12 +105,12 @@ const Dashboard = () => {
         if (error || !dashboardData?.success) {
             return (
                 <div className="text-center py-12">
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-                        <h3 className="text-lg font-medium text-red-800 mb-2">Fehler beim Laden der Daten</h3>
-                        <p className="text-red-600">
+                    <div className="rounded-xl border border-[var(--error)]/30 bg-[var(--error)]/5 p-6">
+                        <h3 className="text-lg font-medium text-[var(--error)] mb-2">Fehler beim Laden der Daten</h3>
+                        <p className="text-[var(--error)]">
                             {getApiErrorMessage(error, 'Fehler beim Laden der Dashboard-Daten')}
                         </p>
-                        <p className="text-sm text-red-500 mt-2">
+                        <p className="text-sm text-[var(--error)] mt-2">
                             Bitte überprüfen Sie Ihre Konfiguration.
                         </p>
                     </div>
@@ -131,13 +131,13 @@ const Dashboard = () => {
         if (data.length === 0) {
             return (
                 <div className="text-center py-12">
-                    <ClockIcon className="mx-auto h-12 w-12 text-gray-400" />
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">Keine Arbeitsstunden für {selectedYear} gefunden</h3>
-                    <p className="mt-1 text-sm text-gray-500">Fügen Sie Ihren ersten Eintrag hinzu.</p>
+                    <ClockIcon className="mx-auto h-12 w-12 text-[var(--muted-soft)]" />
+                    <h3 className="mt-2 text-sm font-medium text-[var(--ink)]">Keine Arbeitsstunden für {selectedYear} gefunden</h3>
+                    <p className="mt-1 text-sm text-[var(--muted)]">Fügen Sie Ihren ersten Eintrag hinzu.</p>
                     <div className="mt-6">
                         <button
                             onClick={() => setShowAddForm(true)}
-                            className={`${buttonVariants.primary} inline-flex items-center shadow-sm`}
+                            className={`${buttonVariants.primary} inline-flex items-center`}
                         >
                             <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
                             Arbeitsstunden eintragen
@@ -167,11 +167,11 @@ const Dashboard = () => {
         ) as Array<keyof WorkHourEntry>;
 
         return (
-            <div className="bg-white shadow-lg rounded-lg overflow-hidden">
-                <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
+            <div className="bg-white rounded-xl overflow-hidden border border-[var(--hairline)]">
+                <div className="px-4 sm:px-6 py-4 border-b border-[var(--hairline)] flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
                     <div>
-                        <h3 className="text-lg font-medium text-gray-900">Meine Arbeitsstunden - {selectedYear}</h3>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <h3 className="text-lg font-semibold tracking-tight text-[var(--ink)]">Meine Arbeitsstunden - {selectedYear}</h3>
+                        <p className="text-sm text-[var(--muted)] mt-1">
                             Detaillierte Übersicht aller Einträge
                         </p>
                     </div>
@@ -186,24 +186,24 @@ const Dashboard = () => {
 
                 {/* Mobile card layout (compact with overflow menu only) */}
                 <div className="block md:hidden">
-                    <div className="divide-y divide-gray-200">
+                    <div className="divide-y divide-[var(--hairline)]">
                         {data.map((row: WorkHourEntry) => (
-                            <div key={row.id} className="p-3 hover:bg-gray-50">
+                            <div key={row.id} className="p-3 hover:bg-[var(--canvas-soft)]">
                                 <div className="flex items-center justify-between space-x-3">
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-baseline space-x-2">
-                                            <div className="text-sm font-medium text-gray-700 flex-none whitespace-nowrap">{row.Datum}</div>
-                                            <div className="text-xs text-gray-500">·</div>
-                                            <div className="text-sm text-gray-900 min-w-0 flex-1 truncate">{String(row.Tätigkeit ?? '-')}</div>
+                                            <div className="text-sm font-medium text-[var(--body)] flex-none whitespace-nowrap">{row.Datum}</div>
+                                            <div className="text-xs text-[var(--muted)]">·</div>
+                                            <div className="text-sm text-[var(--ink)] min-w-0 flex-1 truncate">{String(row.Tätigkeit ?? '-')}</div>
                                         </div>
                                     </div>
                                     <div className="flex items-center space-x-2">
-                                        <div className="text-sm font-semibold text-gray-800 w-14 text-right">{formatHours(row.Stunden)}h</div>
+                                        <div className="text-sm font-semibold text-[var(--ink)] w-14 text-right">{formatHours(row.Stunden)}h</div>
                                         <div className="relative">
                                             <button
                                                 onClick={() => handleEdit(row)}
                                                 aria-label="Bearbeiten"
-                                                className="touch-control rounded-md text-blue-600 hover:bg-blue-50"
+                                                className="touch-control rounded-md text-[var(--muted)] hover:bg-[var(--canvas-soft)] hover:text-[var(--ink)]"
                                             >
                                                 <PencilIcon className="h-5 w-5" />
                                             </button>
@@ -217,30 +217,30 @@ const Dashboard = () => {
 
                 {/* Desktop table layout */}
                 <div className="hidden md:block overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-[var(--hairline)]">
+                        <thead className="bg-[var(--canvas-soft)]">
                             <tr>
                                 {fieldNames.map((field) => (
                                     <th
                                         key={field}
-                                        className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"
+                                        className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap"
                                     >
                                         {FIELD_LABELS[String(field)] ?? String(field).replace(/_/g, ' ')}
                                     </th>
                                 ))}
-                                <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                                <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">
                                     Aktionen
                                 </th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white divide-y divide-[var(--hairline)]">
                             {data.map((row: WorkHourEntry) => (
-                                <tr key={row.id} className="hover:bg-gray-50">
+                                <tr key={row.id} className="hover:bg-[var(--canvas-soft)]">
                                     {fieldNames.map((field) => {
                                         const fieldKey = String(field);
                                         const value = (row as Record<string, unknown>)[fieldKey];
                                         return (
-                                            <td key={fieldKey} className="px-3 lg:px-6 py-4 text-sm text-gray-900">
+                                            <td key={fieldKey} className="px-3 lg:px-6 py-4 text-sm text-[var(--ink)]">
                                                 <div className="max-w-xs break-words" title={fieldKey === 'Stunden' ?
                                                     formatHours(value) :
                                                     typeof value === 'string' || typeof value === 'number' ? String(value) : '-'}>
@@ -257,7 +257,7 @@ const Dashboard = () => {
                                             <button
                                                 onClick={() => handleEdit(row)}
                                                 aria-label="Bearbeiten"
-                                                className="touch-control rounded-md text-blue-600 hover:bg-blue-50"
+                                                className="touch-control rounded-md text-[var(--muted)] hover:bg-[var(--canvas-soft)] hover:text-[var(--ink)]"
                                             >
                                                 <PencilIcon className="h-5 w-5" />
                                             </button>
@@ -295,11 +295,11 @@ const Dashboard = () => {
         >
                 {/* Year Selector */}
                 <div className="mb-4 sm:mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Jahr auswählen:</label>
+                    <label className="block text-sm font-medium text-[var(--body)] mb-2">Jahr auswählen:</label>
                     <select
                         value={selectedYear}
                         onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                        className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full sm:w-auto px-3 py-2 border border-[var(--hairline-strong)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                     >
                         {[new Date().getFullYear() - 1, new Date().getFullYear()].map(year => (
                             <option key={year} value={year}>{year}</option>

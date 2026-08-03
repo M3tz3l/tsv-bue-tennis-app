@@ -51,7 +51,7 @@ const ResetPassword = () => {
                     <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
                         <div className="space-y-4">
                             <div>
-                                <label htmlFor="newpassword" className="block text-sm font-medium text-gray-700 mb-2">
+                                <label htmlFor="newpassword" className="block text-sm font-medium text-[var(--body)] mb-2">
                                     Neues Passwort
                                 </label>
                                 <input
@@ -60,12 +60,12 @@ const ResetPassword = () => {
                                     type="password"
                                     required
                                     autoFocus
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white shadow-sm transition-all duration-200"
+                                    className="w-full px-4 py-3 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent bg-white transition-all duration-200"
                                     placeholder="Ihr neues Passwort eingeben"
                                 />
                             </div>
                             <div>
-                                <label htmlFor="confirmpassword" className="block text-sm font-medium text-gray-700 mb-2">
+                                <label htmlFor="confirmpassword" className="block text-sm font-medium text-[var(--body)] mb-2">
                                     Passwort bestätigen
                                 </label>
                                 <input
@@ -73,7 +73,7 @@ const ResetPassword = () => {
                                     name="confirmpassword"
                                     type="password"
                                     required
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white shadow-sm transition-all duration-200"
+                                    className="w-full px-4 py-3 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent bg-white transition-all duration-200"
                                     placeholder="Ihr neues Passwort bestätigen"
                                 />
                             </div>
@@ -82,7 +82,7 @@ const ResetPassword = () => {
                         <div>
                             <button
                                 type="submit"
-                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+                                className="w-full bg-[var(--primary)] hover:bg-[var(--primary-active)] text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
                             >
                                 Passwort aktualisieren
                             </button>
@@ -91,7 +91,7 @@ const ResetPassword = () => {
                         <div className="text-center">
                             <Link
                                 to="/login"
-                                className="text-sm font-medium text-green-600 hover:text-green-500 transition-colors duration-200"
+                                className="text-sm font-medium text-[var(--primary)] hover:text-[var(--primary-active)] transition-colors duration-200"
                             >
                                 ← Zurück zur Anmeldung
                             </Link>

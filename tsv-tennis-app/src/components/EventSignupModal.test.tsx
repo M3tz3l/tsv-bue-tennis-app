@@ -68,8 +68,8 @@ describe('EventSignupModal', () => {
     
     const errorText = screen.getByText(/Die Anzahl der Personen muss mindestens 1 sein/i);
     expect(errorText).toBeInTheDocument();
-    expect(errorText).toHaveClass('text-red-500');
-    expect(screen.getByLabelText(/Personen/i)).toHaveClass('border-red-500');
+    expect(errorText).toHaveClass('text-[var(--error)]');
+    expect(screen.getByLabelText(/Personen/i)).toHaveClass('border-[var(--error)]');
   });
 
   it('rejects negative contribution quantities with an inline error', async () => {
@@ -84,8 +84,8 @@ describe('EventSignupModal', () => {
 
     const errorText = screen.getByText(/Beiträge dürfen nicht negativ sein/i);
     expect(errorText).toBeInTheDocument();
-    expect(errorText).toHaveClass('text-red-500');
-    expect(screen.getByLabelText(/Salat/i)).toHaveClass('border-red-500');
+    expect(errorText).toHaveClass('text-[var(--error)]');
+    expect(screen.getByLabelText(/Salat/i)).toHaveClass('border-[var(--error)]');
   });
 
   it('creates a signup with the form values', async () => {
@@ -143,11 +143,11 @@ describe('EventSignupModal', () => {
     
     const submitBtn = screen.getByRole('button', { name: /Anmelden/i });
     expect(submitBtn).toHaveClass('action-control');
-    expect(submitBtn).toHaveClass('bg-emerald-700');
-    expect(submitBtn).toHaveClass('hover:bg-emerald-800');
+    expect(submitBtn).toHaveClass('bg-[var(--primary)]');
+    expect(submitBtn).toHaveClass('hover:bg-[var(--primary-active)]');
 
     const cancelBtn = screen.getByRole('button', { name: /Abbrechen/i });
-    expect(cancelBtn).toHaveClass('border-gray-300');
+    expect(cancelBtn).toHaveClass('border-[var(--hairline-strong)]');
 
     // Inputs have touch targets
     const personInput = screen.getByLabelText(/Personen/i);

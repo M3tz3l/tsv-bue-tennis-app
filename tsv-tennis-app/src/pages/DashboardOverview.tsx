@@ -24,7 +24,7 @@ const DashboardOverview = () => {
         <DashboardShell title="Meine Übersicht" onOpenMailComposer={() => setIsMailComposerOpen(true)} isMailComposerOpen={isMailComposerOpen} onCloseMailComposer={() => setIsMailComposerOpen(false)}>
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] lg:items-start">
                 <div className="min-h-56">
-                    {dashboardLoading ? <div className="h-56 animate-pulse rounded-lg border border-slate-200 bg-white shadow-sm" aria-label="Arbeitsstunden werden geladen" /> : dashboardError ? <section className="min-h-56 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 shadow-sm sm:p-6"><h2 className="text-lg font-semibold">Arbeitsstunden</h2><p className="mt-4 text-sm">Arbeitsstunden konnten nicht geladen werden: {getApiErrorMessage(dashboardError, 'Unbekannter Fehler')}</p></section> : dashboardData ? <WorkHoursOverviewCard data={dashboardData} selectedYear={selectedYear} /> : null}
+                    {dashboardLoading ? <div className="h-56 animate-pulse rounded-xl border border-[var(--hairline)] bg-white" aria-label="Arbeitsstunden werden geladen" /> : dashboardError ? <section className="min-h-56 rounded-xl border border-[var(--error)]/30 bg-[var(--error)]/5 p-4 text-[var(--error)] sm:p-6"><h2 className="text-lg font-semibold">Arbeitsstunden</h2><p className="mt-4 text-sm">Arbeitsstunden konnten nicht geladen werden: {getApiErrorMessage(dashboardError, 'Unbekannter Fehler')}</p></section> : dashboardData ? <WorkHoursOverviewCard data={dashboardData} selectedYear={selectedYear} /> : null}
                 </div>
                 <UpcomingEventsList events={events} isLoading={eventsLoading} error={eventsError} limit={3} />
             </div>

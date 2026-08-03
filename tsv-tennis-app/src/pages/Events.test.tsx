@@ -151,8 +151,8 @@ describe('Events', () => {
     mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
     renderEvents();
 
-    expect(screen.getByRole('button', { name: /Veranstaltung erstellen/i })).toHaveClass('bg-emerald-700');
-    expect(screen.getAllByRole('button', { name: /^Bearbeiten$/i })[0]).toHaveClass('border-gray-300');
+    expect(screen.getByRole('button', { name: /Veranstaltung erstellen/i })).toHaveClass('bg-[var(--primary)]');
+    expect(screen.getAllByRole('button', { name: /^Bearbeiten$/i })[0]).toHaveClass('border-[var(--hairline-strong)]');
   });
 
   it('lets Orga members sign up while retaining management controls', async () => {

@@ -6,9 +6,9 @@ describe('design tokens', () => {
     expect(Object.keys(buttonVariants).sort()).toEqual(['destructive', 'primary', 'secondary']);
   });
 
-  it('uses emerald-700 or green-700 (not the 600 shade) for the primary action to meet contrast requirements', () => {
-    expect(buttonVariants.primary).toMatch(/bg-(emerald|green)-700/);
-    expect(buttonVariants.primary).not.toMatch(/bg-(emerald|green)-600(?!\d)/);
+  it('uses the single Cursor Orange accent (never emerald/green) for the primary action', () => {
+    expect(buttonVariants.primary).toMatch(/var\(--primary\)/);
+    expect(buttonVariants.primary).not.toMatch(/emerald|green/);
   });
 
   it('gives every variant the shared touch target class', () => {

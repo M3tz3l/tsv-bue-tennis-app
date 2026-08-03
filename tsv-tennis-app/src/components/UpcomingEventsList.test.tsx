@@ -113,7 +113,7 @@ describe('UpcomingEventsList', () => {
     // CalendarIcon for empty state
     const emptyIcon = screen.getByTestId('empty-events-icon');
     expect(emptyIcon).toBeInTheDocument();
-    expect(emptyIcon).toHaveClass('text-slate-200', 'h-12', 'w-12');
+    expect(emptyIcon).toHaveClass('text-[var(--hairline)]', 'h-12', 'w-12');
     
     expect(screen.getAllByRole('link', { name: /Veranstaltungen/i }).some((link) => link.getAttribute('href') === '/dashboard/veranstaltungen')).toBe(true);
 
@@ -121,7 +121,7 @@ describe('UpcomingEventsList', () => {
     // Skeleton UI
     const skeletons = screen.getAllByTestId('event-skeleton');
     expect(skeletons).toHaveLength(3);
-    expect(skeletons[0]).toHaveClass('bg-slate-200', 'animate-pulse', 'h-16', 'w-full', 'rounded-md');
+    expect(skeletons[0]).toHaveClass('bg-[var(--hairline-soft)]', 'animate-pulse', 'h-16', 'w-full', 'rounded-md');
     expect(screen.queryByText(/Veranstaltungen werden geladen/i)).not.toBeInTheDocument();
 
     rerender(<MemoryRouter><UpcomingEventsList events={undefined} error={new Error('failed')} /></MemoryRouter>);

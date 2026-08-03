@@ -23,10 +23,10 @@ export default function DeleteConfirmDialog({
                             <div className="px-6 py-5">
                                 <div className="flex items-start space-x-3">
                                     <div className="flex-shrink-0">
-                                        <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+                                        <ExclamationTriangleIcon className="h-6 w-6 text-[var(--error)]" />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <div className="mt-2 text-sm text-gray-600">
+                                        <div className="mt-2 text-sm text-[var(--muted)]">
                                             Möchten Sie diesen Eintrag wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
                                         </div>
                                     </div>

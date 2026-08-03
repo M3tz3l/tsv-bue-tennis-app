@@ -32,7 +32,7 @@ const ForgotPassword = () => {
         >
                     <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
                         <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label htmlFor="email" className="block text-sm font-medium text-[var(--body)] mb-2">
                                 E-Mail-Adresse
                             </label>
                             <input
@@ -42,7 +42,7 @@ const ForgotPassword = () => {
                                 autoComplete="email"
                                 required
                                 autoFocus
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white shadow-sm transition-all duration-200"
+                                className="w-full px-4 py-3 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent bg-white transition-all duration-200"
                                 placeholder="Ihre E-Mail-Adresse eingeben"
                             />
                         </div>
@@ -50,7 +50,7 @@ const ForgotPassword = () => {
                         <div>
                             <button
                                 type="submit"
-                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+                                className="w-full bg-[var(--primary)] hover:bg-[var(--primary-active)] text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
                             >
                                 Reset-Link senden
                             </button>
@@ -59,7 +59,7 @@ const ForgotPassword = () => {
                         <div className="text-center">
                             <Link
                                 to="/login"
-                                className="text-sm font-medium text-green-600 hover:text-green-500 transition-colors duration-200"
+                                className="text-sm font-medium text-[var(--primary)] hover:text-[var(--primary-active)] transition-colors duration-200"
                             >
                                 ← Zurück zur Anmeldung
                             </Link>
