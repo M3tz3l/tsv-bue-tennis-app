@@ -59,6 +59,6 @@ describe('ModalShell', () => {
     const footer = screen.getByRole('group', { name: 'Modal-Aktionen' });
     const destructive = screen.getByRole('button', { name: 'Löschen' });
     expect(footer).toContainElement(destructive);
-    expect(destructive.parentElement).toHaveClass('mr-auto');
+    expect(destructive.parentElement).toHaveClass('mr-auto', 'w-full', 'sm:w-auto');
   });
 });

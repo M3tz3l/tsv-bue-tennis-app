@@ -74,7 +74,7 @@ const ModalShell = ({
           {(footer || footerActions) && <div className={`flex flex-wrap justify-end gap-3 border-t border-gray-100 px-6 py-4 ${footerClassName}`}>
             {footerActions ? (
               <div role="group" aria-label="Modal-Aktionen" className="contents">
-                {footerActions.destructive && <div className="mr-auto">{footerActions.destructive}</div>}
+                {footerActions.destructive && <div className="mr-auto w-full sm:w-auto">{footerActions.destructive}</div>}
                 {footerActions.secondary}
                 {footerActions.primary}
               </div>
