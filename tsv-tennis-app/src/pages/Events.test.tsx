@@ -132,4 +132,10 @@ describe('Events', () => {
     expect(screen.getAllByRole('link', { name: /veranstaltungen/i })[0]).toHaveAttribute('aria-current', 'page');
     expect(screen.getAllByRole('link', { name: /arbeitsstunden/i })[0]).toHaveAttribute('href', '/dashboard/arbeitsstunden');
   });
+
+  it('uses the shell title as the single page heading', () => {
+    renderEvents();
+
+    expect(screen.getAllByRole('heading', { name: 'Veranstaltungen' })).toHaveLength(1);
+  });
 });

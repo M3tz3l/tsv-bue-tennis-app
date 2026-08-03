@@ -51,20 +51,21 @@ const Events = () => {
   const isOrga = user?.role?.trim().toLowerCase() === 'orga';
   const [editingEvent, setEditingEvent] = useState<EventSummary | null | undefined>(undefined);
   const [signupsId, setSignupsId] = useState<number | null>(null);
+  const [showMailComposer, setShowMailComposer] = useState(false);
   const visibleEvents = (events ?? []).filter((event) => isOrga || (event.status === 'published' && !isPast(event.event_date)));
 
   useEffect(() => {
     if (error) toast.error(error instanceof Error ? error.message : 'Veranstaltungen konnten nicht geladen werden');
   }, [error]);
 
-  if (isLoading) return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => undefined}><div className="text-center text-gray-600">Veranstaltungen werden geladen...</div></DashboardShell>;
+  if (isLoading) return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><div className="text-center text-gray-600">Veranstaltungen werden geladen...</div></DashboardShell>;
   if (error) {
-    return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => undefined}><div className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-700">Fehler beim Laden der Veranstaltungen</div></DashboardShell>;
+    return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><div className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-700">Fehler beim Laden der Veranstaltungen</div></DashboardShell>;
   }
 
   return (
-    <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => undefined}>
-        <div className="mb-6 flex items-center justify-between"><h1 className="text-2xl font-bold text-gray-900">Veranstaltungen</h1>{isOrga && <button onClick={() => setEditingEvent(null)} className="rounded-md bg-green-600 px-4 py-2 font-medium text-white">Veranstaltung erstellen</button>}</div>
+    <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}>
+        <div className="mb-6 flex items-center justify-between">{isOrga && <button onClick={() => setEditingEvent(null)} className="rounded-md bg-green-600 px-4 py-2 font-medium text-white">Veranstaltung erstellen</button>}</div>
         {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-gray-600 shadow-lg">Keine anstehenden Veranstaltungen</div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((event) => <EventCard key={event.id} event={event} userId={user?.id} isOrga={isOrga} onSelect={setSelectedId} onEdit={setEditingEvent} onSignups={setSignupsId} />)}</div>}
       {selectedId !== null && <EventSignupModal eventId={selectedId} isOpen onClose={() => setSelectedId(null)} />}
       {editingEvent !== undefined && <EventFormModal initialData={editingEvent} isOpen onClose={() => setEditingEvent(undefined)} />}

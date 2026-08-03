@@ -24,6 +24,7 @@ const Dashboard = () => {
     const [editingRow, setEditingRow] = useState<WorkHourEntry | null>(null);
     const [showAddForm, setShowAddForm] = useState(false);
     const [selectedYear, setSelectedYear] = useState(getCurrentYear());
+    const [showMailComposer, setShowMailComposer] = useState(false);
 
     // Fetch family dashboard data from the backend API
     const { data: dashboardData, isLoading, error } = useDashboard(user?.id, selectedYear, !!user?.id && !!token);
@@ -286,7 +287,12 @@ const Dashboard = () => {
     })();
 
     return (
-        <DashboardShell title="TSV BÜ Tennis Arbeitsstunden" onOpenMailComposer={() => undefined}>
+        <DashboardShell
+            title="TSV BÜ Tennis Arbeitsstunden"
+            onOpenMailComposer={() => setShowMailComposer(true)}
+            isMailComposerOpen={showMailComposer}
+            onCloseMailComposer={() => setShowMailComposer(false)}
+        >
                 {/* Year Selector */}
                 <div className="mb-4 sm:mb-6">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Jahr auswählen:</label>

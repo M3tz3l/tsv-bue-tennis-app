@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import TSV_Logo from '../assets/TSV_Tennis.svg';
 import { useAuth } from '../context/AuthContext';
 import ClubNavigation from './ClubNavigation';
@@ -8,19 +7,16 @@ interface DashboardShellProps {
     children: React.ReactNode;
     title: string;
     onOpenMailComposer: () => void;
+    isMailComposerOpen: boolean;
+    onCloseMailComposer: () => void;
 }
 
-const DashboardShell = ({ children, title, onOpenMailComposer }: DashboardShellProps) => {
+const DashboardShell = ({ children, title, onOpenMailComposer, isMailComposerOpen, onCloseMailComposer }: DashboardShellProps) => {
     const { user } = useAuth();
-    const [showMailComposer, setShowMailComposer] = useState(false);
-    const openMailComposer = () => {
-        onOpenMailComposer();
-        setShowMailComposer(true);
-    };
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 md:flex">
-            <ClubNavigation variant="desktop" onRundmail={openMailComposer} />
+            <ClubNavigation variant="desktop" onRundmail={onOpenMailComposer} />
             <div className="min-w-0 flex-1">
                 <header className="border-b border-gray-200 bg-white shadow-sm">
                     <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-4 sm:flex-row sm:px-6 lg:px-8">
@@ -35,8 +31,8 @@ const DashboardShell = ({ children, title, onOpenMailComposer }: DashboardShellP
                     {children}
                 </main>
             </div>
-            <ClubNavigation variant="mobile" onRundmail={openMailComposer} />
-            <MailComposer isOpen={showMailComposer} onClose={() => setShowMailComposer(false)} />
+            <ClubNavigation variant="mobile" onRundmail={onOpenMailComposer} />
+            <MailComposer isOpen={isMailComposerOpen} onClose={onCloseMailComposer} />
         </div>
     );
 };

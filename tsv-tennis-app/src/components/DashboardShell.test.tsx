@@ -11,7 +11,7 @@ vi.mock('../context/AuthContext', () => ({ useAuth: mocks.useAuth }));
 vi.mock('./MailComposer', () => ({
   default: (props: { isOpen: boolean; onClose: () => void }) => {
     mocks.mailComposer(props);
-    return props.isOpen ? <div role="dialog">Mail Composer</div> : null;
+    return props.isOpen ? <div role="dialog"><button onClick={props.onClose}>close mail composer</button></div> : null;
   },
 }));
 
@@ -29,7 +29,12 @@ describe('DashboardShell', () => {
   it('renders identity, title, shared navigation, account action, and content', () => {
     render(
       <MemoryRouter initialEntries={['/dashboard/arbeitsstunden']}>
-        <DashboardShell title="Arbeitsstunden" onOpenMailComposer={vi.fn()}>
+        <DashboardShell
+          title="Arbeitsstunden"
+          onOpenMailComposer={vi.fn()}
+          isMailComposerOpen={false}
+          onCloseMailComposer={vi.fn()}
+        >
           <p>Arbeitsstunden-Inhalt</p>
         </DashboardShell>
       </MemoryRouter>,
@@ -45,19 +50,46 @@ describe('DashboardShell', () => {
     expect(screen.getByText('Willkommen, member@example.com')).toBeInTheDocument();
   });
 
-  it('opens MailComposer only through the Orga navigation action and reserves mobile bottom space', async () => {
+  it('calls the page callback from either navigation and preserves responsive visibility', () => {
     const onOpenMailComposer = vi.fn();
-    const { getAllByRole } = render(
+    render(
       <MemoryRouter>
-        <DashboardShell title="Veranstaltungen" onOpenMailComposer={onOpenMailComposer}>
+        <DashboardShell
+          title="Veranstaltungen"
+          onOpenMailComposer={onOpenMailComposer}
+          isMailComposerOpen={false}
+          onCloseMailComposer={vi.fn()}
+        >
           <p>Events</p>
         </DashboardShell>
       </MemoryRouter>,
     );
 
     expect(screen.getByTestId('dashboard-shell-content')).toHaveClass('pb-[var(--club-nav-height)]');
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    getAllByRole('button', { name: 'Rundmail' })[0].click();
-    expect(onOpenMailComposer).toHaveBeenCalledOnce();
+    const navigations = screen.getAllByRole('navigation', { name: 'Clubnavigation' });
+    expect(navigations[0]).toHaveClass('hidden', 'md:flex');
+    expect(navigations[1]).toHaveClass('md:hidden');
+    screen.getAllByRole('button', { name: 'Rundmail' }).forEach((button) => button.click());
+    expect(onOpenMailComposer).toHaveBeenCalledTimes(2);
+  });
+
+  it('passes controlled MailComposer state through and exposes its close callback', () => {
+    const onCloseMailComposer = vi.fn();
+    render(
+      <MemoryRouter>
+        <DashboardShell
+          title="Veranstaltungen"
+          onOpenMailComposer={vi.fn()}
+          isMailComposerOpen
+          onCloseMailComposer={onCloseMailComposer}
+        >
+          <p>Events</p>
+        </DashboardShell>
+      </MemoryRouter>,
+    );
+
+    expect(mocks.mailComposer).toHaveBeenCalledWith(expect.objectContaining({ isOpen: true, onClose: onCloseMailComposer }));
+    screen.getByRole('button', { name: 'close mail composer' }).click();
+    expect(onCloseMailComposer).toHaveBeenCalledOnce();
   });
 });

@@ -23,3 +23,11 @@ Implemented and verified.
 
 - Lint warnings are pre-existing and unrelated to Task 2.
 - `App.tsx` and `ClubNavigation.tsx` required no changes because Task 1 already supplied the required route-aware navigation and route definitions.
+
+## Review Fix Evidence
+
+- `DashboardShell` now accepts controlled `isMailComposerOpen` and `onCloseMailComposer` props; pages own the state and supply `onOpenMailComposer` callbacks.
+- Removed the duplicate Events heading so the shell title is the single accessible page heading.
+- Shell tests verify MailComposer receives `isOpen`, invoke its `onClose`, and verify callbacks from both desktop and mobile navigation controls.
+- Shell tests verify desktop navigation uses `hidden md:flex` and mobile navigation uses `md:hidden`.
+- Review verification: affected tests passed, 4 files and 19 tests; `npx tsc --noEmit` passed; lint passed with the same pre-existing warnings listed above.
