@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useEvent } from '../hooks/useEvents';
 import { getApiErrorMessage } from '../services/backendService';
 import type { EventSummary } from '../types';
+import { cardShellClass, stackMdClass } from '../styles/tokens';
 
 type UpcomingEventsListProps = {
     events?: EventSummary[];
@@ -70,7 +71,7 @@ const UpcomingEventsList = ({ events, limit = 3, isLoading = false, error }: Upc
     }
 
     return (
-        <section aria-label="Als Nächstes" className="min-h-56 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+        <section aria-label="Als Nächstes" className={`${cardShellClass} min-h-56`}>
             <div className="flex items-baseline justify-between gap-3">
                 <h2 className="text-lg font-semibold text-slate-900">Als Nächstes</h2>
                 <Link className="text-sm font-medium text-emerald-700 underline underline-offset-4" to="/dashboard/veranstaltungen">Alle Veranstaltungen</Link>
@@ -81,7 +82,7 @@ const UpcomingEventsList = ({ events, limit = 3, isLoading = false, error }: Upc
                     <p>Keine anstehenden Veranstaltungen veröffentlicht.</p>
                     <Link className="mt-2 inline-block font-medium text-emerald-700 underline underline-offset-4" to="/dashboard/veranstaltungen">Zu den Veranstaltungen</Link>
                 </div>
-            ) : <div className="mt-4">{upcomingEvents.map((event) => <EventRow key={event.id} event={event} userId={user?.id} />)}</div>}
+            ) : <div className={`${stackMdClass} mt-4`}>{upcomingEvents.map((event) => <EventRow key={event.id} event={event} userId={user?.id} />)}</div>}
         </section>
     );
 };

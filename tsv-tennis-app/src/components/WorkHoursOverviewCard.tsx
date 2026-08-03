@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import type { DashboardResponse, MemberContribution } from '../types';
 import { formatHours, getProgressColor, getProgressPercentage } from '../utils/utils';
+import { cardShellClass, stackMdClass } from '../styles/tokens';
 
 type WorkHoursOverviewCardProps = {
     data: DashboardResponse;
@@ -40,7 +41,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
     };
 
     return (
-        <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 sm:p-6 mb-6 sm:mb-8">
+        <section className={`${cardShellClass} mb-6 sm:mb-8`}>
             {hasFamilyView && data.family ? (
                 <>
                     <h2 className="text-lg sm:text-xl font-semibold text-green-800 mb-4">Familie - {selectedYear}</h2>
@@ -51,7 +52,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
                         </div>
                         {renderProgress(data.family.percentage, 'Familien-Fortschritt')}
                     </div>
-                    <div className="space-y-3">
+                    <div className={stackMdClass}>
                         <h3 className="font-medium text-gray-800">Familienmitglieder:</h3>
                         {[...data.family.memberContributions]
                             .sort((a: MemberContribution, b: MemberContribution) => a.name.localeCompare(b.name, 'de'))

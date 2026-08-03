@@ -38,6 +38,13 @@ describe('UpcomingEventsList', () => {
     mocks.useEvent.mockReturnValue({ data: { own_signup: null } });
   });
 
+  it('uses the shared card shell and stack rhythm for upcoming events', () => {
+    const { container } = render(<MemoryRouter><UpcomingEventsList events={[event()]} /></MemoryRouter>);
+
+    expect(container.querySelector('section')).toHaveClass('card-shell');
+    expect(container.querySelector('.stack-md')).toBeInTheDocument();
+  });
+
   it('filters published future events, sorts them, and limits the rows', () => {
     render(
       <MemoryRouter>

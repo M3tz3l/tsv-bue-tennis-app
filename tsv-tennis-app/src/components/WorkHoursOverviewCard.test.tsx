@@ -24,6 +24,23 @@ const renderCard = (data: DashboardResponse) => render(
 );
 
 describe('WorkHoursOverviewCard', () => {
+    it('uses the shared card shell and stack rhythm', () => {
+        const { container } = renderCard(dashboard({
+            family: {
+                name: 'Familie Mitglied',
+                members: [
+                    { id: 'member-1', name: 'Anna Mitglied', email: 'anna@example.com' },
+                    { id: 'member-2', name: 'Bernd Mitglied', email: 'bernd@example.com' },
+                ],
+                required: 8, completed: 4, remaining: 4, percentage: 50,
+                memberContributions: [],
+            },
+        }));
+
+        expect(container.querySelector('section')).toHaveClass('card-shell');
+        expect(container.querySelector('.stack-md')).toBeInTheDocument();
+    });
+
     it('shows family progress, member values, accessible progress, and the detail link', () => {
         renderCard(dashboard({
             family: {

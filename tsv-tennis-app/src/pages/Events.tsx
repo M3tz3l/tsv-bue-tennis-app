@@ -9,7 +9,7 @@ import EventFormModal from '../components/EventFormModal';
 import EventSignupsModal from '../components/EventSignupsModal';
 import DashboardShell from '../components/DashboardShell';
 import { isOrgaRole } from '../utils/roles';
-import { buttonVariants } from '../styles/tokens';
+import { buttonVariants, cardShellClass, stackMdClass } from '../styles/tokens';
 
 const parseEventDate = (value: string, endOfDay = false) => {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -30,11 +30,11 @@ const EventCard = ({ event, userId, isOrga, onSelect, onEdit, onSignups }: { eve
   const deadlinePassed = event.signup_deadline !== null && (parseEventDate(event.signup_deadline, true)?.getTime() ?? 0) < Date.now();
   const unavailable = full || deadlinePassed;
 
-  return <article className="flex flex-col rounded-lg bg-white p-5 shadow-lg">
+  return <article className={`flex flex-col ${cardShellClass}`}>
     <p className="text-sm font-semibold uppercase tracking-wide text-green-700">{event.type === 'work-duty' ? 'Arbeitsdienst' : 'Veranstaltung'}</p>
     <h2 className="mt-1 text-xl font-bold text-gray-900">{event.title}</h2>
     {event.description && <p className="mt-2 text-sm text-gray-600">{event.description}</p>}
-    <dl className="mt-4 space-y-2 text-sm text-gray-700">
+    <dl className={`${stackMdClass} mt-4 text-sm text-gray-700`}>
       <div><dt className="inline font-medium">Datum: </dt><dd className="inline">{formatDate(event.event_date)}</dd></div>
       {(event.start_time || event.end_time) && <div><dt className="inline font-medium">Zeit: </dt><dd className="inline">{event.start_time ?? ''}{event.end_time ? ` - ${event.end_time}` : ''}</dd></div>}
       {event.location && <div><dt className="inline font-medium">Ort: </dt><dd className="inline">{event.location}</dd></div>}
