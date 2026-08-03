@@ -31,7 +31,7 @@ const EventCard = ({ event, userId, isOrga, onSelect, onEdit, onSignups }: { eve
   const unavailable = full || deadlinePassed;
 
   return <article className={`flex flex-col ${cardShellClass}`}>
-    <p className="text-sm font-semibold uppercase tracking-wide text-[var(--primary)]">{event.type === 'work-duty' ? 'Arbeitsdienst' : 'Veranstaltung'}</p>
+    <p className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">{event.type === 'work-duty' ? 'Arbeitsdienst' : 'Veranstaltung'}</p>
     <h2 className="mt-1 text-xl font-bold text-[var(--ink)]">{event.title}</h2>
     {event.description && <p className="mt-2 text-sm text-[var(--muted)]">{event.description}</p>}
     <dl className={`${stackMdClass} mt-4 text-sm text-[var(--body)]`}>

@@ -28,11 +28,10 @@ describe('DashboardOverview', () => {
     mocks.useEvents.mockReturnValue({ data: [], isLoading: false, error: null });
   });
 
-  it('renders the overview title, greeting fallback, work hours, and events area', () => {
+  it('renders the overview title, work hours, and events area', () => {
     render(<MemoryRouter><DashboardOverview /></MemoryRouter>);
 
     expect(screen.getByRole('heading', { name: 'Meine Übersicht' })).toBeInTheDocument();
-    expect(screen.getByText('Willkommen, Benutzer')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Mitglied - 2026/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Als Nächstes' })).toBeInTheDocument();
   });

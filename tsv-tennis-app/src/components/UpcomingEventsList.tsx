@@ -38,7 +38,7 @@ const EventRow = ({ event, userId }: { event: EventSummary; userId?: string }) =
             <span aria-hidden="true" className="absolute left-0 top-6 h-2.5 w-2.5 rounded-full bg-[var(--primary)]" />
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                 <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">{event.type === 'work-duty' ? 'Arbeitsdienst' : 'Veranstaltung'}</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">{event.type === 'work-duty' ? 'Arbeitsdienst' : 'Veranstaltung'}</p>
                     <Link className="mt-1 flex min-h-11 items-center text-base font-semibold text-[var(--ink)] underline decoration-[var(--hairline)] underline-offset-4 hover:decoration-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20" to={`/dashboard/veranstaltungen?eventId=${event.id}`}>{event.title}</Link>
                     <p className="mt-1 text-sm text-[var(--body)]">{formatDate(event.event_date)}{event.start_time ? `, ${event.start_time} Uhr` : ''}</p>
                     {(event.location || event.description) && <p className="mt-1 text-sm text-[var(--muted)]">{event.location ?? event.description}</p>}

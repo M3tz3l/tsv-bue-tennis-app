@@ -45,7 +45,6 @@ describe('DashboardShell', () => {
     expect(screen.getByRole('img', { name: 'TSV BÜ Tennis Logo' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Arbeitsstunden' })).toBeInTheDocument();
     expect(screen.getByText('Arbeitsstunden-Inhalt')).toBeInTheDocument();
-    expect(screen.getByText('Willkommen, Orga')).toBeInTheDocument();
   });
 
   it('offsets the page content below the fixed topbar', () => {

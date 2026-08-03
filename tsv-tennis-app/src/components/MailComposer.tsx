@@ -284,7 +284,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                 {activeJob.status === 'completed' ? (
                   <CheckCircleIcon className="mx-auto h-12 w-12 text-[var(--success)]" />
                 ) : activeJob.status === 'failed' ? (
-                  <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-red-500" />
+                  <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-[var(--error)]" />
                 ) : (
                   <div className="mx-auto h-12 w-12 flex items-center justify-center">
                     <div className="animate-spin h-10 w-10 border-4 border-[var(--primary)] border-t-transparent rounded-full" />
@@ -308,7 +308,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                   <div className="w-full bg-[var(--hairline-soft)] rounded-full h-2.5">
                     <div
                       className={`h-2.5 rounded-full transition-all duration-300 ${
-                        activeJob.status === 'failed' ? 'bg-red-500' : 'bg-[var(--primary)]'
+                        activeJob.status === 'failed' ? 'bg-[var(--error)]' : 'bg-[var(--primary)]'
                       }`}
                       style={{
                         width: `${
@@ -328,7 +328,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                 </div>
 
                 {activeJob.failed > 0 && (
-                  <p className="mt-3 text-sm text-red-600">
+                  <p className="mt-3 text-sm text-[var(--error)]">
                     {activeJob.failed} fehlgeschlagen
                   </p>
                 )}
@@ -547,7 +547,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                           <button
                             type="button"
                             onClick={() => removeAttachment(index)}
-                            className="text-[var(--muted-soft)] hover:text-red-600 shrink-0"
+                            className="text-[var(--muted-soft)] hover:text-[var(--error)] shrink-0"
                             aria-label={`Datei ${file.name} entfernen`}
                           >
                             <TrashIcon className="h-4 w-4" />
@@ -623,7 +623,7 @@ const PreviewContent: React.FC<{
   senderFirstName: string;
   includeGreeting: boolean;
 }> = ({ subject, message, senderFirstName, includeGreeting }) => (
-  <div className="bg-white rounded-lg p-4 text-sm text-[var(--ink)]">
+  <div className="bg-white rounded-lg border border-[var(--hairline)] p-4 text-sm text-[var(--ink)]">
     <p className="font-medium mb-3">{subject.trim() || 'Kein Betreff'}</p>
     {includeGreeting && <p className="text-[var(--body)] mb-1">Hallo [Vorname],</p>}
     <p className="whitespace-pre-wrap text-[var(--body)]">

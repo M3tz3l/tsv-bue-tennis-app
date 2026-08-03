@@ -288,7 +288,7 @@ const Dashboard = () => {
 
     return (
         <DashboardShell
-            title="TSV BÜ Tennis Arbeitsstunden"
+            title="Arbeitsstunden"
             onOpenMailComposer={() => setShowMailComposer(true)}
             isMailComposerOpen={showMailComposer}
             onCloseMailComposer={() => setShowMailComposer(false)}
