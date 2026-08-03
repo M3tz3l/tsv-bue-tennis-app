@@ -39,18 +39,18 @@ const TopbarNavigation = ({ onOpenMailComposer }: TopbarNavigationProps) => {
             >
               <Bars3Icon className="h-6 w-6" aria-hidden="true" />
             </button>
-            <span className="truncate text-base font-bold text-gray-900">TSV BÜ Tennis</span>
+            <span className="truncate text-base font-bold uppercase tracking-wide text-gray-900">TSV BÜ Tennis</span>
           </div>
 
-          <div className="hidden items-center gap-1 lg:flex">
+          <div className="hidden items-stretch gap-1 lg:flex">
             {routes.map(({ label, to, Icon, end }) => (
               <NavLink
                 key={to}
                 to={to}
                 end={end}
                 className={({ isActive }) =>
-                  `touch-control flex items-center gap-2 rounded-md px-3 text-sm font-medium ${
-                    isActive ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-100'
+                  `touch-control inline-flex items-center gap-2 border-b-2 px-3 text-sm font-semibold uppercase tracking-wide ${
+                    isActive ? 'border-green-700 text-green-900' : 'border-transparent text-slate-600 hover:text-slate-900'
                   } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400`
                 }
               >
@@ -67,7 +67,7 @@ const TopbarNavigation = ({ onOpenMailComposer }: TopbarNavigationProps) => {
           <Menu>
             <MenuButton
               aria-label={displayName}
-              className="touch-control flex items-center gap-2 rounded-md px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+              className="touch-control flex items-center gap-2 px-2 text-sm font-medium text-slate-600 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
             >
               <UserCircleIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
               <span className="hidden max-w-[10rem] truncate sm:inline">{displayName}</span>

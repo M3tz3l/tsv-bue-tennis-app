@@ -22,7 +22,7 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
   return (
     <Dialog open={isOpen} onClose={onClose} className="relative z-50">
       <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
-      <div className="fixed inset-0 flex justify-end">
+      <div className="fixed inset-0 flex justify-start">
         <DialogPanel className="club-navigation-motion flex h-full w-72 max-w-[85vw] flex-col bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
             <DialogTitle className="text-base font-bold text-gray-900">Menü</DialogTitle>
@@ -44,8 +44,8 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
                 end={end}
                 onClick={onClose}
                 className={({ isActive }) =>
-                  `touch-control flex items-center gap-3 rounded-md px-3 text-sm font-medium ${
-                    isActive ? 'bg-emerald-50 text-emerald-700' : 'text-slate-700 hover:bg-slate-100'
+                  `touch-control flex items-center gap-3 border-l-2 px-3 text-sm font-semibold uppercase tracking-wide ${
+                    isActive ? 'border-green-700 bg-green-50 text-green-900' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'
                   } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400`
                 }
               >
@@ -60,7 +60,7 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
                   onClose();
                   onOpenMailComposer();
                 }}
-                className="touch-control flex items-center gap-3 rounded-md px-3 text-sm font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                className="touch-control flex items-center gap-3 border-l-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
               >
                 <EnvelopeIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
                 Rundmail
@@ -69,7 +69,7 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
             <button
               type="button"
               onClick={logout}
-              className="touch-control flex items-center gap-3 rounded-md px-3 text-sm font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+              className="touch-control flex items-center gap-3 border-l-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
             >
               <ArrowRightOnRectangleIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
               Abmelden
