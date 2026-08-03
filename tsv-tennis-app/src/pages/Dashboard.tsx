@@ -2,14 +2,12 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import BackendService, { getApiErrorMessage } from '../services/backendService.ts';
-import { PencilIcon, PlusIcon, ArrowRightOnRectangleIcon, ClockIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, PlusIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
-import TSV_Logo from '../assets/TSV_Tennis.svg';
 import type { WorkHourEntry, CreateWorkHourRequest, MemberContribution } from '../types';
 import useDashboard, { DASHBOARD_QUERY_KEY } from '../hooks/useDashboard';
 import ArbeitsstundenFormModal from '../components/ArbeitsstundenFormModal';
-import MailComposer from '../components/MailComposer';
-import DashboardNavigation from '../components/DashboardNavigation';
+import DashboardShell from '../components/DashboardShell';
 import {
     getCurrentYear,
     getMemberEntries,
@@ -21,20 +19,14 @@ import {
 } from '../utils/utils';
 
 const Dashboard = () => {
-    const { user, logout, token } = useAuth();
+    const { user, token } = useAuth();
     const queryClient = useQueryClient();
     const [editingRow, setEditingRow] = useState<WorkHourEntry | null>(null);
     const [showAddForm, setShowAddForm] = useState(false);
     const [selectedYear, setSelectedYear] = useState(getCurrentYear());
-    const [showMailComposer, setShowMailComposer] = useState(false);
-    const isOrga = user?.role?.trim().toLowerCase() === 'orga';
 
     // Fetch family dashboard data from the backend API
     const { data: dashboardData, isLoading, error } = useDashboard(user?.id, selectedYear, !!user?.id && !!token);
-
-    const handleLogout = () => {
-        logout();
-    };
 
     const handleEdit = async (row: WorkHourEntry) => {
         try {
@@ -294,44 +286,7 @@ const Dashboard = () => {
     })();
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
-            {/* Header */}
-            <header className="bg-white shadow-sm border-b border-gray-200">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex flex-col sm:flex-row justify-between items-center py-4 space-y-3 sm:space-y-0">
-                        <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0">
-                            <img src={TSV_Logo} alt="TSV BÜ Tennis Logo" className="h-16 sm:h-20 w-auto mr-0 sm:mr-4 drop-shadow-sm hover:drop-shadow-md transition-all duration-300" />
-                            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 text-center sm:text-left">TSV BÜ Tennis Arbeitsstunden</h1>
-                        </div>
-                        <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
-                            <span className="text-xs sm:text-sm text-gray-600 text-center">
-                                Willkommen, {user?.email || 'Benutzer'}
-                            </span>
-                            {isOrga && (
-                                <button
-                                    onClick={() => setShowMailComposer(true)}
-                                    className="inline-flex items-center px-3 sm:px-4 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700"
-                                    title="Versende Rundmails an Mitglieder (nur Rolle orga)."
-                                >
-                                    <EnvelopeIcon className="-ml-1 mr-2 h-4 sm:h-5 w-4 sm:w-5" />
-                                    Rundmail
-                                </button>
-                            )}
-                            <button
-                                onClick={handleLogout}
-                                className="inline-flex items-center px-3 sm:px-4 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
-                            >
-                                <ArrowRightOnRectangleIcon className="-ml-1 mr-2 h-4 sm:h-5 w-4 sm:w-5" />
-                                Abmelden
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </header>
-
-            {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
-                <DashboardNavigation />
+        <DashboardShell title="TSV BÜ Tennis Arbeitsstunden" onOpenMailComposer={() => undefined}>
                 {/* Year Selector */}
                 <div className="mb-4 sm:mb-6">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Jahr auswählen:</label>
@@ -470,8 +425,6 @@ const Dashboard = () => {
 
                 {/* Arbeitsstunden Table */}
                 {renderArbeitsstundenTable()}
-            </main>
-
             {/* Add/Edit Form Modal */}
             {(showAddForm || editingRow) && (
                 <ArbeitsstundenFormModal
@@ -487,12 +440,7 @@ const Dashboard = () => {
                 />
             )}
 
-            {/* Mail Composer Modal */}
-            <MailComposer
-                isOpen={showMailComposer}
-                onClose={() => setShowMailComposer(false)}
-            />
-        </div>
+        </DashboardShell>
     );
 };
 

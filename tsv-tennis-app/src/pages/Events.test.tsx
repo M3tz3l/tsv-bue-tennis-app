@@ -129,7 +129,7 @@ describe('Events', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('link', { name: /veranstaltungen/i })).toHaveClass('bg-green-600');
-    expect(screen.getByRole('link', { name: /arbeitsstunden/i })).toHaveAttribute('href', '/dashboard/arbeitsstunden');
+    expect(screen.getAllByRole('link', { name: /veranstaltungen/i })[0]).toHaveAttribute('aria-current', 'page');
+    expect(screen.getAllByRole('link', { name: /arbeitsstunden/i })[0]).toHaveAttribute('href', '/dashboard/arbeitsstunden');
   });
 });

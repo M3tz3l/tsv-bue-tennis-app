@@ -6,7 +6,7 @@ import type { EventSummary } from '../types';
 import EventSignupModal from '../components/EventSignupModal';
 import EventFormModal from '../components/EventFormModal';
 import EventSignupsModal from '../components/EventSignupsModal';
-import DashboardNavigation from '../components/DashboardNavigation';
+import DashboardShell from '../components/DashboardShell';
 
 const parseEventDate = (value: string, endOfDay = false) => {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -57,22 +57,19 @@ const Events = () => {
     if (error) toast.error(error instanceof Error ? error.message : 'Veranstaltungen konnten nicht geladen werden');
   }, [error]);
 
-  if (isLoading) return <main className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-6 text-center text-gray-600">Veranstaltungen werden geladen...</main>;
+  if (isLoading) return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => undefined}><div className="text-center text-gray-600">Veranstaltungen werden geladen...</div></DashboardShell>;
   if (error) {
-    return <main className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-6"><div className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-700">Fehler beim Laden der Veranstaltungen</div></main>;
+    return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => undefined}><div className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-700">Fehler beim Laden der Veranstaltungen</div></DashboardShell>;
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        <DashboardNavigation />
+    <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => undefined}>
         <div className="mb-6 flex items-center justify-between"><h1 className="text-2xl font-bold text-gray-900">Veranstaltungen</h1>{isOrga && <button onClick={() => setEditingEvent(null)} className="rounded-md bg-green-600 px-4 py-2 font-medium text-white">Veranstaltung erstellen</button>}</div>
         {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-gray-600 shadow-lg">Keine anstehenden Veranstaltungen</div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((event) => <EventCard key={event.id} event={event} userId={user?.id} isOrga={isOrga} onSelect={setSelectedId} onEdit={setEditingEvent} onSignups={setSignupsId} />)}</div>}
-      </div>
       {selectedId !== null && <EventSignupModal eventId={selectedId} isOpen onClose={() => setSelectedId(null)} />}
       {editingEvent !== undefined && <EventFormModal initialData={editingEvent} isOpen onClose={() => setEditingEvent(undefined)} />}
       {signupsId !== null && <EventSignupsModal eventId={signupsId} isOpen onClose={() => setSignupsId(null)} />}
-    </main>
+    </DashboardShell>
   );
 };
 
