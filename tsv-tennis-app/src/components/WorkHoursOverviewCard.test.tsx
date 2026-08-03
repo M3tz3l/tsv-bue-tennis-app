@@ -68,4 +68,79 @@ describe('WorkHoursOverviewCard', () => {
         expect(screen.getByText('2 Std geleistet')).toBeInTheDocument();
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
     });
+
+    it('shows normal personal progress values and styling', () => {
+        renderCard(dashboard({
+            personal: {
+                name: 'Anna Mitglied',
+                hours: 4,
+                required: 8,
+                entries: [],
+                exemption_reason: null,
+            },
+        }));
+
+        expect(screen.getByText('4 Std von 8 Std')).toBeInTheDocument();
+        expect(screen.getByText('50% abgeschlossen')).toBeInTheDocument();
+        expect(screen.getByRole('progressbar', { name: 'Ihr Fortschritt: 50% abgeschlossen' })).toHaveAttribute('aria-valuenow', '50');
+        expect(screen.getByRole('progressbar').firstElementChild).toHaveClass('bg-red-500');
+        expect(screen.getByRole('progressbar').firstElementChild).toHaveStyle({ width: '50%' });
+    });
+
+    it('clamps personal progress semantics and styling to the visual range', () => {
+        renderCard(dashboard({
+            personal: {
+                name: 'Anna Mitglied',
+                hours: 12,
+                required: 8,
+                entries: [],
+                exemption_reason: null,
+            },
+        }));
+
+        const progress = screen.getByRole('progressbar', { name: 'Ihr Fortschritt: 100% abgeschlossen' });
+        expect(screen.getByText('12 Std von 8 Std')).toBeInTheDocument();
+        expect(progress).toHaveAttribute('aria-valuemin', '0');
+        expect(progress).toHaveAttribute('aria-valuemax', '100');
+        expect(progress).toHaveAttribute('aria-valuenow', '100');
+        expect(progress.firstElementChild).toHaveClass('bg-green-500');
+        expect(progress.firstElementChild).toHaveStyle({ width: '100%' });
+    });
+
+    it('clamps family progress semantics to the same visual range', () => {
+        renderCard(dashboard({
+            family: {
+                name: 'Familie Mitglied',
+                members: [
+                    { id: 'member-1', name: 'Anna Mitglied', email: 'anna@example.com' },
+                    { id: 'member-2', name: 'Bernd Mitglied', email: 'bernd@example.com' },
+                ],
+                required: 8,
+                completed: 12,
+                remaining: 0,
+                percentage: 150,
+                memberContributions: [],
+            },
+        }));
+
+        const progress = screen.getByRole('progressbar', { name: 'Familien-Fortschritt: 100% abgeschlossen' });
+        expect(progress).toHaveAttribute('aria-valuenow', '100');
+        expect(progress.firstElementChild).toHaveStyle({ width: '100%' });
+    });
+
+    it('keeps zero personal progress at the lower semantic and visual bound', () => {
+        renderCard(dashboard({
+            personal: {
+                name: 'Anna Mitglied',
+                hours: 0,
+                required: 8,
+                entries: [],
+                exemption_reason: null,
+            },
+        }));
+
+        const progress = screen.getByRole('progressbar', { name: 'Ihr Fortschritt: 0% abgeschlossen' });
+        expect(progress).toHaveAttribute('aria-valuenow', '0');
+        expect(progress.firstElementChild).toHaveStyle({ width: '0%' });
+    });
 });

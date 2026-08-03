@@ -14,26 +14,30 @@ const WorkHoursOverviewCard = ({ data, selectedYear }: WorkHoursOverviewCardProp
 
     if (!data.family && !data.personal) return null;
 
-    const renderProgress = (percentage: number, label: string) => (
-        <>
+    const renderProgress = (percentage: number, label: string) => {
+        const clampedPercentage = Math.min(100, Math.max(0, percentage));
+
+        return (
+            <>
             <div
-                aria-label={`${label}: ${Math.round(Math.min(100, percentage))}% abgeschlossen`}
+                aria-label={`${label}: ${Math.round(clampedPercentage)}% abgeschlossen`}
                 aria-valuemax={100}
                 aria-valuemin={0}
-                aria-valuenow={percentage}
+                aria-valuenow={clampedPercentage}
                 className="w-full bg-gray-100 border-b-2 border-gray-300 h-3"
                 role="progressbar"
             >
                 <div
-                    className={`h-2.5 transition-all duration-300 ${getProgressColor(percentage)}`}
-                    style={{ width: `${Math.min(100, percentage)}%` }}
+                    className={`h-2.5 transition-all duration-300 ${getProgressColor(clampedPercentage)}`}
+                    style={{ width: `${clampedPercentage}%` }}
                 />
             </div>
             <div className="text-right text-sm text-gray-600 mt-1">
-                {Math.round(Math.min(100, percentage))}% abgeschlossen
+                {Math.round(clampedPercentage)}% abgeschlossen
             </div>
-        </>
-    );
+            </>
+        );
+    };
 
     return (
         <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 sm:p-6 mb-6 sm:mb-8">
