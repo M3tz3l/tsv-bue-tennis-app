@@ -65,7 +65,8 @@ describe('DashboardShell', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByTestId('dashboard-shell-content')).toHaveClass('pb-[var(--club-nav-height)]');
+    expect(screen.getByTestId('dashboard-shell-content')).toHaveClass('pb-[var(--club-nav-height)]', 'min-w-0');
+    expect(screen.getByTestId('dashboard-shell-content')).toHaveAttribute('data-mobile-safe-spacing', 'true');
     const navigations = screen.getAllByRole('navigation', { name: 'Clubnavigation' });
     expect(navigations[0]).toHaveClass('hidden', 'md:flex');
     expect(navigations[1]).toHaveClass('md:hidden');

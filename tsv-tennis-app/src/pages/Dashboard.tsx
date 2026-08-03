@@ -136,7 +136,7 @@ const Dashboard = () => {
                     <div className="mt-6">
                         <button
                             onClick={() => setShowAddForm(true)}
-                            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                            className="action-control inline-flex items-center border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
                         >
                             <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
                             Arbeitsstunden eintragen
@@ -176,7 +176,7 @@ const Dashboard = () => {
                     </div>
                     <button
                         onClick={() => setShowAddForm(true)}
-                        className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 w-full sm:w-auto"
+                        className="action-control inline-flex items-center justify-center border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 w-full sm:w-auto"
                     >
                         <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
                         Eintragen
@@ -202,7 +202,7 @@ const Dashboard = () => {
                                             <button
                                                 onClick={() => handleEdit(row)}
                                                 aria-label="Bearbeiten"
-                                                className="p-2 rounded-md text-blue-600 hover:bg-blue-50"
+                                                className="touch-control rounded-md text-blue-600 hover:bg-blue-50"
                                             >
                                                 <PencilIcon className="h-5 w-5" />
                                             </button>
@@ -256,7 +256,7 @@ const Dashboard = () => {
                                             <button
                                                 onClick={() => handleEdit(row)}
                                                 aria-label="Bearbeiten"
-                                                className="p-2 rounded-md text-blue-600 hover:bg-blue-50"
+                                                className="touch-control rounded-md text-blue-600 hover:bg-blue-50"
                                             >
                                                 <PencilIcon className="h-5 w-5" />
                                             </button>

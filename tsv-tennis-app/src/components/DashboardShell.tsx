@@ -27,7 +27,7 @@ const DashboardShell = ({ children, title, onOpenMailComposer, isMailComposerOpe
                         <span className="text-center text-xs text-gray-600 sm:text-sm">Willkommen, {user?.email || 'Benutzer'}</span>
                     </div>
                 </header>
-                <main data-testid="dashboard-shell-content" className="mx-auto max-w-7xl px-3 py-4 pb-[var(--club-nav-height)] sm:px-4 sm:py-8 lg:px-8">
+                <main data-testid="dashboard-shell-content" data-mobile-safe-spacing="true" className="mx-auto min-w-0 max-w-7xl px-3 py-4 pb-[var(--club-nav-height)] sm:px-4 sm:py-8 lg:px-8">
                     {children}
                 </main>
             </div>

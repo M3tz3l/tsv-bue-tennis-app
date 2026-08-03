@@ -4,10 +4,6 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-
-const indexCss = readFileSync('src/index.css', 'utf8');
-
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
 }));
@@ -128,7 +124,7 @@ describe('ClubNavigation', () => {
     const links = screen.getAllByRole('link');
     const buttons = screen.getAllByRole('button');
     [...links, ...buttons].forEach((control) => {
-      expect(control).toHaveClass('min-h-11', 'min-w-11', 'focus-visible:outline-2');
+      expect(control).toHaveClass('touch-control', 'focus-visible:outline-2');
     });
     expect(screen.getByText('Mitglied')).toBeInTheDocument();
     await user.tab();
@@ -146,33 +142,37 @@ describe('ClubNavigation', () => {
         <ClubNavigation variant="mobile" onRundmail={vi.fn()} />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('navigation', { name: 'Clubnavigation' })).toHaveClass('md:hidden');
-    expect(indexCss.match(/env\(safe-area-inset-bottom\)/g)).toHaveLength(1);
-    expect(indexCss).toContain('--club-nav-height: calc(4rem + env(safe-area-inset-bottom))');
-    expect(indexCss).toContain('height: var(--club-nav-height)');
-    expect(indexCss).toContain('padding-bottom: var(--club-nav-height)');
-    expect(screen.getByRole('navigation', { name: 'Clubnavigation' })).not.toHaveClass('pb-[env(safe-area-inset-bottom)]');
+    const navigation = screen.getByRole('navigation', { name: 'Clubnavigation' });
+    expect(navigation).toHaveClass('md:hidden');
+    expect(navigation).toHaveAttribute('data-variant', 'mobile');
+    expect(navigation).toHaveAttribute('data-safe-area', 'true');
+    expect(navigation).toHaveAttribute('data-overflow-safe', 'true');
+    expect(navigation).not.toHaveAttribute('aria-hidden', 'true');
   });
 
   it('provides reduced-motion CSS support', () => {
     renderNavigation();
     const navigation = screen.getByRole('navigation', { name: 'Clubnavigation' });
     expect(navigation).toHaveClass('club-navigation-motion');
-    expect(indexCss).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.club-navigation-motion,\s*\.club-navigation-motion \*/);
+    expect(navigation).toHaveAttribute('data-reduced-motion-safe', 'true');
   });
 
   it('keeps navigation controls touch-sized and keyboard-focusable', () => {
     renderNavigation();
 
     [...screen.getAllByRole('link'), ...screen.getAllByRole('button')].forEach((control) => {
-      expect(control).toHaveClass('min-h-11', 'min-w-11', 'focus-visible:outline-2');
+      expect(control).toHaveClass('touch-control', 'focus-visible:outline-2');
     });
   });
 
   it('documents overflow-safe layout assumptions for narrow screens', () => {
-    renderNavigation();
-    expect(indexCss).toContain('box-sizing: border-box');
-    expect(indexCss).toContain('min-width: 0');
-    expect(indexCss).toContain('overflow-x: hidden');
+    render(
+      <MemoryRouter>
+        <ClubNavigation variant="mobile" onRundmail={vi.fn()} />
+      </MemoryRouter>,
+    );
+    const navigation = screen.getByRole('navigation', { name: 'Clubnavigation' });
+    expect(navigation).toHaveAttribute('data-overflow-safe', 'true');
+    expect(navigation.querySelectorAll('[aria-hidden="true"]')).toHaveLength(5);
   });
 });

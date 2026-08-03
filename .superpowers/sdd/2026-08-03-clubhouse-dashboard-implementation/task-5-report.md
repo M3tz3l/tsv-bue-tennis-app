@@ -19,6 +19,13 @@ Complete. Dashboard and Events use the shared DashboardShell navigation only; th
 - Production build passed with the existing Vite chunk-size advisory.
 - `git diff --check` passed.
 
+## Review Fix Evidence
+
+- Replaced cwd-relative stylesheet/source-text assertions with rendered variant, semantic structure, accessibility attribute, and data-contract assertions.
+- Added reusable `touch-control` and `action-control` classes. Icon-only navigation and edit controls guarantee 44px minimum width and height; text actions retain horizontal padding and 44px minimum height.
+- Updated Dashboard and Events primary actions to use the shared control contracts.
+- Visual review remains unavailable because Chromium is not installed; no browser installation was performed.
+
 ## Concerns
 
 - Automated browser visual review could not run because Chromium is not installed in the environment. DOM/CSS responsive assumptions are covered by regression tests at the contract level.

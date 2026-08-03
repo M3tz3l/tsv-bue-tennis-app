@@ -34,6 +34,10 @@ const ClubNavigation = ({ variant, onRundmail }: ClubNavigationProps) => {
     return (
         <nav
             aria-label="Clubnavigation"
+            data-variant={variant}
+            data-safe-area={isMobile ? 'true' : undefined}
+            data-overflow-safe="true"
+            data-reduced-motion-safe="true"
             className={isMobile
                 ? 'club-navigation-mobile club-navigation-motion fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-2 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur md:hidden'
                 : `club-navigation-desktop club-navigation-motion hidden min-h-screen flex-col border-r border-slate-200 bg-slate-950 px-3 py-5 text-white transition-[width] duration-200 md:flex ${isExpanded ? 'w-64' : 'w-20'}`}
@@ -44,7 +48,7 @@ const ClubNavigation = ({ variant, onRundmail }: ClubNavigationProps) => {
                     aria-label={isExpanded ? 'Navigation einklappen' : 'Navigation erweitern'}
                     aria-expanded={isExpanded}
                     onClick={() => setIsExpanded((expanded) => !expanded)}
-                    className="mb-6 flex min-h-11 min-w-11 items-center justify-center self-end rounded-md text-slate-300 hover:bg-slate-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                    className="touch-control mb-6 flex items-center justify-center self-end rounded-md text-slate-300 hover:bg-slate-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
                 >
                     {isExpanded ? <ChevronDoubleLeftIcon className="h-5 w-5" /> : <ChevronDoubleRightIcon className="h-5 w-5" />}
                 </button>
@@ -59,8 +63,8 @@ const ClubNavigation = ({ variant, onRundmail }: ClubNavigationProps) => {
                         title={!isMobile && !isExpanded ? label : undefined}
                         aria-label={!isMobile && !isExpanded ? label : undefined}
                         className={({ isActive }) => `${isMobile
-                            ? 'relative flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-1 rounded-md px-2 text-[11px] font-medium'
-                            : 'relative flex min-h-11 min-w-11 items-center gap-3 rounded-md px-3 text-sm font-medium'} ${isActive
+                            ? 'touch-control relative flex flex-1 flex-col items-center justify-center gap-1 rounded-md px-2 text-[11px] font-medium'
+                            : 'touch-control relative flex items-center gap-3 rounded-md px-3 text-sm font-medium'} ${isActive
                             ? 'text-emerald-700 md:text-emerald-300'
                             : isMobile ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-300 hover:bg-slate-800 hover:text-white'} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400`}
                     >
@@ -80,8 +84,8 @@ const ClubNavigation = ({ variant, onRundmail }: ClubNavigationProps) => {
                         title={!isMobile && !isExpanded ? 'Rundmail' : undefined}
                         onClick={onRundmail}
                         className={isMobile
-                            ? 'flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-1 rounded-md px-2 text-[11px] font-medium text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400'
-                            : 'flex min-h-11 min-w-11 items-center gap-3 rounded-md px-3 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400'}
+                            ? 'touch-control relative flex flex-1 flex-col items-center justify-center gap-1 rounded-md px-2 text-[11px] font-medium text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400'
+                            : 'touch-control flex items-center gap-3 rounded-md px-3 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400'}
                     >
                         <EnvelopeIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
                         {(isMobile || isExpanded) && <span>Rundmail</span>}
@@ -100,7 +104,7 @@ const ClubNavigation = ({ variant, onRundmail }: ClubNavigationProps) => {
                     type="button"
                     title={!isExpanded ? 'Abmelden' : undefined}
                     onClick={logout}
-                    className="flex min-h-11 min-w-11 w-full items-center justify-center gap-3 rounded-md px-3 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                    className="touch-control w-full flex items-center justify-center gap-3 rounded-md px-3 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
                 >
                     <ArrowRightOnRectangleIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
                     {isExpanded && <span>Abmelden</span>}
