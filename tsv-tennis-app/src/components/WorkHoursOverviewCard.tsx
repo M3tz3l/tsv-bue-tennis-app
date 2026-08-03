@@ -7,16 +7,18 @@ import { cardShellClass } from '../styles/tokens';
 type WorkHoursOverviewCardProps = {
     data: DashboardResponse;
     selectedYear: number;
-    showDetailsLink?: boolean;
+    variant?: 'overview' | 'detail';
 };
 
-const WorkHoursOverviewCard = ({ data, selectedYear, showDetailsLink = true }: WorkHoursOverviewCardProps) => {
+const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview' }: WorkHoursOverviewCardProps) => {
     const { user } = useAuth();
     const hasFamilyView = !!data.family && data.family.members.length > 1;
 
     if (!data.family && !data.personal) return null;
 
-    const detailsLink = showDetailsLink && (
+    const showChrome = variant === 'overview';
+
+    const detailsLink = showChrome && (
         <Link
             className="text-sm font-medium text-[var(--primary)] underline decoration-[var(--primary)]/40 underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
             to="/dashboard/arbeitsstunden"
@@ -49,10 +51,12 @@ const WorkHoursOverviewCard = ({ data, selectedYear, showDetailsLink = true }: W
         <section className={`${cardShellClass} mb-6 sm:mb-8`}>
             {hasFamilyView && data.family ? (
                 <>
-                    <div className="flex items-baseline justify-between gap-2 mb-3">
-                        <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-[var(--ink)]">Familie - {selectedYear}</h2>
-                        {detailsLink}
-                    </div>
+                    {showChrome && (
+                        <div className="flex items-baseline justify-between gap-2 mb-3">
+                            <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-[var(--ink)]">Arbeitsstunden {selectedYear}</h2>
+                            {detailsLink}
+                        </div>
+                    )}
                     <div className="flex items-center justify-between gap-2 text-sm text-[var(--body)] mb-1">
                         <span>Familien-Fortschritt</span>
                         <span className="font-semibold text-[var(--ink)]">{formatHours(data.family.completed)} Std von {formatHours(data.family.required)} Std</span>
@@ -92,10 +96,12 @@ const WorkHoursOverviewCard = ({ data, selectedYear, showDetailsLink = true }: W
                 </>
             ) : data.personal ? (
                 <>
-                    <div className="flex items-baseline justify-between gap-2 mb-3">
-                        <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-[var(--ink)]">{data.personal.name || 'Ihre Arbeitsstunden'} - {selectedYear}</h2>
-                        {detailsLink}
-                    </div>
+                    {showChrome && (
+                        <div className="flex items-baseline justify-between gap-2 mb-3">
+                            <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-[var(--ink)]">{data.personal.name || 'Ihre Arbeitsstunden'} - {selectedYear}</h2>
+                            {detailsLink}
+                        </div>
+                    )}
                     {data.personal.required === 0 ? (
                         <div className="p-4 border border-[var(--hairline)] rounded-lg">
                             <div className="flex items-center justify-between">

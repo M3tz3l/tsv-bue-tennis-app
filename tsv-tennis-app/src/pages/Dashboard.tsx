@@ -307,7 +307,7 @@ const Dashboard = () => {
                     </select>
                 </div>
 
-                {dashboardData && <WorkHoursOverviewCard data={dashboardData} selectedYear={selectedYear} showDetailsLink={false} />}
+                {dashboardData && <WorkHoursOverviewCard data={dashboardData} selectedYear={selectedYear} variant="detail" />}
 
                 {/* Arbeitsstunden Table */}
                 {renderArbeitsstundenTable()}

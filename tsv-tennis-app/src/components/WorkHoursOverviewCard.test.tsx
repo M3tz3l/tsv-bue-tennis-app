@@ -60,7 +60,7 @@ describe('WorkHoursOverviewCard', () => {
             },
         }));
 
-        expect(screen.getByRole('heading', { name: 'Familie - 2026' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Arbeitsstunden 2026' })).toBeInTheDocument();
         expect(screen.getByText('10.5 Std von 16 Std')).toBeInTheDocument();
         expect(screen.getByRole('progressbar', { name: 'Familien-Fortschritt: 66% abgeschlossen' })).toHaveAttribute('aria-valuenow', '65.625');
     expect(screen.getByText('Anna Mitglied (Sie)')).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe('WorkHoursOverviewCard', () => {
         expect(screen.getByRole('link', { name: 'Details ansehen' })).toHaveAttribute('href', '/dashboard/arbeitsstunden');
   });
 
-    it('omits the details link when showDetailsLink is false', () => {
+    it('hides the heading and details link in the detail variant', () => {
         render(
             <MemoryRouter>
                 <WorkHoursOverviewCard data={dashboard({ family: {
@@ -79,11 +79,12 @@ describe('WorkHoursOverviewCard', () => {
                     ],
                     required: 8, completed: 4, remaining: 4, percentage: 50,
                     memberContributions: [],
-                } })} selectedYear={2026} showDetailsLink={false} />
+                } })} selectedYear={2026} variant="detail" />
             </MemoryRouter>,
         );
 
         expect(screen.queryByRole('link', { name: 'Details ansehen' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: /Arbeitsstunden 2026/ })).not.toBeInTheDocument();
     });
 
     it('identifies the current family member by ID and uses one exemption color', () => {
