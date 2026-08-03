@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+:root {
+  --club-nav-height: calc(4rem + env(safe-area-inset-bottom));
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -13,6 +17,11 @@
 
 @media (max-width: 767px) {
   body:has(.club-navigation-mobile) {
-    padding-bottom: 5rem;
+    padding-bottom: var(--club-nav-height);
+  }
+
+  .club-navigation-mobile {
+    box-sizing: border-box;
+    height: var(--club-nav-height);
   }
 }

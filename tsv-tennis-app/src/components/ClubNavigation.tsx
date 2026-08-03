@@ -57,6 +57,7 @@ const ClubNavigation = ({ variant, onRundmail }: ClubNavigationProps) => {
                         to={to}
                         end={end}
                         title={!isMobile && !isExpanded ? label : undefined}
+                        aria-label={!isMobile && !isExpanded ? label : undefined}
                         className={({ isActive }) => `${isMobile
                             ? 'relative flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-1 rounded-md px-2 text-[11px] font-medium'
                             : 'relative flex min-h-11 min-w-11 items-center gap-3 rounded-md px-3 text-sm font-medium'} ${isActive
