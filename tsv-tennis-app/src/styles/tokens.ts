@@ -17,3 +17,10 @@ export const buttonVariants = {
 
 export const cardShellClass = 'card-shell';
 export const stackMdClass = 'stack-md';
+
+// Shared form-control base: inputs, selects, and textareas. Callers append
+// the border color explicitly (e.g. `border-gray-300`, or `border-red-500`
+// for an invalid field) so a field can switch to an error color without
+// fighting the base class.
+export const fieldControl =
+  'w-full min-h-[44px] rounded-md border px-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400';

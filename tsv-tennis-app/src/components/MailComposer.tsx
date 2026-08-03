@@ -268,7 +268,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   // During active job: show progress view
   if (activeJob) {
     return (
-      <ModalShell isOpen={isOpen} onClose={handleClose} title="Mail versenden" disableClose={isBusy} widthClassName="max-w-lg" backdropClassName="bg-black/60" headerContent={(
+      <ModalShell isOpen={isOpen} onClose={handleClose} title="Mail versenden" disableClose={isBusy} widthClassName="max-w-lg" headerContent={(
             <div className="flex items-center gap-3">
               <div className="bg-purple-100 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-purple-700" /></div>
               <DialogTitle className="text-lg font-semibold text-gray-900">Mail versenden</DialogTitle>
@@ -352,7 +352,6 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       disableClose={isBusy}
       widthClassName="max-w-4xl"
       panelClassName="max-h-[90vh] min-h-[60vh] flex flex-col overflow-hidden"
-      backdropClassName="bg-black/60"
       panelProps={{ onDragOver: handleDragOver, onDragLeave: handleDragLeave, onDrop: handleDrop }}
       headerContent={(
         <div className="flex items-center gap-3">
@@ -373,7 +372,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
               <span className="text-sm text-gray-600">An {currentRecipientCount} {recipientFilter === 'all' ? 'Mitglieder' : 'Ausschuss-Mitglieder'} senden?</span>
               <button onClick={() => setConfirmSend(false)} disabled={isBusy} className={buttonVariants.secondary}>Zurück</button>
               <button onClick={handleSendBulk} disabled={isBusy} className={`${buttonVariants.primary} inline-flex items-center justify-center shadow-sm`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />Jetzt senden</button>
-            </> : <button onClick={() => isFormValid && setConfirmSend(true)} disabled={isBusy || !isFormValid} className={`${buttonVariants.primary} inline-flex items-center justify-center shadow-sm`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />{isLoading ? 'Wird gestartet...' : 'Versenden'}{currentRecipientCount !== null && <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-green-500/20">{currentRecipientCount}</span>}</button>}
+            </> : <button onClick={() => isFormValid && setConfirmSend(true)} disabled={isBusy || !isFormValid} className={`${buttonVariants.primary} inline-flex items-center justify-center shadow-sm`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />{isLoading ? 'Wird gestartet...' : 'Versenden'}{currentRecipientCount !== null && <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-purple-500/20 text-purple-700">{currentRecipientCount}</span>}</button>}
           </div>
         </>
       )}

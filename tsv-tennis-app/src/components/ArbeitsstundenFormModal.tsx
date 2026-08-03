@@ -8,7 +8,7 @@ import BackendService from '../services/backendService';
 import { useAuth } from '../context/AuthContext';
 import { DASHBOARD_QUERY_KEY } from '../hooks/useDashboard';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
-import { buttonVariants, stackMdClass } from '../styles/tokens';
+import { buttonVariants, fieldControl, stackMdClass } from '../styles/tokens';
 import ModalShell from './ModalShell';
 
 type FormValues = {
@@ -155,7 +155,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                         </div>
                     )}
 
-                    <form id="work-hours-form" onSubmit={handleSubmit(onSubmit)} className="px-6 py-4">
+                    <form id="work-hours-form" onSubmit={handleSubmit(onSubmit)} className="px-6 py-5">
                         <div className={stackMdClass}>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Nachname</label>
@@ -163,7 +163,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                     type="text"
                                     {...register('Nachname', { required: 'Nachname ist erforderlich' })}
                                     readOnly
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 cursor-not-allowed"
+                                    className={`${fieldControl} bg-gray-50 text-gray-500 cursor-not-allowed`}
                                 />
                                 {errors.Nachname && <p className="text-xs text-red-600 mt-1">{errors.Nachname.message}</p>}
                             </div>
@@ -174,7 +174,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                     type="text"
                                     {...register('Vorname', { required: 'Vorname ist erforderlich' })}
                                     readOnly
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 cursor-not-allowed"
+                                    className={`${fieldControl} bg-gray-50 text-gray-500 cursor-not-allowed`}
                                 />
                                 {errors.Vorname && <p className="text-xs text-red-600 mt-1">{errors.Vorname.message}</p>}
                             </div>
@@ -186,7 +186,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                     {...register('Datum', { required: 'Datum ist erforderlich' })}
                                     min={minDate}
                                     max={today}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                    className={`${fieldControl} border-gray-300`}
                                     lang="de"
                                     aria-invalid={!!errors.Datum}
                                 />
@@ -213,7 +213,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                             return true;
                                         }
                                     })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                    className={`${fieldControl} border-gray-300`}
                                     placeholder="z.B. 2.75"
                                 />
                                 {errors.Stunden && <p className="text-xs text-red-600 mt-1">{errors.Stunden.message}</p>}
@@ -225,7 +225,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                 <input
                                     type="text"
                                     {...register('Tätigkeit', { required: 'Tätigkeit ist erforderlich', maxLength: { value: 40, message: 'Maximal 40 Zeichen' } })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                    className={`${fieldControl} border-gray-300`}
                                     placeholder="z.B. Platzpflege, Dienst..."
                                 />
                                 <div className="text-xs text-gray-500 mt-1">{/* length shown by API consumer if needed */}</div>

@@ -20,7 +20,7 @@ export default function DeleteConfirmDialog({
             destructive: <button type="button" onClick={async () => { await onConfirm(); }} disabled={isProcessing} className={buttonVariants.destructive}>{isProcessing ? 'Löschen...' : 'Löschen'}</button>,
             secondary: <button type="button" onClick={onCancel} disabled={isProcessing} className={buttonVariants.secondary}>Abbrechen</button>,
         }}>
-                            <div className="p-4 sm:p-6">
+                            <div className="px-6 py-5">
                                 <div className="flex items-start space-x-3">
                                     <div className="flex-shrink-0">
                                         <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />

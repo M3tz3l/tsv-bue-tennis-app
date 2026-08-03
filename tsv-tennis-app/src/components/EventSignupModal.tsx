@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
-import { buttonVariants, stackMdClass } from '../styles/tokens';
+import { buttonVariants, fieldControl, stackMdClass } from '../styles/tokens';
 import { useAuth } from '../context/AuthContext';
 import { useCreateEventSignup, useDeleteEventSignup, useEvent, useUpdateEventSignup } from '../hooks/useEvents';
 import type { SignupRequest } from '../types';
@@ -108,7 +108,7 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
         <form id="event-signup-form" onSubmit={submit} className={`${stackMdClass} px-6 py-5`}>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Personen
-                  <input aria-label="Personen" type="number" step="1" value={peopleCount} onChange={(e) => setPeopleCount(e.target.value)} disabled={pending} className={`mt-1 w-full min-h-[44px] rounded-md border px-3 py-2 ${errors.peopleCount ? 'border-red-500' : 'border-gray-300'}`} />
+                  <input aria-label="Personen" type="number" step="1" value={peopleCount} onChange={(e) => setPeopleCount(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 ${errors.peopleCount ? 'border-red-500' : 'border-gray-300'}`} />
                 </label>
                 {errors.peopleCount && <p className="mt-1 text-sm text-red-500">{errors.peopleCount}</p>}
               </div>
@@ -116,7 +116,7 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
               {data.event.allow_salad && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Salat
-                    <input aria-label="Salat" type="number" step="1" value={saladCount} onChange={(e) => setSaladCount(e.target.value)} disabled={pending} className={`mt-1 w-full min-h-[44px] rounded-md border px-3 py-2 ${errors.contributions ? 'border-red-500' : 'border-gray-300'}`} />
+                    <input aria-label="Salat" type="number" step="1" value={saladCount} onChange={(e) => setSaladCount(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 ${errors.contributions ? 'border-red-500' : 'border-gray-300'}`} />
                   </label>
                 </div>
               )}
@@ -124,14 +124,14 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
               {data.event.allow_cake && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Kuchen
-                    <input aria-label="Kuchen" type="number" step="1" value={cakeCount} onChange={(e) => setCakeCount(e.target.value)} disabled={pending} className={`mt-1 w-full min-h-[44px] rounded-md border px-3 py-2 ${errors.contributions ? 'border-red-500' : 'border-gray-300'}`} />
+                    <input aria-label="Kuchen" type="number" step="1" value={cakeCount} onChange={(e) => setCakeCount(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 ${errors.contributions ? 'border-red-500' : 'border-gray-300'}`} />
                   </label>
                 </div>
               )}
               {errors.contributions && <p className="text-sm text-red-500">{errors.contributions}</p>}
               
               <label className="block text-sm font-medium text-gray-700">Kommentar
-                <textarea value={comment} onChange={(e) => setComment(e.target.value)} disabled={pending} className="mt-1 w-full min-h-[44px] rounded-md border border-gray-300 px-3 py-2" />
+                <textarea value={comment} onChange={(e) => setComment(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 border-gray-300`} />
               </label>
         </form>
       )}

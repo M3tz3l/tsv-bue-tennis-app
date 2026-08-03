@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buttonVariants, cardShellClass, stackMdClass } from './tokens';
+import { buttonVariants, cardShellClass, fieldControl, stackMdClass } from './tokens';
 
 describe('design tokens', () => {
   it('defines exactly one primary, secondary, and destructive button variant', () => {
@@ -20,5 +20,10 @@ describe('design tokens', () => {
   it('exposes card and stack layout classes', () => {
     expect(cardShellClass).toBe('card-shell');
     expect(stackMdClass).toBe('stack-md');
+  });
+
+  it('exposes a field control with the 44px touch-target contract and no hardcoded border color', () => {
+    expect(fieldControl).toMatch(/min-h-\[44px\]/);
+    expect(fieldControl).not.toMatch(/border-(gray|red)-/);
   });
 });
