@@ -3,8 +3,8 @@
 // classes in components.
 
 export const buttonVariants = {
-  // Primary call-to-action. Cursor Orange (#f54e00) is the single accent —
-  // reserved for primary actions. White text on orange meets >=4.5:1 contrast.
+  // Primary call-to-action. The inOpera red is the single accent — reserved
+  // for primary actions.
   primary:
     'action-control rounded-md bg-[var(--primary)] font-medium text-[var(--on-primary)] hover:bg-[var(--primary-active)] disabled:bg-[var(--muted-soft)]',
   // Secondary/neutral action (cancel, close, edit) — white card pill with a
