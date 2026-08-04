@@ -6,6 +6,109 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EventType {
+    #[serde(rename = "event")]
+    Event,
+    #[serde(rename = "work-duty")]
+    WorkDuty,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum EventStatus {
+    Draft,
+    Published,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct CreateEventRequest {
+    #[serde(rename = "type")]
+    pub event_type: EventType,
+    pub title: String,
+    pub description: Option<String>,
+    pub event_date: String,
+    pub start_time: Option<String>,
+    pub end_time: Option<String>,
+    pub location: Option<String>,
+    pub signup_deadline: Option<String>,
+    pub capacity: Option<i32>,
+    pub allow_salad: bool,
+    pub allow_cake: bool,
+    pub status: EventStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+pub struct UpdateEventRequest {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub event_date: Option<String>,
+    pub start_time: Option<String>,
+    pub end_time: Option<String>,
+    pub location: Option<String>,
+    pub signup_deadline: Option<String>,
+    pub capacity: Option<i32>,
+    #[serde(default)]
+    pub clear_fields: Vec<String>,
+    pub allow_salad: Option<bool>,
+    pub allow_cake: Option<bool>,
+    pub status: Option<EventStatus>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SignupRequest {
+    pub people_count: i32,
+    pub salad_count: i32,
+    pub cake_count: i32,
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct EventSummary {
+    pub id: i64,
+    #[serde(rename = "type")]
+    pub event_type: EventType,
+    pub title: String,
+    pub description: Option<String>,
+    pub event_date: String,
+    pub start_time: Option<String>,
+    pub end_time: Option<String>,
+    pub location: Option<String>,
+    pub signup_deadline: Option<String>,
+    pub capacity: Option<i32>,
+    pub allow_salad: bool,
+    pub allow_cake: bool,
+    pub status: EventStatus,
+    pub signup_people_count: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct EventDetail {
+    pub event: EventSummary,
+    pub own_signup: Option<EventSignup>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct EventSignup {
+    pub id: i64,
+    pub event_id: i64,
+    pub member_id: String,
+    pub member_name: Option<String>,
+    pub people_count: i32,
+    pub salad_count: i32,
+    pub cake_count: i32,
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SignupSummary {
+    pub signups: Vec<EventSignup>,
+    pub total_people: i32,
+    pub total_salad: i32,
+    pub total_cake: i32,
+}
+
 // Request/Response models
 #[derive(Debug, Deserialize, Type)]
 pub struct LoginRequest {

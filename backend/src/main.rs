@@ -17,6 +17,7 @@ use tracing::{debug, error, info};
 use tsv_tennis_backend::config::Config;
 use tsv_tennis_backend::database::Database;
 use tsv_tennis_backend::email::EmailService;
+use tsv_tennis_backend::events::EventRepository;
 use tsv_tennis_backend::token_store::TokenStore;
 
 use tsv_tennis_backend::{routes, state, teable};
@@ -38,6 +39,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize database connection
     let database = Database::new(&config.database_url).await?;
+    let event_repository = EventRepository::new(database.pool().clone()).await?;
 
     let email_service = Arc::new(EmailService::new().expect("Failed to initialize email service"));
     let token_store = TokenStore::new();
@@ -48,7 +50,9 @@ async fn main() -> anyhow::Result<()> {
     info!("  Members table:  {}", config.members_table_id);
     info!("  Work hours tbl: {}", config.work_hours_table_id);
 
-    let http_client = Client::new();
+    let http_client = Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()?;
 
     let teable_config = teable::TeableConfig {
         api_url: config.teable_api_url.clone(),
@@ -120,6 +124,7 @@ async fn main() -> anyhow::Result<()> {
         email_service,
         token_store,
         database,
+        event_repository,
         mail_jobs,
         jwt_secret: config.jwt_secret.clone(),
     };
@@ -190,6 +195,7 @@ async fn main() -> anyhow::Result<()> {
         .nest("/arbeitsstunden", routes::work_hours::routes())
         .merge(routes::mail::member_count_routes())
         .route("/mail/jobs/:job_id", get(routes::mail::get_mail_job_status))
+        .merge(routes::events::read_routes().with_state(state.clone()))
         .layer(GovernorLayer {
             config: read_governor_conf,
         })
@@ -205,6 +211,7 @@ async fn main() -> anyhow::Result<()> {
             "/mail/send",
             axum::routing::post(routes::mail::send_bulk_mail),
         )
+        .merge(routes::events::write_routes().with_state(state.clone()))
         .layer(GovernorLayer {
             config: write_governor_conf,
         })
@@ -341,6 +348,9 @@ mod tests {
         let database = Database::new(":memory:")
             .await
             .expect("Failed to create test database");
+        let event_repository = EventRepository::new(database.pool().clone())
+            .await
+            .expect("Failed to create test event repository");
 
         let teable_config = tsv_tennis_backend::teable::TeableConfig {
             api_url: teable_url.to_string(),
@@ -355,6 +365,7 @@ mod tests {
             email_service,
             token_store,
             database,
+            event_repository,
             mail_jobs: std::sync::Arc::new(tokio::sync::RwLock::new(
                 std::collections::HashMap::new(),
             )),
@@ -396,6 +407,7 @@ mod tests {
             )
             .route("/mail/jobs/:job_id", get(routes::mail::get_mail_job_status))
             .nest("/arbeitsstunden", routes::work_hours::routes())
+            .merge(routes::events::routes())
             .route_layer(middleware::from_fn_with_state(
                 state.clone(),
                 state::auth_middleware,

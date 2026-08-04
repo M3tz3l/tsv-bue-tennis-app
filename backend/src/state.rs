@@ -13,6 +13,7 @@ use tower_governor::GovernorError;
 
 use crate::database::Database;
 use crate::email::EmailService;
+use crate::events::EventRepository;
 use crate::teable::TeableConfig;
 use crate::token_store::TokenStore;
 
@@ -25,6 +26,7 @@ pub struct AppState {
     pub email_service: Arc<EmailService>,
     pub token_store: TokenStore,
     pub database: Database,
+    pub event_repository: EventRepository,
     pub mail_jobs: MailJobStore,
     pub jwt_secret: String,
 }
