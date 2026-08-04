@@ -472,14 +472,15 @@ async fn signup_endpoints_reject_disabled_events_with_conflict() {
 #[serial]
 async fn events_default_to_signups_enabled_when_field_omitted() {
     let (server, _repository) = app().await;
-    let mut request = event_request(EventStatus::Published);
-    request.allow_signups = true;
-    let body = server
+    let request = event_request(EventStatus::Published);
+    let mut body = serde_json::to_value(&request).unwrap();
+    body.as_object_mut().unwrap().remove("allow_signups");
+    let response = server
         .post("/events")
         .authorization(format!("Bearer {}", token("orga-1", Some("orga"))))
-        .json(&request)
+        .json(&body)
         .await;
-    body.assert_status(StatusCode::OK);
-    let event = body.json::<serde_json::Value>();
+    response.assert_status(StatusCode::OK);
+    let event = response.json::<serde_json::Value>();
     assert_eq!(event["allow_signups"], true);
 }
