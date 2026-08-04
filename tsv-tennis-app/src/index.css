@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("/fonts/archivo-latin.woff2") format("woff2");
+}
+
 :root {
   /* Cursor-style design tokens — warm cream canvas, warm ink, single orange voltage */
   --canvas: #f7f7f4;
