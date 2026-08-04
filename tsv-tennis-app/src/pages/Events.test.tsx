@@ -64,11 +64,11 @@ describe('Events', () => {
     expect(screen.queryByText('Entwurf')).not.toBeInTheDocument();
   });
 
-  it('uses the shared card shell and stack rhythm for event cards', () => {
+  it('uses the shared card shell for event cards', () => {
     renderEvents();
 
     expect(screen.getByRole('article', { name: '' })).toHaveClass('card-shell');
-    expect(screen.getByRole('article', { name: '' }).querySelector('.stack-md')).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: '' }).querySelector('dl')).toBeInTheDocument();
   });
 
   it('shows only the current member signup status and opens the modal', async () => {
