@@ -271,6 +271,9 @@ pub async fn list_signups(
         }
         Ok::<_, EventRouteError>(())
     };
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(15), collect_names).await;
+    match tokio::time::timeout(std::time::Duration::from_secs(15), collect_names).await {
+        Ok(Ok(())) | Err(_) => {}
+        Ok(Err(error)) => return Err(error),
+    }
     Ok(Json(summary))
 }
