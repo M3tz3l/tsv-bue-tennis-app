@@ -28,7 +28,8 @@ const EventSignupsModal = ({ eventId, isOpen, onClose }: Props) => {
       {error && <p className="px-6 py-5 text-[var(--error)]">Anmeldungen konnten nicht geladen werden</p>}
       {data && (
         <div className="px-6 py-5">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--hairline)]">
                 <th className={`${th} py-2 pr-3 text-left`}>Name</th>
@@ -62,7 +63,8 @@ const EventSignupsModal = ({ eventId, isOpen, onClose }: Props) => {
                 <td className="pt-3 pl-3" />
               </tr>
             </tfoot>
-          </table>
+            </table>
+          </div>
         </div>
       )}
     </ModalShell>

@@ -21,7 +21,7 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
       <div className="fixed inset-0 flex justify-start">
         <DialogPanel className="club-navigation-motion flex h-full w-72 max-w-[85vw] flex-col border-r border-[var(--hairline)] bg-white">
           <div className="flex items-center justify-between border-b border-[var(--hairline)] px-4 py-3">
-            <DialogTitle className="text-base font-semibold text-[var(--ink)]">Menü</DialogTitle>
+            <DialogTitle className="text-base font-extrabold text-[var(--ink)]">Menü</DialogTitle>
             <button
               type="button"
               aria-label="Schließen"
@@ -39,8 +39,8 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
                 end={end}
                 onClick={onClose}
                 className={({ isActive }) =>
-                  `touch-control flex items-center border-l-2 px-3 text-sm font-semibold uppercase tracking-wide ${
-                    isActive ? 'border-[var(--primary)] bg-[var(--canvas-soft)] text-[var(--primary)]' : 'border-transparent text-[var(--body)] hover:bg-[var(--canvas-soft)] hover:text-[var(--ink)]'
+                  `touch-control flex items-center border-l-2 px-3 text-sm font-medium ${
+                    isActive ? 'border-[var(--primary)] text-[var(--primary-active)]' : 'border-transparent text-[var(--body)] hover:bg-[var(--canvas-soft)] hover:text-[var(--ink)]'
                   } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]`
                 }
               >
@@ -54,7 +54,7 @@ const TopbarMobileMenu = ({ isOpen, onClose, onOpenMailComposer }: TopbarMobileM
                   onClose();
                   onOpenMailComposer();
                 }}
-                className="touch-control flex items-center border-l-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-[var(--body)] hover:bg-[var(--canvas-soft)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                className="touch-control flex items-center border-l-2 border-transparent px-3 text-sm font-medium text-[var(--body)] hover:bg-[var(--canvas-soft)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
               >
                 Rundmail
               </button>

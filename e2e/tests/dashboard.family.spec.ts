@@ -45,9 +45,9 @@ test.describe('Dashboard Family View', () => {
     await loginViaBrowser(page, user.email, getFixtures().password);
 
     // Family heading and progress section
-    await expect(page.locator(`text=Familie - ${currentYear}`)).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(`text=Arbeitsstunden ${currentYear}`)).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('text=Familien-Fortschritt')).toBeVisible();
-    await expect(page.locator('text=Familienmitglieder:')).toBeVisible();
+    await expect(page.locator('text=Familienmitglieder')).toBeVisible();
 
     // Both members listed, current user marked "(Sie)"
     await expect(page.locator(`text=${user.lastName}`)).toBeVisible();
@@ -69,7 +69,7 @@ test.describe('Dashboard Family View', () => {
     await loginViaBrowser(page, user.email, getFixtures().password);
 
     // Empty family: 0 of 16 hours
-    await expect(page.locator('text=Familie - ' + currentYear)).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('text=Arbeitsstunden ' + currentYear)).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('text=0 Std von 16 Std')).toBeVisible();
 
     // Add 2.5h via the modal

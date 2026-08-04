@@ -187,14 +187,6 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
     setIsSendingTest(true);
     try {
-      const formData = new FormData();
-      formData.append('subject', subject.trim());
-      formData.append('message', message.trim());
-      formData.append('include_greeting', String(includeGreeting));
-      for (const file of attachments) {
-        formData.append('attachments', file);
-      }
-
       const response = await BackendService.sendTestMail(
         {
           subject: subject.trim(),
@@ -272,7 +264,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       <ModalShell isOpen={isOpen} onClose={handleClose} title="Mail versenden" disableClose={isBusy} widthClassName="max-w-lg" headerContent={(
             <div className="flex items-center gap-3">
               <div className="bg-[var(--primary)]/10 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-[var(--primary)]" /></div>
-              <DialogTitle className="text-lg font-semibold text-[var(--ink)]">Mail versenden</DialogTitle>
+              <DialogTitle className="text-lg font-extrabold text-[var(--ink)]">Mail versenden</DialogTitle>
             </div>
           )} footer={(
             <button onClick={handleClose} disabled={isBusy} className={buttonVariants.secondary}>
@@ -357,7 +349,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       headerContent={(
         <div className="flex items-center gap-3">
           <div className="bg-[var(--primary)]/10 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-[var(--primary)]" /></div>
-          <DialogTitle className="text-lg font-semibold text-[var(--ink)]">Rundmail versenden</DialogTitle>
+          <DialogTitle className="text-lg font-extrabold text-[var(--ink)]">Rundmail versenden</DialogTitle>
         </div>
       )}
       headerClassName="shrink-0 bg-[var(--primary)]/5"

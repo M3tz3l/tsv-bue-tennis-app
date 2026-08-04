@@ -1,18 +1,16 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useQueryClient } from '@tanstack/react-query';
 import BackendService, { getApiErrorMessage } from '../services/backendService.ts';
 import { PencilIcon, PlusIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
-import type { WorkHourEntry, CreateWorkHourRequest, MemberContribution } from '../types';
-import useDashboard, { DASHBOARD_QUERY_KEY } from '../hooks/useDashboard';
+import type { WorkHourEntry, MemberContribution } from '../types';
+import useDashboard from '../hooks/useDashboard';
+import { useWorkHourSave } from '../hooks/useWorkHourSave';
 import ArbeitsstundenFormModal from '../components/ArbeitsstundenFormModal';
 import DashboardShell from '../components/DashboardShell';
 import WorkHoursOverviewCard from '../components/WorkHoursOverviewCard';
 import {
     getCurrentYear,
-    getMemberEntries,
-    hasDuplicateEntry,
     formatHours,
     sortEntriesByDate,
 } from '../utils/utils';
@@ -20,7 +18,6 @@ import { buttonVariants } from '../styles/tokens';
 
 const Dashboard = () => {
     const { user, token } = useAuth();
-    const queryClient = useQueryClient();
     const [editingRow, setEditingRow] = useState<WorkHourEntry | null>(null);
     const [showAddForm, setShowAddForm] = useState(false);
     const [selectedYear, setSelectedYear] = useState(getCurrentYear());
@@ -28,6 +25,18 @@ const Dashboard = () => {
 
     // Fetch family dashboard data from the backend API
     const { data: dashboardData, isLoading, error } = useDashboard(user?.id, selectedYear, !!user?.id && !!token);
+
+    const { handleSave, userProfile } = useWorkHourSave({
+        userId: user?.id,
+        email: user?.email,
+        year: selectedYear,
+        dashboardData,
+        editingRow,
+        onSuccess: () => {
+            setEditingRow(null);
+            setShowAddForm(false);
+        },
+    });
 
     const handleEdit = async (row: WorkHourEntry) => {
         try {
@@ -45,54 +54,6 @@ const Dashboard = () => {
     };
 
     // Consolidate current user's entries from personal + family data
-    const getMyEntries = (): WorkHourEntry[] => getMemberEntries(dashboardData, user?.id);
-
-    const handleSave = async (formData: Partial<CreateWorkHourRequest> & { [key: string]: unknown }) => {
-        try {
-            const myEntries = getMyEntries();
-
-            // Check for duplicate entry on the same date
-            if (!editingRow) {
-                if (hasDuplicateEntry(myEntries, formData)) {
-                    toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
-                    return;
-                }
-            } else if (editingRow.Datum !== formData.Datum) {
-                if (hasDuplicateEntry(myEntries, formData, editingRow.id)) {
-                    toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
-                    return;
-                }
-            }
-
-            const payload: CreateWorkHourRequest = {
-                Datum: formData.Datum || '',
-                Tätigkeit: String(formData.Tätigkeit ?? ''),
-                Stunden: Number(formData.Stunden) || 0
-            };
-
-            const response = editingRow
-                ? await BackendService.updateArbeitsstunden(String(editingRow.id), payload)
-                : await BackendService.createArbeitsstunden(payload);
-
-            if (response && response.success) {
-                toast.success(editingRow ? 'Eintrag erfolgreich aktualisiert' : 'Eintrag erfolgreich erstellt');
-                if (editingRow) setEditingRow(null);
-                else setShowAddForm(false);
-                void queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(user?.id, selectedYear) });
-            } else {
-                const backendMsg = response.message;
-                toast.error(backendMsg || (editingRow ? 'Fehler beim Aktualisieren' : 'Fehler beim Erstellen'));
-            }
-        } catch (error: unknown) {
-            const msg = getApiErrorMessage(error, 'Ein Fehler ist aufgetreten');
-            if (typeof msg === 'string' && /duplicate|bereits (vorhanden|ein Eintrag)/i.test(msg)) {
-                toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
-            } else {
-                toast.error(msg);
-            }
-        }
-    };
-
     const renderArbeitsstundenTable = () => {
         if (isLoading) {
             return (
@@ -170,7 +131,7 @@ const Dashboard = () => {
             <div className="bg-white rounded-xl overflow-hidden border border-[var(--hairline)]">
                 <div className="px-4 sm:px-6 py-4 border-b border-[var(--hairline)] flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
                     <div>
-                        <h3 className="text-lg font-semibold tracking-tight text-[var(--ink)]">Meine Arbeitsstunden - {selectedYear}</h3>
+                        <h3 className="text-lg font-extrabold tracking-tight text-[var(--ink)]">Meine Arbeitsstunden - {selectedYear}</h3>
                         <p className="text-sm text-[var(--muted)] mt-1">
                             Detaillierte Übersicht aller Einträge
                         </p>
@@ -271,20 +232,6 @@ const Dashboard = () => {
             </div>
         );
     };
-
-    // Prepare user profile for the modal (avoid repeated finds and implicit any)
-    const userProfile = (() => {
-        if (dashboardData?.personal?.name) {
-            const parts = dashboardData.personal.name.split(' ');
-            return { Nachname: parts.slice(1).join(' '), Vorname: parts[0] };
-        }
-        const found = dashboardData?.family?.members?.find((m: { email?: string; name?: string }) => m.email === user?.email);
-        if (found && found.name) {
-            const parts = found.name.split(' ');
-            return { Nachname: parts.slice(1).join(' '), Vorname: parts[0] };
-        }
-        return { Nachname: '', Vorname: '' };
-    })();
 
     return (
         <DashboardShell

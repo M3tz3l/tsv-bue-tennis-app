@@ -6,14 +6,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
   useEvents: vi.fn(),
-  useEvent: vi.fn(),
   modal: vi.fn(),
   formModal: vi.fn(),
   signupsModal: vi.fn(),
 }));
 
 vi.mock('../context/AuthContext', () => ({ useAuth: mocks.useAuth }));
-vi.mock('../hooks/useEvents', () => ({ useEvents: mocks.useEvents, useEvent: mocks.useEvent }));
+vi.mock('../hooks/useEvents', () => ({ useEvents: mocks.useEvents }));
 vi.mock('../components/EventSignupModal', () => ({
   default: (props: { eventId: number; onClose: () => void }) => {
     mocks.modal(props);
@@ -44,12 +43,14 @@ const event = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const renderEvents = (overrides: Record<string, unknown> = {}, detailOverrides: Record<string, unknown> | null = null) => {
-  if (Object.keys(overrides).length > 0) {
-    mocks.useEvents.mockReturnValue({ data: [event(overrides), event({ id: 2, title: 'Vergangen', event_date: '2000-01-01' }), event({ id: 3, title: 'Entwurf', status: 'draft' })], isLoading: false, error: null });
-  }
-  if (detailOverrides) {
-    mocks.useEvent.mockReturnValue({ data: { event: event(overrides), own_signup: null, ...detailOverrides }, isLoading: false, error: null });
+const detail = (eventOverrides: Record<string, unknown> = {}, ownSignup: Record<string, unknown> | null = null) => ({
+  event: event(eventOverrides),
+  own_signup: ownSignup,
+});
+
+const renderEvents = (details: Array<{ event: Record<string, unknown>; own_signup: Record<string, unknown> | null }> | null = null) => {
+  if (details) {
+    mocks.useEvents.mockReturnValue({ data: details, isLoading: false, error: null });
   }
   return render(<MemoryRouter><Events /></MemoryRouter>);
 };
@@ -58,8 +59,7 @@ describe('Events', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.useAuth.mockReturnValue({ user: { id: 'member-1', role: 'member' } });
-    mocks.useEvents.mockReturnValue({ data: [event(), event({ id: 2, title: 'Vergangen', event_date: '2000-01-01' }), event({ id: 3, title: 'Entwurf', status: 'draft' })], isLoading: false, error: null });
-    mocks.useEvent.mockReturnValue({ data: { event: event(), own_signup: { people_count: 2 } }, isLoading: false, error: null });
+    mocks.useEvents.mockReturnValue({ data: [detail({}, { people_count: 2 }), detail({ id: 2, title: 'Vergangen', event_date: '2000-01-01' }), detail({ id: 3, title: 'Entwurf', status: 'draft' })], isLoading: false, error: null });
   });
 
   it('renders only future published events and required metadata', () => {
@@ -81,14 +81,13 @@ describe('Events', () => {
   });
 
   it('shows no signup button for an event with signups disabled', () => {
-    mocks.useEvent.mockReturnValue({ data: { event: event({ allow_signups: false }), own_signup: null }, isLoading: false, error: null });
-    renderEvents({ allow_signups: false });
+    renderEvents([detail({ allow_signups: false })]);
     expect(screen.queryByRole('button', { name: /anmelden|ausgebucht|anmeldeschluss/i })).not.toBeInTheDocument();
   });
 
   it('shows the own signup and a cancel button for a disabled event the member signed up for', async () => {
     const user = userEvent.setup();
-    renderEvents({ allow_signups: false }, { own_signup: { people_count: 2 } });
+    renderEvents([detail({ allow_signups: false }, { people_count: 2 })]);
 
     expect(screen.getByText(/Ihre Anmeldung: 2 Personen/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Stornieren/i }));
@@ -96,7 +95,7 @@ describe('Events', () => {
   });
 
   it('hides signup UI for a disabled event the member did not sign up for', () => {
-    renderEvents({ allow_signups: false }, { own_signup: null });
+    renderEvents([detail({ allow_signups: false }, null)]);
 
     expect(screen.queryByText(/Ihre Anmeldung/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Stornieren/i })).not.toBeInTheDocument();
@@ -116,7 +115,6 @@ describe('Events', () => {
     renderEvents();
 
     expect(screen.getByText(/Ihre Anmeldung: 2 Personen/)).toBeInTheDocument();
-    expect(mocks.useEvent).toHaveBeenCalledWith('member-1', 1, true);
   });
 
   it('opens the event identified by the eventId query parameter', () => {
@@ -134,8 +132,7 @@ describe('Events', () => {
   });
 
   it('keeps full events visible but does not offer an action', () => {
-    mocks.useEvents.mockReturnValue({ data: [event({ capacity: 3, signup_people_count: 3 })], isLoading: false, error: null });
-    mocks.useEvent.mockReturnValue({ data: { event: event({ capacity: 3, signup_people_count: 3 }), own_signup: null }, isLoading: false, error: null });
+    mocks.useEvents.mockReturnValue({ data: [detail({ capacity: 3, signup_people_count: 3 }, null)], isLoading: false, error: null });
     renderEvents();
 
     expect(screen.getByText(/Ausgebucht/)).toBeInTheDocument();
@@ -143,8 +140,7 @@ describe('Events', () => {
   });
 
   it('displays RFC3339 deadlines and keeps a date-only deadline actionable', () => {
-    mocks.useEvents.mockReturnValue({ data: [event({ signup_deadline: '2099-07-01T23:00:00Z' }), event({ id: 5, title: 'Tagesschluss', signup_deadline: '2099-07-12' })], isLoading: false, error: null });
-    mocks.useEvent.mockReturnValue({ data: { event: event(), own_signup: null }, isLoading: false, error: null });
+    mocks.useEvents.mockReturnValue({ data: [detail({ signup_deadline: '2099-07-01T23:00:00Z' }), detail({ id: 5, title: 'Tagesschluss', signup_deadline: '2099-07-12' })], isLoading: false, error: null });
     renderEvents();
 
     expect(screen.getAllByText(/Anmeldung bis/)).toHaveLength(2);
@@ -153,8 +149,7 @@ describe('Events', () => {
 
   it('keeps edit and cancel available for an own signup on a full event', async () => {
     const user = userEvent.setup();
-    mocks.useEvents.mockReturnValue({ data: [event({ capacity: 3, signup_people_count: 3 })], isLoading: false, error: null });
-    mocks.useEvent.mockReturnValue({ data: { event: event({ capacity: 3, signup_people_count: 3 }), own_signup: { people_count: 1 } }, isLoading: false, error: null });
+    mocks.useEvents.mockReturnValue({ data: [detail({ capacity: 3, signup_people_count: 3 }, { people_count: 1 })], isLoading: false, error: null });
     renderEvents();
 
     await user.click(screen.getByRole('button', { name: /Anmeldung bearbeiten/i }));
@@ -174,8 +169,6 @@ describe('Events', () => {
     expect(screen.getAllByRole('button', { name: /Anmeldungen anzeigen/i })).not.toHaveLength(0);
     expect(screen.getByText('Entwurf')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /^Bearbeiten$/i })).toHaveLength(3);
-    expect(mocks.useEvent).toHaveBeenCalledTimes(3);
-    expect(mocks.useEvent).toHaveBeenCalledWith('orga-1', 1, false);
   });
 
   it('uses shared button variants for event actions', () => {
@@ -189,8 +182,7 @@ describe('Events', () => {
   it('lets Orga members sign up while retaining management controls', async () => {
     const user = userEvent.setup();
     mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
-    mocks.useEvents.mockReturnValue({ data: [event()], isLoading: false, error: null });
-    mocks.useEvent.mockReturnValue({ data: { event: event(), own_signup: null }, isLoading: false, error: null });
+    mocks.useEvents.mockReturnValue({ data: [detail({}, null)], isLoading: false, error: null });
     renderEvents();
 
     expect(screen.getByRole('button', { name: /Bearbeiten/i })).toBeInTheDocument();

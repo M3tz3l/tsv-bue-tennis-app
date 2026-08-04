@@ -51,6 +51,13 @@ describe('EventSignupsModal', () => {
     expect(mocks.useEventSignups).toHaveBeenCalledWith('member-1', 4, false);
   });
 
+  it('keeps the signups table scrollable on narrow screens', () => {
+    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
+
+    const table = screen.getByRole('table');
+    expect(table.parentElement).toHaveClass('overflow-x-auto');
+  });
+
   it('uses shared minimum touch and action control classes and accessibility styles', () => {
     render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
 

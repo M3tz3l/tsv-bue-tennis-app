@@ -1,15 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EventSummary } from '../types';
+import type { EventDetail, EventSummary } from '../types';
 
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
-  useEvent: vi.fn(),
 }));
 
 vi.mock('../context/AuthContext', () => ({ useAuth: mocks.useAuth }));
-vi.mock('../hooks/useEvents', () => ({ useEvent: mocks.useEvent }));
 
 import UpcomingEventsList from './UpcomingEventsList';
 
@@ -32,15 +30,19 @@ const event = (overrides: Partial<EventSummary> = {}): EventSummary => ({
   ...overrides,
 });
 
+const detail = (eventOverrides: Partial<EventSummary> = {}, ownSignup: Record<string, unknown> | null = null): EventDetail => ({
+  event: event(eventOverrides),
+  own_signup: ownSignup as EventDetail['own_signup'],
+});
+
 describe('UpcomingEventsList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.useAuth.mockReturnValue({ user: { id: 'member-1' } });
-    mocks.useEvent.mockReturnValue({ data: { own_signup: null } });
   });
 
   it('uses the shared card shell and stack rhythm for upcoming events', () => {
-    const { container } = render(<MemoryRouter><UpcomingEventsList events={[event()]} /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><UpcomingEventsList events={[detail()]} /></MemoryRouter>);
 
     expect(container.querySelector('section')).toHaveClass('card-shell');
     expect(container.querySelector('.stack-md')).toBeInTheDocument();
@@ -50,12 +52,12 @@ describe('UpcomingEventsList', () => {
     render(
       <MemoryRouter>
         <UpcomingEventsList events={[
-          event({ id: 1, title: 'Später', event_date: '2099-09-01' }),
-          event({ id: 2, title: 'Früher', event_date: '2099-08-10' }),
-          event({ id: 3, title: 'Entwurf', status: 'draft' }),
-          event({ id: 4, title: 'Vergangen', event_date: '2000-01-01' }),
-          event({ id: 5, title: 'Dritter', event_date: '2099-08-20', start_time: '08:00' }),
-          event({ id: 6, title: 'Vierter', event_date: '2099-08-20', start_time: '09:00' }),
+          detail({ id: 1, title: 'Später', event_date: '2099-09-01' }),
+          detail({ id: 2, title: 'Früher', event_date: '2099-08-10' }),
+          detail({ id: 3, title: 'Entwurf', status: 'draft' }),
+          detail({ id: 4, title: 'Vergangen', event_date: '2000-01-01' }),
+          detail({ id: 5, title: 'Dritter', event_date: '2099-08-20', start_time: '08:00' }),
+          detail({ id: 6, title: 'Vierter', event_date: '2099-08-20', start_time: '09:00' }),
         ]} />
       </MemoryRouter>,
     );
@@ -72,8 +74,8 @@ describe('UpcomingEventsList', () => {
 
   it('orders same-day events by start time', () => {
     render(<MemoryRouter><UpcomingEventsList limit={2} events={[
-      event({ id: 9, title: 'Später Termin', event_date: '2099-08-20', start_time: '09:00' }),
-      event({ id: 8, title: 'Früher Termin', event_date: '2099-08-20', start_time: '08:00' }),
+      detail({ id: 9, title: 'Später Termin', event_date: '2099-08-20', start_time: '09:00' }),
+      detail({ id: 8, title: 'Früher Termin', event_date: '2099-08-20', start_time: '08:00' }),
     ]} /></MemoryRouter>);
 
     const rows = screen.getAllByRole('article');
@@ -82,33 +84,23 @@ describe('UpcomingEventsList', () => {
   });
 
   it('shows only the current member\'s signup state', () => {
-    mocks.useEvent.mockImplementation((_userId: string | undefined, eventId: number | undefined) => ({
-      data: eventId === 1 ? { own_signup: { people_count: 2 } } : { own_signup: null },
-    }));
-
-    render(<MemoryRouter><UpcomingEventsList events={[event(), event({ id: 2, title: 'Training' })]} /></MemoryRouter>);
+    render(<MemoryRouter><UpcomingEventsList events={[
+      detail({}, { people_count: 2 }),
+      detail({ id: 2, title: 'Training' }, null),
+    ]} /></MemoryRouter>);
 
     expect(screen.getByText('Ihre Anmeldung: 2 Personen')).toBeInTheDocument();
-    expect(mocks.useEvent).toHaveBeenCalledTimes(2);
     expect(screen.queryByText(/andere Anmeldungen/i)).not.toBeInTheDocument();
   });
 
-  it('uses one detail query per displayed event for own signup status', () => {
-    const events = [event({ id: 1 }), event({ id: 2 }), event({ id: 3 }), event({ id: 4 })];
-    render(<MemoryRouter><UpcomingEventsList events={events} /></MemoryRouter>);
-
-    expect(mocks.useEvent).toHaveBeenCalledTimes(3);
-    expect(mocks.useEvent).toHaveBeenNthCalledWith(1, 'member-1', expect.any(Number));
-  });
-
   it('makes event actions touch-sized and visibly focusable', () => {
-    render(<MemoryRouter><UpcomingEventsList events={[event()]} /></MemoryRouter>);
+    render(<MemoryRouter><UpcomingEventsList events={[detail()]} /></MemoryRouter>);
 
     expect(screen.getByRole('link', { name: 'Sommerfest' })).toHaveClass('min-h-11', 'focus-visible:outline-2', 'focus-visible:ring-2');
   });
 
   it('renders an informational event title as plain text', () => {
-    render(<MemoryRouter><UpcomingEventsList events={[{ ...event(), title: 'Training', allow_signups: false }]} /></MemoryRouter>);
+    render(<MemoryRouter><UpcomingEventsList events={[detail({ title: 'Training', allow_signups: false })]} /></MemoryRouter>);
     const link = screen.queryByRole('link', { name: /training/i });
     expect(link).not.toBeInTheDocument();
     expect(screen.getByText('Training')).toBeInTheDocument();
@@ -133,6 +125,7 @@ describe('UpcomingEventsList', () => {
     expect(screen.queryByText(/Veranstaltungen werden geladen/i)).not.toBeInTheDocument();
 
     rerender(<MemoryRouter><UpcomingEventsList events={undefined} error={new Error('failed')} /></MemoryRouter>);
-    expect(screen.getByText('failed')).toBeInTheDocument();
+    expect(screen.queryByText('failed')).not.toBeInTheDocument();
+    expect(screen.queryByRole('article')).not.toBeInTheDocument();
   });
 });

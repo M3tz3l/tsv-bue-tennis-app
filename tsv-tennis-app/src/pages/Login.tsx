@@ -8,6 +8,7 @@ import { toast } from "react-toastify";
 import TSVLogo from "../assets/TSV_Tennis.svg";
 import { EyeIcon, EyeSlashIcon, InformationCircleIcon, KeyIcon, XMarkIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import type { UserResponse } from "@/types";
+import { buttonVariants, fieldControl } from "../styles/tokens";
 
 const Login = () => {
     const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -100,7 +101,7 @@ const Login = () => {
                                     className="h-20 w-auto "
                                 />
                             </div>
-                            <h2 className="mt-2 text-center text-2xl font-semibold tracking-tight text-[var(--ink)]">
+                            <h2 className="mt-2 text-center text-2xl font-extrabold tracking-tight text-[var(--ink)]">
                                 Willkommen
                             </h2>
                             <p className="mt-2 text-center text-sm text-[var(--muted)]">
@@ -108,17 +109,17 @@ const Login = () => {
                             </p>
 
                             {showBanner && (
-                                <div className="mt-6 mb-4 p-4 bg-amber-50 border-l-4 border-amber-400 rounded-r-md">
+                                <div className="mt-6 mb-4 p-4 border-l-4 border-[var(--primary)] bg-[var(--canvas-soft)]">
                                     <div className="flex">
-                                        <ExclamationTriangleIcon className="h-5 w-5 text-amber-400 mt-0.5" />
+                                        <ExclamationTriangleIcon className="h-5 w-5 text-[var(--primary)] mt-0.5" />
                                         <div className="ml-3 flex-1">
-                                            <p className="text-sm text-amber-800">
+                                            <p className="text-sm text-[var(--body)]">
                                                 <strong>Erstanmeldung:</strong> Nutzen Sie "Passwort zurücksetzen" mit Ihrer registrierten E-Mail-Adresse.
                                             </p>
                                         </div>
                                         <button
                                             onClick={dismissBanner}
-                                            className="ml-3 text-amber-400 hover:text-amber-600 focus:outline-none"
+                                            className="ml-3 text-[var(--muted-soft)] hover:text-[var(--ink)] focus:outline-none"
                                             aria-label="Banner schließen"
                                         >
                                             <XMarkIcon className="h-4 w-4" />
@@ -140,7 +141,7 @@ const Login = () => {
                                             autoComplete="email"
                                             required
                                             autoFocus
-                                            className="w-full px-4 py-3 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)] bg-white transition-all duration-200 placeholder:text-[var(--muted-soft)]"
+                                            className={`${fieldControl} border-[var(--hairline-strong)]`}
                                             placeholder="Ihre E-Mail-Adresse eingeben"
                                         />
                                     </div>
@@ -180,7 +181,7 @@ const Login = () => {
                                                 type={showPassword ? 'text' : 'password'}
                                                 autoComplete="current-password"
                                                 required
-                                                className="w-full px-4 py-3 pr-12 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)] bg-white transition-all duration-200 placeholder:text-[var(--muted-soft)]"
+                                                className={`${fieldControl} border-[var(--hairline-strong)] pr-12`}
                                                 placeholder="Ihr Passwort eingeben"
                                             />
                                             <button
@@ -203,11 +204,11 @@ const Login = () => {
                                     <button
                                         type="submit"
                                         disabled={isLoading}
-                                        className="w-full bg-[var(--primary)] hover:bg-[var(--primary-active)] disabled:bg-[var(--muted-soft)] text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
+                                        className={`${buttonVariants.primary} w-full py-3`}
                                     >
                                         {isLoading ? (
                                             <div className="flex items-center justify-center">
-                                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[var(--on-primary)] mr-2"></div>
                                                 Anmelden...
                                             </div>
                                         ) : (
@@ -219,7 +220,7 @@ const Login = () => {
                                 <div className="text-center">
                                     <Link
                                         to="/forgotPassword"
-                                        className="inline-flex items-center text-base font-semibold text-[var(--primary)] hover:text-[var(--primary-active)] transition-colors duration-200 hover:underline"
+                                        className="inline-flex items-center text-base font-semibold text-[var(--primary-active)] hover:text-[var(--primary)] transition-colors duration-200 hover:underline"
                                     >
                                         <KeyIcon className="h-5 w-5 mr-2" />
                                         Passwort zurücksetzen

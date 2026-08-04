@@ -1,16 +1,17 @@
-import { Link } from 'react-router-dom';
+import { PlusIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import type { DashboardResponse, MemberContribution } from '../types';
 import { formatHours, getProgressPercentage } from '../utils/utils';
-import { cardShellClass } from '../styles/tokens';
+import { cardShellClass, buttonVariants } from '../styles/tokens';
 
 type WorkHoursOverviewCardProps = {
     data: DashboardResponse;
     selectedYear: number;
     variant?: 'overview' | 'detail';
+    onAdd?: () => void;
 };
 
-const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview' }: WorkHoursOverviewCardProps) => {
+const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview', onAdd }: WorkHoursOverviewCardProps) => {
     const { user } = useAuth();
     const hasFamilyView = !!data.family && data.family.members.length > 1;
 
@@ -18,13 +19,27 @@ const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview' }: Wor
 
     const showChrome = variant === 'overview';
 
-    const detailsLink = showChrome && (
-        <Link
-            className="text-sm font-medium text-[var(--primary)] underline decoration-[var(--primary)]/40 underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
-            to="/dashboard/arbeitsstunden"
+    const addButton = showChrome && onAdd && (
+        <button
+            type="button"
+            onClick={onAdd}
+            aria-label="Arbeitsstunden eintragen"
+            className={`${buttonVariants.primary} inline-flex items-center justify-center`}
         >
-            Details ansehen
-        </Link>
+            <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
+            Eintragen
+        </button>
+    );
+
+    const title = hasFamilyView && data.family
+        ? `Arbeitsstunden ${selectedYear}`
+        : `${data.personal?.name || 'Ihre Arbeitsstunden'} - ${selectedYear}`;
+
+    const header = showChrome && (
+        <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-lg font-extrabold tracking-tight text-[var(--ink)]">{title}</h2>
+            {addButton}
+        </div>
     );
 
     const renderProgress = (percentage: number, label: string) => {
@@ -51,12 +66,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview' }: Wor
         <section className={`${cardShellClass} mb-6 sm:mb-8`}>
             {hasFamilyView && data.family ? (
                 <>
-                    {showChrome && (
-                        <div className="flex items-baseline justify-between gap-2 mb-3">
-                            <h2 className="text-lg font-semibold tracking-tight text-[var(--ink)]">Arbeitsstunden {selectedYear}</h2>
-                            {detailsLink}
-                        </div>
-                    )}
+                    {header}
                     <div className="flex items-center justify-between gap-2 text-sm text-[var(--body)] mb-1">
                         <span>Familien-Fortschritt</span>
                         <span className="font-semibold text-[var(--ink)]">{formatHours(data.family.completed)} Std von {formatHours(data.family.required)} Std</span>
@@ -71,7 +81,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview' }: Wor
                                 return (
                                     <li key={member.id} className="flex items-center justify-between gap-3 py-2">
                                         <div className="min-w-0 flex flex-col">
-                                            <span className={`truncate font-medium ${isCurrentUser ? 'text-[var(--ink)]' : 'text-[var(--ink)]'}`}>
+                                            <span className={`truncate font-medium ${isCurrentUser ? 'text-[var(--ink)]' : 'text-[var(--body)]'}`}>
                                                 {member.name} {isCurrentUser ? '(Sie)' : ''}
                                             </span>
                                             {member.exemption_reason && (
@@ -96,12 +106,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview' }: Wor
                 </>
             ) : data.personal ? (
                 <>
-                    {showChrome && (
-                        <div className="flex items-baseline justify-between gap-2 mb-3">
-                            <h2 className="text-lg font-semibold tracking-tight text-[var(--ink)]">{data.personal.name || 'Ihre Arbeitsstunden'} - {selectedYear}</h2>
-                            {detailsLink}
-                        </div>
-                    )}
+                    {header}
                     {data.personal.required === 0 ? (
                         <div className="p-4 border border-[var(--hairline)] rounded-lg">
                             <div className="flex items-center justify-between">

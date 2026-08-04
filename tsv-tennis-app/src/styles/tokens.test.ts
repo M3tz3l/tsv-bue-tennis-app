@@ -6,7 +6,7 @@ describe('design tokens', () => {
     expect(Object.keys(buttonVariants).sort()).toEqual(['destructive', 'primary', 'secondary']);
   });
 
-  it('uses the single Cursor Orange accent (never emerald/green) for the primary action', () => {
+  it('uses the single red accent (never emerald/green) for the primary action', () => {
     expect(buttonVariants.primary).toMatch(/var\(--primary\)/);
     expect(buttonVariants.primary).not.toMatch(/emerald|green/);
   });

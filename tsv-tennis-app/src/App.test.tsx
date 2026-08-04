@@ -56,4 +56,22 @@ describe('dashboard routes', () => {
     expect(await screen.findByText('Login page')).toBeInTheDocument();
     await waitFor(() => expect(window.location.pathname).toBe('/login'));
   });
+
+  it('redirects an unknown path to the dashboard for authenticated users', async () => {
+    window.history.pushState({}, '', '/does-not-exist');
+
+    render(<App />);
+
+    expect(await screen.findByText('Dashboard overview page')).toBeInTheDocument();
+  });
+
+  it('redirects an unknown path to login for unauthenticated users', async () => {
+    mocks.useAuth.mockReturnValue({ user: null, loading: false });
+    window.history.pushState({}, '', '/does-not-exist');
+
+    render(<App />);
+
+    expect(await screen.findByText('Login page')).toBeInTheDocument();
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
+  });
 });

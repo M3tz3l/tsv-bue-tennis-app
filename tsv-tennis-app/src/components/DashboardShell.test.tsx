@@ -61,7 +61,7 @@ describe('DashboardShell', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByTestId('dashboard-shell-content')).toHaveClass('pt-16');
+    expect(screen.getByTestId('dashboard-shell-content')).toHaveClass('pt-12');
   });
 
   it('passes controlled MailComposer state through and exposes its close callback', () => {

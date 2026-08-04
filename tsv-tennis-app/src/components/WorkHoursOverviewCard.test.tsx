@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { DashboardResponse } from '../types';
@@ -65,10 +66,9 @@ describe('WorkHoursOverviewCard', () => {
         expect(screen.getByRole('progressbar', { name: 'Familien-Fortschritt: 66% abgeschlossen' })).toHaveAttribute('aria-valuenow', '65.625');
     expect(screen.getByText('Anna Mitglied (Sie)')).toBeInTheDocument();
         expect(screen.getByText('6.5 / 8 Std')).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'Details ansehen' })).toHaveAttribute('href', '/dashboard/arbeitsstunden');
   });
 
-    it('hides the heading and details link in the detail variant', () => {
+    it('hides the heading in the detail variant', () => {
         render(
             <MemoryRouter>
                 <WorkHoursOverviewCard data={dashboard({ family: {
@@ -83,8 +83,67 @@ describe('WorkHoursOverviewCard', () => {
             </MemoryRouter>,
         );
 
-        expect(screen.queryByRole('link', { name: 'Details ansehen' })).not.toBeInTheDocument();
         expect(screen.queryByRole('heading', { name: /Arbeitsstunden 2026/ })).not.toBeInTheDocument();
+    });
+
+    it('renders a red add button in the overview variant that opens the add modal', async () => {
+        const user = userEvent.setup();
+        const onAdd = vi.fn();
+        render(
+            <MemoryRouter>
+                <WorkHoursOverviewCard
+                    data={dashboard({ family: {
+                        name: 'Familie Mitglied',
+                        members: [
+                            { id: 'member-1', name: 'Anna Mitglied', email: 'anna@example.com' },
+                            { id: 'member-2', name: 'Bernd Mitglied', email: 'bernd@example.com' },
+                        ],
+                        required: 8, completed: 4, remaining: 4, percentage: 50,
+                        memberContributions: [],
+                    } })}
+                    selectedYear={2026}
+                    onAdd={onAdd}
+                />
+            </MemoryRouter>,
+        );
+
+        const addButton = screen.getByRole('button', { name: /Arbeitsstunden eintragen/ });
+        expect(addButton).toBeInTheDocument();
+        await user.click(addButton);
+        expect(onAdd).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides the add button when no onAdd handler is provided', () => {
+        render(
+            <MemoryRouter>
+                <WorkHoursOverviewCard data={dashboard({ personal: {
+                    name: 'Anna Mitglied', hours: 4, required: 8, entries: [], exemption_reason: null,
+                } })} selectedYear={2026} />
+            </MemoryRouter>,
+        );
+
+        expect(screen.queryByRole('button', { name: /Arbeitsstunden eintragen/ })).not.toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Anna Mitglied - 2026' })).toBeInTheDocument();
+    });
+
+    it('emphasizes the current family member over other members', () => {
+        renderCard(dashboard({
+            family: {
+                name: 'Familie Mitglied',
+                members: [
+                    { id: 'member-1', name: 'Anna Mitglied', email: 'anna@example.com' },
+                    { id: 'member-2', name: 'Bernd Mitglied', email: 'bernd@example.com' },
+                ],
+                required: 8, completed: 4, remaining: 4, percentage: 50,
+                memberContributions: [
+                    { id: 'member-1', name: 'Anna Mitglied', hours: 4, required: 8, entries: [], exemption_reason: null },
+                    { id: 'member-2', name: 'Bernd Mitglied', hours: 4, required: 8, entries: [], exemption_reason: null },
+                ],
+            },
+        }));
+
+        expect(screen.getByText('Anna Mitglied (Sie)')).toHaveClass('text-[var(--ink)]');
+        expect(screen.getByText('Bernd Mitglied')).toHaveClass('text-[var(--body)]');
     });
 
     it('identifies the current family member by ID and uses one exemption color', () => {

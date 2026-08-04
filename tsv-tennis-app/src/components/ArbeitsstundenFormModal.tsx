@@ -145,7 +145,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
             footerActions={{
                 destructive: initialData && <button type="button" onClick={() => setShowDeleteDialog(true)} className={`${buttonVariants.destructive} ${isDeleting ? 'opacity-60 cursor-not-allowed' : ''}`} disabled={isDeleting || isSubmitting}>Löschen</button>,
                 secondary: <button type="button" onClick={onClose} className={buttonVariants.secondary} disabled={isSubmitting || isDeleting}>Abbrechen</button>,
-                primary: <button type="submit" form="work-hours-form" className={`${buttonVariants.primary} ${isSubmitting ? 'cursor-not-allowed' : ''}`} disabled={isSubmitting || isDeleting} style={isSubmitting ? { pointerEvents: 'none' } : {}}>{isSubmitting ? 'Speichern...' : (initialData ? 'Aktualisieren' : 'Erstellen')}</button>,
+                primary: <button type="submit" form="work-hours-form" className={`${buttonVariants.primary} ${isSubmitting ? 'cursor-not-allowed' : ''}`} disabled={isSubmitting || isDeleting}>{isSubmitting ? 'Speichern...' : (initialData ? 'Aktualisieren' : 'Erstellen')}</button>,
             }}
         >
 

@@ -59,7 +59,7 @@ const ModalShell = ({
           className={`w-full ${widthClassName} rounded-xl border border-[var(--hairline)] bg-white ${panelClassName}`}
         >
           <div className={`flex items-center justify-between border-b border-[var(--hairline)] px-6 py-4 ${headerClassName}`}>
-            {headerContent ?? <DialogTitle className="text-lg font-semibold tracking-tight text-[var(--ink)]">{title}</DialogTitle>}
+            {headerContent ?? <DialogTitle className="text-lg font-extrabold tracking-tight text-[var(--ink)]">{title}</DialogTitle>}
             <button
               type="button"
               aria-label="Schließen"

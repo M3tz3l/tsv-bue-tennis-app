@@ -358,9 +358,9 @@ class BackendService {
     }
   }
 
-  async getEvents(): Promise<EventSummary[] | ApiError> {
+  async getEvents(): Promise<EventDetail[] | ApiError> {
     try {
-      const response = await this.api.get<EventSummary[]>('/events');
+      const response = await this.api.get<EventDetail[]>('/events');
       return response.data;
     } catch (error: unknown) {
       logApiError('Error fetching events:', error);

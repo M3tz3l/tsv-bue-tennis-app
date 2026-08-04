@@ -76,6 +76,7 @@ const App = () => {
                                     } />
                                 <Route path="/impressum" element={<Impressum />} />
                                 <Route path="/datenschutz" element={<Datenschutz />} />
+                                <Route path="*" element={<HomeRedirect />} />
                             </Routes>
                         </div>
                         <Footer />

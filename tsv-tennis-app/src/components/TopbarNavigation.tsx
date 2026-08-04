@@ -20,9 +20,9 @@ const TopbarNavigation = ({ onOpenMailComposer }: TopbarNavigationProps) => {
     <>
       <nav
         aria-label="Clubnavigation"
-        className="club-navigation-motion fixed inset-x-0 top-0 z-40 border-b border-[var(--hairline)] bg-white"
+        className="club-navigation-motion fixed inset-x-0 top-0 z-40 border-b-2 border-[var(--hairline-strong)] bg-[var(--canvas)]"
       >
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex h-12 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
@@ -33,18 +33,18 @@ const TopbarNavigation = ({ onOpenMailComposer }: TopbarNavigationProps) => {
             >
               <Bars3Icon className="h-6 w-6" aria-hidden="true" />
             </button>
-            <img src={TSV_Logo} alt="TSV BÜ Tennis Logo" className="h-10 w-auto" />
+            <img src={TSV_Logo} alt="TSV BÜ Tennis Logo" className="h-9 w-auto" />
           </div>
 
-          <div className="hidden items-stretch gap-1 self-stretch lg:flex">
+          <div className="hidden items-center gap-1 lg:flex">
             {routes.map(({ label, to, end }) => (
               <NavLink
                 key={to}
                 to={to}
                 end={end}
                 className={({ isActive }) =>
-                  `touch-control inline-flex items-center border-b-2 px-3 text-sm font-semibold uppercase tracking-wide ${
-                    isActive ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--ink)]'
+                  `touch-control inline-flex items-center px-3 text-sm font-medium ${
+                    isActive ? 'text-[var(--primary-active)]' : 'text-[var(--muted)] hover:text-[var(--ink)]'
                   } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]`
                 }
               >
@@ -55,7 +55,7 @@ const TopbarNavigation = ({ onOpenMailComposer }: TopbarNavigationProps) => {
               <button
                 type="button"
                 onClick={onOpenMailComposer}
-                className="touch-control inline-flex items-center border-b-2 border-transparent px-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                className="touch-control inline-flex items-center px-3 text-sm font-medium text-[var(--muted)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
               >
                 Rundmail
               </button>
