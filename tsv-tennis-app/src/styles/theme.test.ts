@@ -39,4 +39,17 @@ describe('modernist foundation', () => {
     expect(styles).toMatch(/--radius-md:\s*0px/);
     expect(styles).toMatch(/\.card-shell\s*\{[^}]*border-radius:\s*0/);
   });
+
+  it('sets Archivo as the body font and a bold modernist heading style', () => {
+    const styles = css();
+    expect(styles).toMatch(/body\s*\{[^}]*font-family:\s*"Archivo"/);
+    expect(styles).toMatch(/font-weight:\s*800/);
+    expect(styles).toMatch(/letter-spacing:\s*-0\.015em/);
+  });
+
+  it('provides a 2px divider utility', () => {
+    const styles = css();
+    expect(styles).toMatch(/\.hr\s*\{[^}]*border:\s*0/);
+    expect(styles).toMatch(/\.hr\s*\{[^}]*height:\s*2px/);
+  });
 });

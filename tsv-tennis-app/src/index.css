@@ -40,11 +40,27 @@ body {
   overflow-x: hidden;
   background-color: var(--canvas);
   color: var(--ink);
-  font-family: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto,
+  font-family: "Archivo", system-ui, -apple-system, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Archivo", system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.12;
+  margin: 0 0 0.5rem;
+}
+
+.hr {
+  height: 2px;
+  border: 0;
+  margin: 1rem 0;
+  background: var(--hairline-strong);
 }
 
 .touch-control {
