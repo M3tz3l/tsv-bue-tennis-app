@@ -126,10 +126,7 @@ async fn regular_members_only_see_published_events_and_own_signup() {
 }
 
 #[tokio::test]
-<<<<<<< HEAD
 #[serial]
-=======
->>>>>>> 51c04a2 (fix: address Orga event review findings)
 async fn orga_list_includes_drafts_and_past_events() {
     let (server, repository) = app().await;
     let mut draft = event_request(EventStatus::Draft);
@@ -147,7 +144,6 @@ async fn orga_list_includes_drafts_and_past_events() {
 }
 
 #[tokio::test]
-<<<<<<< HEAD
 #[serial]
 async fn signup_listing_preserves_rows_when_a_member_lookup_fails() {
     let mut teable = Server::new_async().await;
@@ -201,8 +197,6 @@ async fn signup_listing_preserves_rows_when_a_member_lookup_fails() {
 
 #[tokio::test]
 #[serial]
-=======
->>>>>>> 51c04a2 (fix: address Orga event review findings)
 async fn regular_members_cannot_fetch_draft_details_but_orga_can() {
     let (server, repository) = app().await;
     let draft = repository

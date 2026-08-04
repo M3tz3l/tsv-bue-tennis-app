@@ -145,7 +145,6 @@ impl EventRepository {
     }
 
     pub async fn list_published_future(&self, _member_id: &str) -> EventResult<Vec<EventSummary>> {
-<<<<<<< HEAD
         let rows = sqlx::query(
             "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE status='published' AND event_date >= date('now') ORDER BY event_date,start_time",
         )
@@ -160,19 +159,6 @@ impl EventRepository {
         )
         .fetch_all(&self.pool)
         .await?;
-=======
-        self.list_events("WHERE status='published' AND event_date >= date('now')")
-            .await
-    }
-
-    pub async fn list_all_events(&self) -> EventResult<Vec<EventSummary>> {
-        self.list_events("").await
-    }
-
-    async fn list_events(&self, filter: &str) -> EventResult<Vec<EventSummary>> {
-        let query = format!("SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events {filter} ORDER BY event_date,start_time");
-        let rows = sqlx::query(&query).fetch_all(&self.pool).await?;
->>>>>>> 51c04a2 (fix: address Orga event review findings)
         Ok(rows.iter().map(summary).collect())
     }
 

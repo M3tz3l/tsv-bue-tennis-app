@@ -443,7 +443,6 @@ async fn event_validation_rejects_malformed_times_and_non_positive_capacity() {
 }
 
 #[tokio::test]
-<<<<<<< HEAD
 async fn signup_deadline_must_not_follow_event_date_on_create_or_update() {
     let repository = repository().await;
     let mut request = event_request();
@@ -472,8 +471,6 @@ async fn signup_deadline_must_not_follow_event_date_on_create_or_update() {
 }
 
 #[tokio::test]
-=======
->>>>>>> 51c04a2 (fix: address Orga event review findings)
 async fn orga_event_listing_includes_drafts_and_past_events() {
     let repository = repository().await;
     let mut draft = event_request();
