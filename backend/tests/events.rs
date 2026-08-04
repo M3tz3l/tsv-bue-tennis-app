@@ -183,6 +183,107 @@ async fn signups_are_rejected_when_disabled_but_deletion_is_allowed() {
 }
 
 #[tokio::test]
+async fn toggling_allow_signups_off_keeps_existing_signups_and_blocks_new_ones() {
+    let repository = repository().await;
+    let event = repository
+        .create_event("orga-1", event_request())
+        .await
+        .unwrap();
+    repository
+        .create_signup(
+            event.id,
+            "member-1",
+            SignupRequest {
+                people_count: 1,
+                salad_count: 0,
+                cake_count: 0,
+                comment: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    repository
+        .update_event(
+            event.id,
+            UpdateEventRequest {
+                allow_signups: Some(false),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    let error = repository
+        .create_signup(
+            event.id,
+            "member-2",
+            SignupRequest {
+                people_count: 1,
+                salad_count: 0,
+                cake_count: 0,
+                comment: None,
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, EventError::Conflict(_)));
+
+    let detail = repository.get_event(event.id, "member-1").await.unwrap();
+    assert_eq!(detail.own_signup.as_ref().map(|s| s.people_count), Some(1));
+
+    assert!(repository.delete_signup(event.id, "member-1").await.is_ok());
+}
+
+#[tokio::test]
+async fn reenabling_allow_signups_accepts_signups_again() {
+    let repository = repository().await;
+    let mut request = event_request();
+    request.allow_signups = false;
+    let event = repository.create_event("orga-1", request).await.unwrap();
+
+    let error = repository
+        .create_signup(
+            event.id,
+            "member-1",
+            SignupRequest {
+                people_count: 1,
+                salad_count: 0,
+                cake_count: 0,
+                comment: None,
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, EventError::Conflict(_)));
+
+    repository
+        .update_event(
+            event.id,
+            UpdateEventRequest {
+                allow_signups: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(repository
+        .create_signup(
+            event.id,
+            "member-1",
+            SignupRequest {
+                people_count: 1,
+                salad_count: 0,
+                cake_count: 0,
+                comment: None,
+            },
+        )
+        .await
+        .is_ok());
+}
+
+#[tokio::test]
 async fn events_allow_signups_by_default() {
     let repository = repository().await;
     let event = repository
