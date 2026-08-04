@@ -25,7 +25,7 @@ import EventFormModal from './EventFormModal';
 const event = {
   id: 4, type: 'event' as const, title: 'Sommerfest', description: 'Abend', event_date: '2099-07-12',
   start_time: null, end_time: '22:00', location: 'Clubheim', signup_deadline: null, capacity: null,
-  allow_salad: true, allow_cake: false, status: 'draft' as const, signup_people_count: 0,
+  allow_salad: true, allow_cake: false, allow_signups: true, status: 'draft' as const, signup_people_count: 0,
 };
 
 describe('EventFormModal', () => {
@@ -58,7 +58,7 @@ describe('EventFormModal', () => {
     expect(mocks.create).toHaveBeenCalledWith({
       type: 'event', title: 'Sommerfest', description: 'Abend', event_date: '2099-07-12',
       start_time: null, end_time: '22:00', location: 'Clubheim', signup_deadline: null,
-      capacity: null, allow_salad: true, allow_cake: false, status: 'draft',
+      capacity: null, allow_salad: true, allow_cake: false, allow_signups: true, status: 'draft',
     });
   });
 

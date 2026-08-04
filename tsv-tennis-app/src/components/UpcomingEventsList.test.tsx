@@ -26,6 +26,7 @@ const event = (overrides: Partial<EventSummary> = {}): EventSummary => ({
   capacity: null,
   allow_salad: false,
   allow_cake: false,
+  allow_signups: true,
   status: 'published',
   signup_people_count: 0,
   ...overrides,

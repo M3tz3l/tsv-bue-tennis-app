@@ -270,7 +270,7 @@ describe('BackendService', () => {
     const updatePayload = {
       title: 'Neues Sommerfest', description: null, event_date: null, start_time: null,
       end_time: null, location: null, signup_deadline: null, capacity: null,
-      clear_fields: [], allow_salad: null, allow_cake: null, status: null,
+      clear_fields: [], allow_salad: null, allow_cake: null, allow_signups: null, status: null,
     };
     const signupPayload = {
       people_count: 2,

@@ -11,7 +11,7 @@ import ModalShell from './ModalShell';
 type Props = { isOpen: boolean; onClose: () => void; initialData?: EventSummary | null };
 type FormState = Omit<CreateEventRequest, 'type'> & { type: EventType };
 
-const emptyForm: FormState = { type: 'event', title: '', description: null, event_date: '', start_time: null, end_time: null, location: null, signup_deadline: null, capacity: null, allow_salad: false, allow_cake: false, status: 'draft' };
+const emptyForm: FormState = { type: 'event', title: '', description: null, event_date: '', start_time: null, end_time: null, location: null, signup_deadline: null, capacity: null, allow_salad: false, allow_cake: false, allow_signups: true, status: 'draft' };
 
 const EventFormModal = ({ isOpen, onClose, initialData = null }: Props) => {
   const { user } = useAuth();
@@ -25,7 +25,7 @@ const EventFormModal = ({ isOpen, onClose, initialData = null }: Props) => {
 
   useEffect(() => {
     if (!initialData) { setForm(emptyForm); return; }
-    setForm({ type: initialData.type, title: initialData.title, description: initialData.description, event_date: initialData.event_date, start_time: initialData.start_time, end_time: initialData.end_time, location: initialData.location, signup_deadline: initialData.signup_deadline, capacity: initialData.capacity, allow_salad: initialData.allow_salad, allow_cake: initialData.allow_cake, status: initialData.status });
+    setForm({ type: initialData.type, title: initialData.title, description: initialData.description, event_date: initialData.event_date, start_time: initialData.start_time, end_time: initialData.end_time, location: initialData.location, signup_deadline: initialData.signup_deadline, capacity: initialData.capacity, allow_salad: initialData.allow_salad, allow_cake: initialData.allow_cake, allow_signups: initialData.allow_signups, status: initialData.status });
   }, [initialData, isOpen]);
 
   if (!isOrga) return null;
@@ -44,6 +44,7 @@ const EventFormModal = ({ isOpen, onClose, initialData = null }: Props) => {
           .filter((field) => payload[field] === null);
         const updatePayload: UpdateEventRequest = {
           ...payload,
+          allow_signups: form.allow_signups ?? true,
           clear_fields,
           ...Object.fromEntries(clear_fields.map((field) => [field, undefined])),
         };
