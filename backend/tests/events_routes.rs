@@ -112,7 +112,7 @@ async fn regular_members_only_see_published_events_and_own_signup() {
         .authorization(format!("Bearer {}", token("member-1", None)))
         .await;
     response.assert_status_ok();
-    response.assert_json(&json!([json!({"id": published.id, "type": "event", "title": "Club event", "description": null, "event_date": published.event_date, "start_time": null, "end_time": null, "location": null, "signup_deadline": null, "capacity": 2, "allow_salad": true, "allow_cake": true, "status": "published", "signup_people_count": 1})]));
+    response.assert_json(&json!([json!({"id": published.id, "type": "event", "title": "Club event", "description": null, "event_date": published.event_date, "start_time": null, "end_time": null, "location": null, "signup_deadline": null, "capacity": 2, "allow_salad": true, "allow_cake": true, "allow_signups": true, "status": "published", "signup_people_count": 1})]));
 
     let detail = server
         .get(&format!("/events/{}", published.id))
@@ -435,4 +435,51 @@ async fn malformed_deadlines_are_rejected_and_cannot_receive_signups() {
         .json(&json!({"people_count": 1, "salad_count": 0, "cake_count": 0}))
         .await;
     signup.assert_status(StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+#[serial]
+async fn signup_endpoints_reject_disabled_events_with_conflict() {
+    let (server, repository) = app().await;
+    let mut request = event_request(EventStatus::Published);
+    request.allow_signups = false;
+    let event = repository.create_event("orga-1", request).await.unwrap();
+
+    let post = server
+        .post(&format!("/events/{}/signup", event.id))
+        .authorization(format!("Bearer {}", token("member-1", None)))
+        .json(&json!({"people_count": 1, "salad_count": 0, "cake_count": 0}))
+        .await;
+    post.assert_status(StatusCode::CONFLICT);
+
+    sqlx::query("INSERT INTO event_signups (event_id, member_id, people_count) VALUES (?, ?, ?)")
+        .bind(event.id)
+        .bind("member-1")
+        .bind(1)
+        .execute(repository.pool())
+        .await
+        .unwrap();
+
+    let put = server
+        .put(&format!("/events/{}/signup", event.id))
+        .authorization(format!("Bearer {}", token("member-1", None)))
+        .json(&json!({"people_count": 2, "salad_count": 0, "cake_count": 0}))
+        .await;
+    put.assert_status(StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+#[serial]
+async fn events_default_to_signups_enabled_when_field_omitted() {
+    let (server, _repository) = app().await;
+    let mut request = event_request(EventStatus::Published);
+    request.allow_signups = true;
+    let body = server
+        .post("/events")
+        .authorization(format!("Bearer {}", token("orga-1", Some("orga"))))
+        .json(&request)
+        .await;
+    body.assert_status(StatusCode::OK);
+    let event = body.json::<serde_json::Value>();
+    assert_eq!(event["allow_signups"], true);
 }

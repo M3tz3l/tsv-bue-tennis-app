@@ -135,6 +135,77 @@ async fn signup_is_unique_per_event_and_member() {
 }
 
 #[tokio::test]
+async fn signups_are_rejected_when_disabled_but_deletion_is_allowed() {
+    let repository = repository().await;
+    let mut request = event_request();
+    request.allow_signups = false;
+    let event = repository.create_event("orga-1", request).await.unwrap();
+
+    let create_error = repository
+        .create_signup(
+            event.id,
+            "member-1",
+            SignupRequest {
+                people_count: 1,
+                salad_count: 0,
+                cake_count: 0,
+                comment: None,
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(create_error, EventError::Conflict(_)));
+
+    sqlx::query("INSERT INTO event_signups (event_id, member_id, people_count) VALUES (?, ?, ?)")
+        .bind(event.id)
+        .bind("member-1")
+        .bind(1)
+        .execute(repository.pool())
+        .await
+        .unwrap();
+
+    let update_error = repository
+        .update_signup(
+            event.id,
+            "member-1",
+            SignupRequest {
+                people_count: 2,
+                salad_count: 0,
+                cake_count: 0,
+                comment: None,
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(update_error, EventError::Conflict(_)));
+
+    assert!(repository.delete_signup(event.id, "member-1").await.is_ok());
+}
+
+#[tokio::test]
+async fn events_allow_signups_by_default() {
+    let repository = repository().await;
+    let event = repository
+        .create_event("orga-1", event_request())
+        .await
+        .unwrap();
+    assert!(event.allow_signups);
+    repository
+        .create_signup(
+            event.id,
+            "member-1",
+            SignupRequest {
+                people_count: 1,
+                salad_count: 0,
+                cake_count: 0,
+                comment: None,
+            },
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn event_and_signup_validation_rejects_invalid_values() {
     let repository = repository().await;
 
