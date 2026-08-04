@@ -15,6 +15,7 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
   const updateSignup = useUpdateEventSignup(user?.id);
   const deleteSignup = useDeleteEventSignup(user?.id);
   const signup = data?.own_signup;
+  const event = data?.event;
   const [peopleCount, setPeopleCount] = useState('1');
   const [saladCount, setSaladCount] = useState('0');
   const [cakeCount, setCakeCount] = useState('0');
@@ -87,6 +88,8 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
   const close = () => {
     if (!pending) onClose();
   };
+
+  if (event && !event.allow_signups) return null;
 
   return (
     <ModalShell

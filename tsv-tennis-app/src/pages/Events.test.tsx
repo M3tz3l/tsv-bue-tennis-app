@@ -38,12 +38,18 @@ const event = (overrides: Record<string, unknown> = {}) => ({
   capacity: 20,
   allow_salad: false,
   allow_cake: false,
+  allow_signups: true,
   status: 'published',
   signup_people_count: 3,
   ...overrides,
 });
 
-const renderEvents = () => render(<MemoryRouter><Events /></MemoryRouter>);
+const renderEvents = (overrides: Record<string, unknown> = {}) => {
+  if (Object.keys(overrides).length > 0) {
+    mocks.useEvents.mockReturnValue({ data: [event(overrides), event({ id: 2, title: 'Vergangen', event_date: '2000-01-01' }), event({ id: 3, title: 'Entwurf', status: 'draft' })], isLoading: false, error: null });
+  }
+  return render(<MemoryRouter><Events /></MemoryRouter>);
+};
 
 describe('Events', () => {
   beforeEach(() => {
@@ -69,6 +75,12 @@ describe('Events', () => {
 
     expect(screen.getByRole('article', { name: '' })).toHaveClass('card-shell');
     expect(screen.getByRole('article', { name: '' }).querySelector('dl')).toBeInTheDocument();
+  });
+
+  it('shows no signup button for an event with signups disabled', () => {
+    mocks.useEvent.mockReturnValue({ data: { event: event({ allow_signups: false }), own_signup: null }, isLoading: false, error: null });
+    renderEvents({ allow_signups: false });
+    expect(screen.queryByRole('button', { name: /anmelden|ausgebucht|anmeldeschluss/i })).not.toBeInTheDocument();
   });
 
   it('shows only the current member signup status and opens the modal', async () => {

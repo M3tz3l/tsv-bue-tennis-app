@@ -29,6 +29,7 @@ const detail = (overrides: Record<string, unknown> = {}) => ({
     id: 1, type: 'event', title: 'Sommerfest', description: null,
     event_date: '2099-07-12', start_time: null, end_time: null, location: null,
     signup_deadline: null, capacity: 20, allow_salad: true, allow_cake: true,
+    allow_signups: true,
     status: 'published', signup_people_count: 2,
   },
   own_signup: null,
@@ -44,6 +45,12 @@ describe('EventSignupModal', () => {
     mocks.create.mockResolvedValue({});
     mocks.update.mockResolvedValue({});
     mocks.remove.mockResolvedValue({});
+  });
+
+  it('renders nothing when the event does not allow signups', () => {
+    mocks.useEvent.mockReturnValue({ data: detail({ event: { ...detail().event, allow_signups: false } }), isLoading: false, error: null });
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('defaults people to one and renders enabled contribution fields only', () => {

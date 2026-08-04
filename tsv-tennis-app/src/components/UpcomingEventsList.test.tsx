@@ -107,6 +107,13 @@ describe('UpcomingEventsList', () => {
     expect(screen.getByRole('link', { name: 'Sommerfest' })).toHaveClass('min-h-11', 'focus-visible:outline-2', 'focus-visible:ring-2');
   });
 
+  it('renders an informational event title as plain text', () => {
+    render(<MemoryRouter><UpcomingEventsList events={[{ ...event(), title: 'Training', allow_signups: false }]} /></MemoryRouter>);
+    const link = screen.queryByRole('link', { name: /training/i });
+    expect(link).not.toBeInTheDocument();
+    expect(screen.getByText('Training')).toBeInTheDocument();
+  });
+
   it('renders empty, loading, and error states with correct visual elements', () => {
     const { rerender } = render(<MemoryRouter><UpcomingEventsList events={[]} /></MemoryRouter>);
     expect(screen.getByText(/keine anstehenden Veranstaltungen veröffentlicht/i)).toBeInTheDocument();

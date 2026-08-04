@@ -41,7 +41,7 @@ const EventCard = ({ event, userId, isOrga, onSelect, onEdit, onSignups }: { eve
       <div><dt className="inline font-medium">Plätze: </dt><dd className="inline">{event.signup_people_count}{event.capacity === null ? '' : ` / ${event.capacity}`} Personen</dd></div>
       {event.signup_deadline && <div><dt className="inline font-medium">Anmeldung bis: </dt><dd className="inline">{formatDate(event.signup_deadline)}</dd></div>}
     </dl>
-    {ownSignup && <p className="mt-3 text-sm font-medium text-[var(--primary)]">Ihre Anmeldung: {ownSignup.people_count} Personen</p>}
+    {event.allow_signups && ownSignup && <p className="mt-3 text-sm font-medium text-[var(--primary)]">Ihre Anmeldung: {ownSignup.people_count} Personen</p>}
     <div className="mt-4 flex-1" />
     {isOrga && (
       <div className="flex flex-wrap gap-2">
@@ -49,9 +49,11 @@ const EventCard = ({ event, userId, isOrga, onSelect, onEdit, onSignups }: { eve
         <button onClick={() => onSignups(event.id)} className={buttonVariants.secondary}>Anmeldungen anzeigen</button>
       </div>
     )}
-    <div className="mt-3">
-      {ownSignup ? <button onClick={() => onSelect(event.id)} className={`${buttonVariants.primary} w-full`}>Anmeldung bearbeiten</button> : unavailable ? <p className="rounded-md bg-[var(--canvas-soft)] px-3 py-2 text-center text-sm font-medium text-[var(--muted)]">{full ? 'Ausgebucht' : 'Anmeldeschluss erreicht'}</p> : <button onClick={() => onSelect(event.id)} className={`${buttonVariants.primary} w-full`}>Anmelden</button>}
-    </div>
+    {event.allow_signups && (
+      <div className="mt-3">
+        {ownSignup ? <button onClick={() => onSelect(event.id)} className={`${buttonVariants.primary} w-full`}>Anmeldung bearbeiten</button> : unavailable ? <p className="rounded-md bg-[var(--canvas-soft)] px-3 py-2 text-center text-sm font-medium text-[var(--muted)]">{full ? 'Ausgebucht' : 'Anmeldeschluss erreicht'}</p> : <button onClick={() => onSelect(event.id)} className={`${buttonVariants.primary} w-full`}>Anmelden</button>}
+      </div>
+    )}
   </article>;
 };
 
