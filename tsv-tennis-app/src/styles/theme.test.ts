@@ -32,4 +32,11 @@ describe('modernist foundation', () => {
     expect(styles).toContain('--primary-active: #c5260f');
     expect(styles).toContain('--hairline: #e4e2e2');
   });
+
+  it('zeroes all border radii (sharp corners)', () => {
+    const styles = css();
+    expect(styles).toContain('@theme');
+    expect(styles).toMatch(/--radius-md:\s*0px/);
+    expect(styles).toMatch(/\.card-shell\s*\{[^}]*border-radius:\s*0/);
+  });
 });
