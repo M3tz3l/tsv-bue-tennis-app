@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -36,6 +37,12 @@ describe('EventFormModal', () => {
     mocks.create.mockResolvedValue(event);
     mocks.update.mockResolvedValue(event);
     mocks.remove.mockResolvedValue({ success: true });
+  });
+
+  it('defaults to allowing signups and can disable them', () => {
+    render(<MemoryRouter><EventFormModal isOpen onClose={vi.fn()} /></MemoryRouter>);
+    const toggle = screen.getByLabelText('Anmeldungen zulassen');
+    expect(toggle).toBeChecked();
   });
 
   it('does not render management UI for regular members', () => {
