@@ -3,7 +3,7 @@
 //! This binary generates TypeScript definitions from Rust types using Specta.
 //! Run with: `cargo run --bin generate-types`
 
-use specta::ts;
+use specta::ts::{self, BigIntExportBehavior};
 use std::path::Path;
 
 // Import the types we want to export
@@ -26,9 +26,11 @@ fn main() -> anyhow::Result<()> {
     typescript_code.push_str("// Generated with: cargo run --bin generate-types\n\n");
 
     // Define a macro to reduce repetition
+    let export_config = ts::ExportConfiguration::new().bigint(BigIntExportBehavior::Number);
+
     macro_rules! export_type {
         ($type:ty) => {
-            typescript_code.push_str(&ts::export::<$type>(&Default::default())?);
+            typescript_code.push_str(&ts::export::<$type>(&export_config)?);
             typescript_code.push_str("\n\n");
         };
     }
@@ -55,6 +57,15 @@ fn main() -> anyhow::Result<()> {
     export_type!(SendBulkMailRequest);
     export_type!(MailJob);
     export_type!(MailJobStatus);
+    export_type!(EventType);
+    export_type!(EventStatus);
+    export_type!(CreateEventRequest);
+    export_type!(UpdateEventRequest);
+    export_type!(SignupRequest);
+    export_type!(EventSummary);
+    export_type!(EventDetail);
+    export_type!(EventSignup);
+    export_type!(SignupSummary);
 
     // Write to file
     std::fs::write(&output_path, typescript_code)?;

@@ -3,7 +3,10 @@
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{sqlite::SqlitePool, Row};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePool},
+    Row,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthUser {
@@ -26,7 +29,10 @@ pub struct Database {
 
 impl Database {
     pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
-        let pool = SqlitePool::connect(database_url).await?;
+        let options = database_url
+            .parse::<SqliteConnectOptions>()?
+            .foreign_keys(true);
+        let pool = SqlitePool::connect_with(options).await?;
 
         // Create tables if they don't exist (SQLite syntax)
         sqlx::query(
@@ -42,7 +48,83 @@ impl Database {
         .execute(&pool)
         .await?;
 
+        Self::initialize_event_tables(&pool).await?;
+
         Ok(Database { pool })
+    }
+
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+
+    pub async fn initialize_event_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                event_date TEXT NOT NULL,
+                start_time TEXT,
+                end_time TEXT,
+                location TEXT,
+                signup_deadline TEXT,
+                capacity INTEGER,
+                allow_salad INTEGER NOT NULL,
+                allow_cake INTEGER NOT NULL,
+                allow_signups INTEGER NOT NULL DEFAULT 1,
+                status TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS event_signups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                member_id TEXT NOT NULL,
+                people_count INTEGER NOT NULL,
+                salad_count INTEGER NOT NULL DEFAULT 0,
+                cake_count INTEGER NOT NULL DEFAULT 0,
+                comment TEXT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(event_id, member_id)
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        // Add allow_signups to events created before this column existed.
+        let has_allow_signups: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM pragma_table_info('events') WHERE name = 'allow_signups'",
+        )
+        .fetch_one(pool)
+        .await?;
+        if has_allow_signups == 0 {
+            sqlx::query("ALTER TABLE events ADD COLUMN allow_signups INTEGER NOT NULL DEFAULT 1")
+                .execute(pool)
+                .await?;
+        }
+
+        // Every pooled connection is created from the same SqliteConnectOptions
+        // with foreign_keys(true), so a single probe confirms the setting.
+        let enabled: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
+            .fetch_one(pool)
+            .await?;
+        if enabled != 1 {
+            return Err(sqlx::Error::Protocol(
+                "event tables require SQLite foreign keys enabled".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// Pings the database to verify connectivity.
