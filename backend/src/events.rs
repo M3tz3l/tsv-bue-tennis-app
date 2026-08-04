@@ -91,22 +91,12 @@ impl EventRepository {
         member_id: &str,
         payload: SignupRequest,
     ) -> EventResult<EventSignup> {
-        validate_signup(&payload, true, false)?;
-        let mut connection = self.pool.acquire().await?;
-        sqlx::query("BEGIN IMMEDIATE")
-            .execute(&mut *connection)
-            .await?;
-        let event = match sqlx::query("SELECT status, allow_salad, allow_cake, signup_deadline, capacity, (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) AS signup_people_count FROM events WHERE id = ?")
-            .bind(event_id).fetch_optional(&mut *connection).await {
-            Ok(Some(event)) => event,
-            Ok(None) => { let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await; return Err(EventError::NotFound); }
-            Err(error) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                return Err(error.into());
-            }
-        };
+        validate_signup(&payload)?;
+        let mut tx = self.pool.begin().await?;
+        let event = sqlx::query("SELECT status, allow_salad, allow_cake, signup_deadline, capacity, (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) AS signup_people_count FROM events WHERE id = ?")
+            .bind(event_id).fetch_optional(&mut *tx).await?
+            .ok_or(EventError::NotFound)?;
         if event.get::<String, _>("status") != "published" {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
             return Err(EventError::Validation(
                 "draft events cannot receive signups".into(),
             ));
@@ -115,7 +105,6 @@ impl EventRepository {
             .get::<Option<String>, _>("signup_deadline")
             .is_some_and(|deadline| deadline_invalid_or_passed(&deadline))
         {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
             return Err(EventError::Conflict("signup deadline has passed".into()));
         }
         if event
@@ -127,52 +116,44 @@ impl EventRepository {
                     .is_none_or(|total| total > i64::from(capacity))
             })
         {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
             return Err(EventError::Conflict("event capacity exceeded".into()));
         }
         if (!event.get::<bool, _>("allow_salad") && payload.salad_count > 0)
             || (!event.get::<bool, _>("allow_cake") && payload.cake_count > 0)
         {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
             return Err(EventError::Validation(
                 "disabled contributions must be zero".into(),
             ));
         }
         let result = sqlx::query("INSERT INTO event_signups (event_id,member_id,people_count,salad_count,cake_count,comment) VALUES (?,?,?,?,?,?)")
-            .bind(event_id).bind(member_id).bind(payload.people_count).bind(payload.salad_count).bind(payload.cake_count).bind(clean(payload.comment)).execute(&mut *connection).await;
-        match result {
-            Ok(result) => {
-                if let Err(error) = sqlx::query("COMMIT").execute(&mut *connection).await {
-                    let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                    return Err(error.into());
-                }
-                let signup_id = result.last_insert_rowid();
-                drop(connection);
-                self.get_signup(signup_id).await
-            }
+            .bind(event_id).bind(member_id).bind(payload.people_count).bind(payload.salad_count).bind(payload.cake_count).bind(clean(payload.comment))
+            .execute(&mut *tx).await;
+        let signup_id = match result {
+            Ok(result) => result.last_insert_rowid(),
             Err(sqlx::Error::Database(error)) if error.is_unique_violation() => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                Err(EventError::Conflict("member already signed up".into()))
+                return Err(EventError::Conflict("member already signed up".into()));
             }
-            Err(error) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                Err(error.into())
-            }
-        }
+            Err(error) => return Err(error.into()),
+        };
+        tx.commit().await?;
+        self.get_signup(signup_id).await
     }
 
     pub async fn list_published_future(&self, _member_id: &str) -> EventResult<Vec<EventSummary>> {
-        self.list_events("WHERE status='published' AND event_date >= date('now')")
-            .await
+        let rows = sqlx::query(
+            "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE status='published' AND event_date >= date('now') ORDER BY event_date,start_time",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.iter().map(summary).collect())
     }
 
     pub async fn list_all_events(&self) -> EventResult<Vec<EventSummary>> {
-        self.list_events("").await
-    }
-
-    async fn list_events(&self, filter: &str) -> EventResult<Vec<EventSummary>> {
-        let query = format!("SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events {filter} ORDER BY event_date,start_time");
-        let rows = sqlx::query(&query).fetch_all(&self.pool).await?;
+        let rows = sqlx::query(
+            "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events ORDER BY event_date,start_time",
+        )
+        .fetch_all(&self.pool)
+        .await?;
         Ok(rows.iter().map(summary).collect())
     }
 
@@ -196,26 +177,13 @@ impl EventRepository {
         id: i64,
         payload: UpdateEventRequest,
     ) -> EventResult<EventSummary> {
-        let mut connection = self.pool.acquire().await?;
-        sqlx::query("BEGIN IMMEDIATE")
-            .execute(&mut *connection)
-            .await?;
-
-        let current = match sqlx::query("SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE id=?")
+        let mut tx = self.pool.begin().await?;
+        let current = sqlx::query("SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE id=?")
             .bind(id)
-            .fetch_optional(&mut *connection)
-            .await
-        {
-            Ok(Some(row)) => summary(&row),
-            Ok(None) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                return Err(EventError::NotFound);
-            }
-            Err(error) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                return Err(error.into());
-            }
-        };
+            .fetch_optional(&mut *tx)
+            .await?
+            .map(|row| summary(&row))
+            .ok_or(EventError::NotFound)?;
         let title = payload.title.clone().unwrap_or(current.title.clone());
         let date = payload
             .event_date
@@ -241,38 +209,37 @@ impl EventRepository {
         );
         let allow_salad = payload.allow_salad.unwrap_or(current.allow_salad);
         let allow_cake = payload.allow_cake.unwrap_or(current.allow_cake);
-        if let Err(error) =
-            validate_event(&title, &date, start.as_deref(), end.as_deref(), capacity)
-        {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-            return Err(error);
-        }
+        validate_event(&title, &date, start.as_deref(), end.as_deref(), capacity)?;
         let deadline = update_optional(
             &payload.clear_fields,
             "signup_deadline",
             payload.signup_deadline.clone(),
             current.signup_deadline.clone(),
         );
-        if let Err(error) = validate_deadline(deadline.as_deref(), &date) {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-            return Err(error);
+        validate_deadline(deadline.as_deref(), &date)?;
+        let unpublishing =
+            current.status == EventStatus::Published && payload.status == Some(EventStatus::Draft);
+        let new_status = payload.status.unwrap_or(current.status);
+        if unpublishing {
+            let signup_count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM event_signups WHERE event_id=?")
+                    .bind(id)
+                    .fetch_one(&mut *tx)
+                    .await?;
+            if signup_count > 0 {
+                return Err(EventError::Conflict(
+                    "cannot unpublish an event with existing signups".into(),
+                ));
+            }
         }
         if let Some(capacity) = capacity {
-            let signup_people_count: i64 = match sqlx::query_scalar(
+            let signup_people_count: i64 = sqlx::query_scalar(
                 "SELECT COALESCE(SUM(people_count), 0) FROM event_signups WHERE event_id=?",
             )
             .bind(id)
-            .fetch_one(&mut *connection)
-            .await
-            {
-                Ok(value) => value,
-                Err(error) => {
-                    let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                    return Err(error.into());
-                }
-            };
+            .fetch_one(&mut *tx)
+            .await?;
             if i64::from(capacity) < signup_people_count {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
                 return Err(EventError::Conflict(
                     "capacity cannot be below the current signup total".into(),
                 ));
@@ -283,23 +250,15 @@ impl EventRepository {
                 .bind(allow_salad)
                 .bind(allow_cake)
                 .bind(id)
-                .fetch_one(&mut *connection)
-                .await;
-            let counts = match counts {
-                Ok(counts) => counts,
-                Err(error) => {
-                    let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                    return Err(error.into());
-                }
-            };
+                .fetch_one(&mut *tx)
+                .await?;
             if counts.get::<i64, _>("salad_count") > 0 || counts.get::<i64, _>("cake_count") > 0 {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
                 return Err(EventError::Conflict(
                     "cannot disable food option with existing contributions".into(),
                 ));
             }
         }
-        let result = sqlx::query("UPDATE events SET title=?,description=?,event_date=?,start_time=?,end_time=?,location=?,signup_deadline=?,capacity=?,allow_salad=?,allow_cake=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
+        sqlx::query("UPDATE events SET title=?,description=?,event_date=?,start_time=?,end_time=?,location=?,signup_deadline=?,capacity=?,allow_salad=?,allow_cake=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
             .bind(title.trim())
             .bind(clean(update_optional(&payload.clear_fields, "description", payload.description, current.description)))
             .bind(date)
@@ -310,19 +269,11 @@ impl EventRepository {
             .bind(capacity)
             .bind(allow_salad)
             .bind(allow_cake)
-            .bind(status(&payload.status.unwrap_or(current.status)))
+            .bind(status(&new_status))
             .bind(id)
-            .execute(&mut *connection)
-            .await;
-        if let Err(error) = result {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-            return Err(error.into());
-        }
-        if let Err(error) = sqlx::query("COMMIT").execute(&mut *connection).await {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-            return Err(error.into());
-        }
-        drop(connection);
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
         self.get_summary(id).await
     }
 
@@ -343,28 +294,14 @@ impl EventRepository {
         member_id: &str,
         payload: SignupRequest,
     ) -> EventResult<EventSignup> {
-        validate_signup(&payload, false, false)?;
-        let mut connection = self.pool.acquire().await?;
-        sqlx::query("BEGIN IMMEDIATE")
-            .execute(&mut *connection)
-            .await?;
-        let event = match sqlx::query("SELECT status, allow_salad, allow_cake, signup_deadline, capacity, (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) AS signup_people_count FROM events WHERE id=?")
+        validate_signup(&payload)?;
+        let mut tx = self.pool.begin().await?;
+        let event = sqlx::query("SELECT status, allow_salad, allow_cake, signup_deadline, capacity, (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) AS signup_people_count FROM events WHERE id=?")
             .bind(event_id)
-            .fetch_optional(&mut *connection)
-            .await
-        {
-            Ok(Some(event)) => event,
-            Ok(None) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                return Err(EventError::NotFound);
-            }
-            Err(error) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                return Err(error.into());
-            }
-        };
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or(EventError::NotFound)?;
         if event.get::<String, _>("status") != "published" {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
             return Err(EventError::Validation(
                 "draft events cannot receive signups".into(),
             ));
@@ -373,31 +310,16 @@ impl EventRepository {
             .get::<Option<String>, _>("signup_deadline")
             .is_some_and(|deadline| deadline_invalid_or_passed(&deadline))
         {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
             return Err(EventError::Conflict("signup deadline has passed".into()));
         }
-        let existing_people: i32 = match sqlx::query_scalar(
+        let existing_people: i32 = sqlx::query_scalar(
             "SELECT people_count FROM event_signups WHERE event_id=? AND member_id=?",
         )
         .bind(event_id)
         .bind(member_id)
-        .fetch_optional(&mut *connection)
-        .await
-        {
-            Ok(Some(people)) => people,
-            Ok(None) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                return Err(EventError::NotFound);
-            }
-            Err(error) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                return Err(error.into());
-            }
-        };
-        if existing_people < 0 {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-            return Err(EventError::NotFound);
-        }
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or(EventError::NotFound)?;
         if event
             .get::<Option<i32>, _>("capacity")
             .is_some_and(|capacity| {
@@ -408,60 +330,38 @@ impl EventRepository {
                     .is_none_or(|total| total > i64::from(capacity))
             })
         {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
             return Err(EventError::Conflict("event capacity exceeded".into()));
         }
         if (!event.get::<bool, _>("allow_salad") && payload.salad_count > 0)
             || (!event.get::<bool, _>("allow_cake") && payload.cake_count > 0)
         {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
             return Err(EventError::Validation(
                 "disabled contributions must be zero".into(),
             ));
         }
-        let result = match sqlx::query("UPDATE event_signups SET people_count=?,salad_count=?,cake_count=?,comment=?,updated_at=CURRENT_TIMESTAMP WHERE event_id=? AND member_id=?")
-            .bind(payload.people_count).bind(payload.salad_count).bind(payload.cake_count).bind(clean(payload.comment)).bind(event_id).bind(member_id).execute(&mut *connection).await {
-            Ok(result) => result,
-            Err(error) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                return Err(error.into());
-            }
-        };
+        let result = sqlx::query("UPDATE event_signups SET people_count=?,salad_count=?,cake_count=?,comment=?,updated_at=CURRENT_TIMESTAMP WHERE event_id=? AND member_id=?")
+            .bind(payload.people_count).bind(payload.salad_count).bind(payload.cake_count).bind(clean(payload.comment)).bind(event_id).bind(member_id)
+            .execute(&mut *tx)
+            .await?;
         if result.rows_affected() == 0 {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
             return Err(EventError::NotFound);
         }
-        let id = match sqlx::query("SELECT id FROM event_signups WHERE event_id=? AND member_id=?")
-            .bind(event_id)
-            .bind(member_id)
-            .fetch_optional(&mut *connection)
-            .await
-        {
-            Ok(Some(row)) => row.get::<i64, _>("id"),
-            Ok(None) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                return Err(EventError::NotFound);
-            }
-            Err(error) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-                return Err(error.into());
-            }
-        };
-        if let Err(error) = sqlx::query("COMMIT").execute(&mut *connection).await {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-            return Err(error.into());
-        }
-        drop(connection);
+        let id: i64 =
+            sqlx::query_scalar("SELECT id FROM event_signups WHERE event_id=? AND member_id=?")
+                .bind(event_id)
+                .bind(member_id)
+                .fetch_one(&mut *tx)
+                .await?;
+        tx.commit().await?;
         self.get_signup(id).await
     }
 
     pub async fn delete_signup(&self, event_id: i64, member_id: &str) -> EventResult<()> {
-        let event =
-            sqlx::query("SELECT status, signup_deadline, event_date FROM events WHERE id=?")
-                .bind(event_id)
-                .fetch_optional(&self.pool)
-                .await?
-                .ok_or(EventError::NotFound)?;
+        let event = sqlx::query("SELECT status, signup_deadline FROM events WHERE id=?")
+            .bind(event_id)
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or(EventError::NotFound)?;
         if event.get::<String, _>("status") != "published" {
             return Err(EventError::Validation(
                 "draft events cannot receive signups".into(),
@@ -546,7 +446,7 @@ fn validate_event(
     Ok(())
 }
 
-fn validate_signup(payload: &SignupRequest, _new: bool, _allow_disabled: bool) -> EventResult<()> {
+fn validate_signup(payload: &SignupRequest) -> EventResult<()> {
     if !(1..=MAX_PEOPLE_COUNT).contains(&payload.people_count)
         || !(0..=MAX_FOOD_COUNT).contains(&payload.salad_count)
         || !(0..=MAX_FOOD_COUNT).contains(&payload.cake_count)

@@ -256,13 +256,21 @@ pub async fn list_signups(
             (index, name)
         });
     }
-    while let Some(result) = tasks.join_next().await {
-        let (index, name) = result.map_err(|error| {
-            error_response(EventError::Database(sqlx::Error::Protocol(
-                error.to_string().into(),
-            )))
-        })?;
-        summary.signups[index].member_name = name;
-    }
+    // Bound the external member-lookup phase with an overall deadline so a slow
+    // Teable instance cannot keep the handler open; unresolved members stay null.
+    let collect_names = async {
+        while let Some(result) = tasks.join_next().await {
+            let (index, name) = result.map_err(|error| {
+                tracing::warn!(%error, "signup member lookup task failed");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"success":false,"message":"member lookup failed","data":null})),
+                )
+            })?;
+            summary.signups[index].member_name = name;
+        }
+        Ok::<_, EventRouteError>(())
+    };
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(15), collect_names).await;
     Ok(Json(summary))
 }

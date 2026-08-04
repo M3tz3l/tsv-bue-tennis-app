@@ -391,19 +391,13 @@ async fn signup_update_enforces_deadline_and_capacity() {
     let mut expired = event_request(EventStatus::Published);
     expired.signup_deadline = Some("2000-01-01".into());
     let expired = repository.create_event("orga-1", expired).await.unwrap();
-    repository
-        .create_signup(
-            expired.id,
-            "member-1",
-            tsv_tennis_backend::models::SignupRequest {
-                people_count: 1,
-                salad_count: 0,
-                cake_count: 0,
-                comment: None,
-            },
-        )
+    sqlx::query("INSERT INTO event_signups (event_id, member_id, people_count) VALUES (?, ?, ?)")
+        .bind(expired.id)
+        .bind("member-1")
+        .bind(1)
+        .execute(repository.pool())
         .await
-        .err();
+        .unwrap();
     let deadline = server
         .put(&format!("/events/{}/signup", expired.id))
         .authorization(format!("Bearer {}", token("member-1", None)))

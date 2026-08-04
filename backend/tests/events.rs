@@ -1,13 +1,29 @@
-use sqlx::{sqlite::SqlitePoolOptions, Executor};
+use chrono::{Duration, Utc};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::Executor;
 use tsv_tennis_backend::database::Database;
 use tsv_tennis_backend::events::{
     CreateEventRequest, EventError, EventRepository, EventStatus, EventType, SignupRequest,
     UpdateEventRequest,
 };
 
+fn future_date(days: i64) -> String {
+    (Utc::now().date_naive() + Duration::days(days)).to_string()
+}
+
 async fn repository() -> EventRepository {
-    let database = Database::new("sqlite::memory:").await.unwrap();
-    EventRepository::new(database.pool().clone()).await.unwrap()
+    let options = "sqlite::memory:"
+        .parse::<SqliteConnectOptions>()
+        .unwrap()
+        .foreign_keys(true);
+    // In-memory SQLite is isolated per connection, so pin the pool to a single
+    // connection to keep the database alive across the test.
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await
+        .unwrap();
+    EventRepository::new(pool).await.unwrap()
 }
 
 fn event_request() -> CreateEventRequest {
@@ -15,7 +31,7 @@ fn event_request() -> CreateEventRequest {
         event_type: EventType::Event,
         title: "Sommerfest".into(),
         description: Some("Gemeinsames Fest".into()),
-        event_date: "2026-08-15".into(),
+        event_date: future_date(11),
         start_time: Some("18:00".into()),
         end_time: Some("21:00".into()),
         location: Some("Tennisplatz".into()),
@@ -257,7 +273,7 @@ async fn event_validation_rejects_malformed_times_and_non_positive_capacity() {
 async fn signup_deadline_must_not_follow_event_date_on_create_or_update() {
     let repository = repository().await;
     let mut request = event_request();
-    request.signup_deadline = Some("2026-08-16".into());
+    request.signup_deadline = Some(future_date(12));
     assert!(matches!(
         repository.create_event("orga-1", request).await,
         Err(EventError::Validation(_))
@@ -272,7 +288,7 @@ async fn signup_deadline_must_not_follow_event_date_on_create_or_update() {
             .update_event(
                 event.id,
                 UpdateEventRequest {
-                    signup_deadline: Some("2026-08-16T00:00:00Z".into()),
+                    signup_deadline: Some(format!("{}T00:00:00Z", future_date(12))),
                     ..Default::default()
                 },
             )
@@ -474,6 +490,55 @@ async fn disabling_food_options_requires_existing_signup_counts_to_be_zero() {
         .await
         .unwrap_err();
     assert!(matches!(error, EventError::Conflict(_)));
+}
+
+#[tokio::test]
+async fn published_event_with_signups_cannot_be_unpublished() {
+    let repository = repository().await;
+    let event = repository
+        .create_event("orga-1", event_request())
+        .await
+        .unwrap();
+    repository
+        .create_signup(
+            event.id,
+            "member-1",
+            SignupRequest {
+                people_count: 1,
+                salad_count: 0,
+                cake_count: 0,
+                comment: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    let error = repository
+        .update_event(
+            event.id,
+            UpdateEventRequest {
+                status: Some(EventStatus::Draft),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, EventError::Conflict(_)));
+
+    let empty = repository
+        .create_event("orga-1", event_request())
+        .await
+        .unwrap();
+    assert!(repository
+        .update_event(
+            empty.id,
+            UpdateEventRequest {
+                status: Some(EventStatus::Draft),
+                ..Default::default()
+            },
+        )
+        .await
+        .is_ok());
 }
 
 #[tokio::test]

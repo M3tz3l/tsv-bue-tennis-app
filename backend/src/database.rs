@@ -101,18 +101,15 @@ impl Database {
         .execute(pool)
         .await?;
 
-        let mut connections = Vec::new();
-        for _ in 0..pool.options().get_max_connections() {
-            let mut connection = pool.acquire().await?;
-            let enabled: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
-                .fetch_one(&mut *connection)
-                .await?;
-            if enabled != 1 {
-                return Err(sqlx::Error::Protocol(
-                    "event tables require SQLite foreign keys enabled".into(),
-                ));
-            }
-            connections.push(connection);
+        // Every pooled connection is created from the same SqliteConnectOptions
+        // with foreign_keys(true), so a single probe confirms the setting.
+        let enabled: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
+            .fetch_one(pool)
+            .await?;
+        if enabled != 1 {
+            return Err(sqlx::Error::Protocol(
+                "event tables require SQLite foreign keys enabled".into(),
+            ));
         }
         Ok(())
     }

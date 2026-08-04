@@ -195,7 +195,7 @@ async fn main() -> anyhow::Result<()> {
         .nest("/arbeitsstunden", routes::work_hours::routes())
         .merge(routes::mail::member_count_routes())
         .route("/mail/jobs/:job_id", get(routes::mail::get_mail_job_status))
-        .merge(routes::events::read_routes().with_state(state.clone()))
+        .merge(routes::events::read_routes())
         .layer(GovernorLayer {
             config: read_governor_conf,
         })
@@ -211,7 +211,7 @@ async fn main() -> anyhow::Result<()> {
             "/mail/send",
             axum::routing::post(routes::mail::send_bulk_mail),
         )
-        .merge(routes::events::write_routes().with_state(state.clone()))
+        .merge(routes::events::write_routes())
         .layer(GovernorLayer {
             config: write_governor_conf,
         })
