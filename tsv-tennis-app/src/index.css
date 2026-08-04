@@ -9,20 +9,20 @@
 }
 
 :root {
-  /* Cursor-style design tokens — warm cream canvas, warm ink, single orange voltage */
-  --canvas: #f7f7f4;
-  --canvas-soft: #fafaf7;
-  --ink: #26251e;
-  --body: #5a5852;
-  --muted: #807d72;
-  --muted-soft: #a09c92;
-  --hairline: #e6e5e0;
-  --hairline-soft: #efeee8;
-  --hairline-strong: #cfcdc4;
-  --primary: #f54e00;
-  --primary-active: #d04200;
+  /* inOpera "Modernist" design tokens — cool gray canvas, red voltage, sharp corners */
+  --canvas: #f3f2f2;
+  --canvas-soft: #f8f4f4;
+  --ink: #201e1d;
+  --body: #4a4845;
+  --muted: #7d7979;
+  --muted-soft: #9b9797;
+  --hairline: #e4e2e2;
+  --hairline-soft: #eae7e7;
+  --hairline-strong: #d7d3d3;
+  --primary: #ec3013;
+  --primary-active: #c5260f;
   --on-primary: #ffffff;
-  --success: #1f8a65;
+  --success: #1f7a52;
   --error: #cf2d56;
 }
 

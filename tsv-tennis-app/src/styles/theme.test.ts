@@ -23,4 +23,13 @@ describe('modernist foundation', () => {
     expect(styles).toContain('font-family: "Archivo"');
     expect(styles).toContain('/fonts/archivo-latin.woff2');
   });
+
+  it('uses the inOpera gray/red token palette', () => {
+    const styles = css();
+    expect(styles).toContain('--canvas: #f3f2f2');
+    expect(styles).toContain('--ink: #201e1d');
+    expect(styles).toContain('--primary: #ec3013');
+    expect(styles).toContain('--primary-active: #c5260f');
+    expect(styles).toContain('--hairline: #e4e2e2');
+  });
 });
