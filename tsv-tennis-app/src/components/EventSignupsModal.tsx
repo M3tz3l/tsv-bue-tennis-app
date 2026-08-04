@@ -1,24 +1,72 @@
 import { useAuth } from '../context/AuthContext';
 import { useEventSignups } from '../hooks/useEvents';
 import { isOrgaRole } from '../utils/roles';
-import { stackMdClass } from '../styles/tokens';
 import ModalShell from './ModalShell';
 
 type Props = { eventId: number; isOpen: boolean; onClose: () => void };
+
+const th = 'py-2 px-3 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]';
+const td = 'py-2.5 px-3 text-[var(--body)]';
 
 const EventSignupsModal = ({ eventId, isOpen, onClose }: Props) => {
   const { user } = useAuth();
   const isOrga = isOrgaRole(user?.role);
   const { data, isLoading, error } = useEventSignups(user?.id, eventId, isOrga);
   if (!isOrga) return null;
-    return <ModalShell isOpen={isOpen} onClose={onClose} title="Anmeldungen" widthClassName="max-w-3xl" panelClassName="max-h-[90vh] overflow-y-auto" backdropTestId="modal-backdrop" footer={null}>
-      {isLoading && <p className="p-6">Wird geladen...</p>}
-      {error && <p className="p-6 text-[var(--error)]">Anmeldungen konnten nicht geladen werden</p>}
-      {data && <div className={`${stackMdClass} px-6 py-5`}>
-        <div className="grid gap-3 sm:grid-cols-3"><p>Personen gesamt: {data.total_people}</p><p>Salate gesamt: {data.total_salad}</p><p>Kuchen gesamt: {data.total_cake}</p></div>
-        <div className={stackMdClass}>{data.signups.map((signup) => <article key={signup.id} className="rounded-md border border-[var(--hairline)] p-4"><h3 className="font-medium">{signup.member_name ?? signup.member_id}</h3><p>{signup.people_count} Personen · {signup.salad_count} Salate · {signup.cake_count} Kuchen</p>{signup.comment && <p className="mt-1 text-sm text-[var(--muted)]">{signup.comment}</p>}</article>)}</div>
-      </div>}
-    </ModalShell>;
+
+  return (
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Anmeldungen"
+      widthClassName="max-w-3xl"
+      panelClassName="max-h-[90vh] overflow-y-auto"
+      backdropTestId="modal-backdrop"
+      footer={null}
+    >
+      {isLoading && <p className="px-6 py-5 text-[var(--muted)]">Wird geladen...</p>}
+      {error && <p className="px-6 py-5 text-[var(--error)]">Anmeldungen konnten nicht geladen werden</p>}
+      {data && (
+        <div className="px-6 py-5">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--hairline)]">
+                <th className={`${th} py-2 pr-3 text-left`}>Name</th>
+                <th className={`${th} text-right`}>Personen</th>
+                <th className={`${th} text-right`}>Salate</th>
+                <th className={`${th} text-right`}>Kuchen</th>
+                <th className={`${th} py-2 pl-3 text-left`}>Kommentar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.signups.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className={`${td} px-0 py-6 text-center text-[var(--muted)]`}>Noch keine Anmeldungen</td>
+                </tr>
+              ) : data.signups.map((signup) => (
+                <tr key={signup.id} className="border-b border-[var(--hairline-soft)]">
+                  <td className={`${td} py-2.5 pr-3 font-medium text-[var(--ink)]`}>{signup.member_name ?? signup.member_id}</td>
+                  <td className={`${td} text-right`}>{signup.people_count}</td>
+                  <td className={`${td} text-right`}>{signup.salad_count}</td>
+                  <td className={`${td} text-right`}>{signup.cake_count}</td>
+                  <td className={`${td} py-2.5 pl-3 text-[var(--muted)]`}>{signup.comment ?? ''}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="font-semibold text-[var(--ink)]">
+                <td className="pt-3 pr-3">Gesamt</td>
+                <td className="px-3 pt-3 text-right">{data.total_people}</td>
+                <td className="px-3 pt-3 text-right">{data.total_salad}</td>
+                <td className="px-3 pt-3 text-right">{data.total_cake}</td>
+                <td className="pt-3 pl-3" />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </ModalShell>
+  );
 };
 
 export default EventSignupsModal;

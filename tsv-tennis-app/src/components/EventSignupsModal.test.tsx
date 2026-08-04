@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ useAuth: vi.fn(), useEventSignups: vi.fn() }));
@@ -21,11 +21,27 @@ describe('EventSignupsModal', () => {
 
   it('shows signup details and aggregate totals to Orga', () => {
     render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
-    expect(screen.getByText('Anna A')).toBeInTheDocument();
-    expect(screen.getByText('Kommt spaeter')).toBeInTheDocument();
-    expect(screen.getByText(/Personen gesamt: 5/)).toBeInTheDocument();
-    expect(screen.getByText(/Salate gesamt: 1/)).toBeInTheDocument();
-    expect(screen.getByText(/Kuchen gesamt: 2/)).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('Anna A')).toBeInTheDocument();
+    expect(within(table).getByText('Berta B')).toBeInTheDocument();
+    expect(within(table).getByText('Kommt spaeter')).toBeInTheDocument();
+
+    const totals = table.querySelector('tfoot');
+    expect(totals).not.toBeNull();
+    expect(within(totals as HTMLElement).getByText('Gesamt')).toBeInTheDocument();
+    expect(within(totals as HTMLElement).getByText('5')).toBeInTheDocument();
+    expect(within(totals as HTMLElement).getByText('1')).toBeInTheDocument();
+    expect(within(totals as HTMLElement).getByText('2')).toBeInTheDocument();
+  });
+
+  it('shows an empty state and zero totals when no one has signed up', () => {
+    mocks.useEventSignups.mockReturnValue({ data: {
+      signups: [], total_people: 0, total_salad: 0, total_cake: 0,
+    }, isLoading: false, error: null });
+    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByText('Noch keine Anmeldungen')).toBeInTheDocument();
   });
 
   it('does not render signup details for regular members', () => {
