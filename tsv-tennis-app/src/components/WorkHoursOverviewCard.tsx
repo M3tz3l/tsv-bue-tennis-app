@@ -53,7 +53,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview' }: Wor
                 <>
                     {showChrome && (
                         <div className="flex items-baseline justify-between gap-2 mb-3">
-                            <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-[var(--ink)]">Arbeitsstunden {selectedYear}</h2>
+                            <h2 className="text-lg font-semibold tracking-tight text-[var(--ink)]">Arbeitsstunden {selectedYear}</h2>
                             {detailsLink}
                         </div>
                     )}
@@ -78,7 +78,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview' }: Wor
                                                 <span className="truncate text-xs text-[var(--muted)] italic">Befreit: {member.exemption_reason}</span>
                                             )}
                                         </div>
-                                        <span className={`shrink-0 text-sm sm:text-base font-semibold ${member.exemption_reason ? 'text-[var(--success)]' : isCurrentUser ? 'text-[var(--ink)]' : 'text-[var(--body)]'}`}>
+                                        <span className={`shrink-0 text-sm font-semibold ${member.exemption_reason ? 'text-[var(--success)]' : isCurrentUser ? 'text-[var(--ink)]' : 'text-[var(--body)]'}`}>
                                             {member.exemption_reason
                                                 ? (member.hours > 0 ? `${formatHours(member.hours)} Std / Befreit` : 'Befreit')
                                                 : `${formatHours(member.hours)} / ${formatHours(member.required)} Std`}
@@ -98,7 +98,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview' }: Wor
                 <>
                     {showChrome && (
                         <div className="flex items-baseline justify-between gap-2 mb-3">
-                            <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-[var(--ink)]">{data.personal.name || 'Ihre Arbeitsstunden'} - {selectedYear}</h2>
+                            <h2 className="text-lg font-semibold tracking-tight text-[var(--ink)]">{data.personal.name || 'Ihre Arbeitsstunden'} - {selectedYear}</h2>
                             {detailsLink}
                         </div>
                     )}

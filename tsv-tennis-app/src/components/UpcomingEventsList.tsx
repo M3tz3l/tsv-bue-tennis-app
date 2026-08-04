@@ -56,7 +56,7 @@ const UpcomingEventsList = ({ events, limit = 3, isLoading = false, error }: Upc
     if (isLoading) {
         return (
             <section aria-label="Als Nächstes" className="min-h-56 rounded-xl border border-[var(--hairline)] bg-white p-4 sm:p-6">
-                <h2 className="text-lg font-semibold text-[var(--ink)]">Als Nächstes</h2>
+                <h2 className="text-lg font-semibold tracking-tight text-[var(--ink)]">Als Nächstes</h2>
                 <div className="mt-4 space-y-4">
                     <div data-testid="event-skeleton" className="bg-[var(--hairline-soft)] animate-pulse h-16 w-full rounded-md"></div>
                     <div data-testid="event-skeleton" className="bg-[var(--hairline-soft)] animate-pulse h-16 w-full rounded-md"></div>
@@ -67,13 +67,13 @@ const UpcomingEventsList = ({ events, limit = 3, isLoading = false, error }: Upc
     }
 
     if (error) {
-        return <section aria-label="Als Nächstes" className="min-h-56 rounded-xl border border-[var(--error)]/30 bg-[var(--error)]/5 p-4 text-[var(--error)] sm:p-6"><h2 className="text-lg font-semibold">Als Nächstes</h2><p className="mt-4 text-sm">{getApiErrorMessage(error, 'Veranstaltungen konnten nicht geladen werden')}</p></section>;
+        return <section aria-label="Als Nächstes" className="min-h-56 rounded-xl border border-[var(--error)]/30 bg-[var(--error)]/5 p-4 text-[var(--error)] sm:p-6"><h2 className="text-lg font-semibold tracking-tight">Als Nächstes</h2><p className="mt-4 text-sm">{getApiErrorMessage(error, 'Veranstaltungen konnten nicht geladen werden')}</p></section>;
     }
 
     return (
         <section aria-label="Als Nächstes" className={`${cardShellClass} min-h-56`}>
             <div className="flex items-baseline justify-between gap-3">
-                <h2 className="text-lg font-semibold text-[var(--ink)]">Als Nächstes</h2>
+                <h2 className="text-lg font-semibold tracking-tight text-[var(--ink)]">Als Nächstes</h2>
                 <Link className="text-sm font-medium text-[var(--primary)] underline underline-offset-4" to="/dashboard/veranstaltungen">Alle Veranstaltungen</Link>
             </div>
             {upcomingEvents.length === 0 ? (
