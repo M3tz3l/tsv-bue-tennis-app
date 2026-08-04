@@ -77,10 +77,10 @@ impl EventRepository {
             payload.capacity,
         )?;
         validate_deadline(payload.signup_deadline.as_deref(), &payload.event_date)?;
-        let result = sqlx::query("INSERT INTO events (type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,status,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        let result = sqlx::query("INSERT INTO events (type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
             .bind(event_type(&payload.event_type)).bind(payload.title.trim()).bind(clean(payload.description))
             .bind(payload.event_date).bind(clean(payload.start_time)).bind(clean(payload.end_time)).bind(clean(payload.location))
-            .bind(clean(payload.signup_deadline)).bind(payload.capacity).bind(payload.allow_salad).bind(payload.allow_cake)
+            .bind(clean(payload.signup_deadline)).bind(payload.capacity).bind(payload.allow_salad).bind(payload.allow_cake).bind(payload.allow_signups)
             .bind(status(&payload.status)).bind(actor_id).execute(&self.pool).await?;
         self.get_summary(result.last_insert_rowid()).await
     }
@@ -93,12 +93,17 @@ impl EventRepository {
     ) -> EventResult<EventSignup> {
         validate_signup(&payload)?;
         let mut tx = self.pool.begin().await?;
-        let event = sqlx::query("SELECT status, allow_salad, allow_cake, signup_deadline, capacity, (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) AS signup_people_count FROM events WHERE id = ?")
+        let event = sqlx::query("SELECT status, allow_salad, allow_cake, allow_signups, signup_deadline, capacity, (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) AS signup_people_count FROM events WHERE id = ?")
             .bind(event_id).fetch_optional(&mut *tx).await?
             .ok_or(EventError::NotFound)?;
         if event.get::<String, _>("status") != "published" {
             return Err(EventError::Validation(
                 "draft events cannot receive signups".into(),
+            ));
+        }
+        if !event.get::<bool, _>("allow_signups") {
+            return Err(EventError::Conflict(
+                "signups are disabled for this event".into(),
             ));
         }
         if event
@@ -141,7 +146,7 @@ impl EventRepository {
 
     pub async fn list_published_future(&self, _member_id: &str) -> EventResult<Vec<EventSummary>> {
         let rows = sqlx::query(
-            "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE status='published' AND event_date >= date('now') ORDER BY event_date,start_time",
+            "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE status='published' AND event_date >= date('now') ORDER BY event_date,start_time",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -150,7 +155,7 @@ impl EventRepository {
 
     pub async fn list_all_events(&self) -> EventResult<Vec<EventSummary>> {
         let rows = sqlx::query(
-            "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events ORDER BY event_date,start_time",
+            "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events ORDER BY event_date,start_time",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -178,7 +183,7 @@ impl EventRepository {
         payload: UpdateEventRequest,
     ) -> EventResult<EventSummary> {
         let mut tx = self.pool.begin().await?;
-        let current = sqlx::query("SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE id=?")
+        let current = sqlx::query("SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE id=?")
             .bind(id)
             .fetch_optional(&mut *tx)
             .await?
@@ -209,6 +214,7 @@ impl EventRepository {
         );
         let allow_salad = payload.allow_salad.unwrap_or(current.allow_salad);
         let allow_cake = payload.allow_cake.unwrap_or(current.allow_cake);
+        let allow_signups = payload.allow_signups.unwrap_or(current.allow_signups);
         validate_event(&title, &date, start.as_deref(), end.as_deref(), capacity)?;
         let deadline = update_optional(
             &payload.clear_fields,
@@ -258,7 +264,7 @@ impl EventRepository {
                 ));
             }
         }
-        sqlx::query("UPDATE events SET title=?,description=?,event_date=?,start_time=?,end_time=?,location=?,signup_deadline=?,capacity=?,allow_salad=?,allow_cake=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
+        sqlx::query("UPDATE events SET title=?,description=?,event_date=?,start_time=?,end_time=?,location=?,signup_deadline=?,capacity=?,allow_salad=?,allow_cake=?,allow_signups=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
             .bind(title.trim())
             .bind(clean(update_optional(&payload.clear_fields, "description", payload.description, current.description)))
             .bind(date)
@@ -269,6 +275,7 @@ impl EventRepository {
             .bind(capacity)
             .bind(allow_salad)
             .bind(allow_cake)
+            .bind(allow_signups)
             .bind(status(&new_status))
             .bind(id)
             .execute(&mut *tx)
@@ -296,7 +303,7 @@ impl EventRepository {
     ) -> EventResult<EventSignup> {
         validate_signup(&payload)?;
         let mut tx = self.pool.begin().await?;
-        let event = sqlx::query("SELECT status, allow_salad, allow_cake, signup_deadline, capacity, (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) AS signup_people_count FROM events WHERE id=?")
+        let event = sqlx::query("SELECT status, allow_salad, allow_cake, allow_signups, signup_deadline, capacity, (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) AS signup_people_count FROM events WHERE id=?")
             .bind(event_id)
             .fetch_optional(&mut *tx)
             .await?
@@ -304,6 +311,11 @@ impl EventRepository {
         if event.get::<String, _>("status") != "published" {
             return Err(EventError::Validation(
                 "draft events cannot receive signups".into(),
+            ));
+        }
+        if !event.get::<bool, _>("allow_signups") {
+            return Err(EventError::Conflict(
+                "signups are disabled for this event".into(),
             ));
         }
         if event
@@ -403,7 +415,7 @@ impl EventRepository {
     }
 
     async fn get_summary(&self, id: i64) -> EventResult<EventSummary> {
-        let row = sqlx::query("SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE id=?").bind(id).fetch_optional(&self.pool).await?.ok_or(EventError::NotFound)?;
+        let row = sqlx::query("SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE id=?").bind(id).fetch_optional(&self.pool).await?.ok_or(EventError::NotFound)?;
         Ok(summary(&row))
     }
 
@@ -564,6 +576,7 @@ fn summary(row: &sqlx::sqlite::SqliteRow) -> EventSummary {
         capacity: row.get("capacity"),
         allow_salad: row.get("allow_salad"),
         allow_cake: row.get("allow_cake"),
+        allow_signups: row.get("allow_signups"),
         status: parse_status(row.get("status")),
         signup_people_count: row.get("signup_people_count"),
     }

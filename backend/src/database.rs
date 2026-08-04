@@ -73,6 +73,7 @@ impl Database {
                 capacity INTEGER,
                 allow_salad INTEGER NOT NULL,
                 allow_cake INTEGER NOT NULL,
+                allow_signups INTEGER NOT NULL DEFAULT 1,
                 status TEXT NOT NULL,
                 created_by TEXT NOT NULL,
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -100,6 +101,18 @@ impl Database {
         )
         .execute(pool)
         .await?;
+
+        // Add allow_signups to events created before this column existed.
+        let has_allow_signups: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM pragma_table_info('events') WHERE name = 'allow_signups'",
+        )
+        .fetch_one(pool)
+        .await?;
+        if has_allow_signups == 0 {
+            sqlx::query("ALTER TABLE events ADD COLUMN allow_signups INTEGER NOT NULL DEFAULT 1")
+                .execute(pool)
+                .await?;
+        }
 
         // Every pooled connection is created from the same SqliteConnectOptions
         // with foreign_keys(true), so a single probe confirms the setting.

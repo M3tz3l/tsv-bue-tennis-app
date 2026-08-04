@@ -22,6 +22,10 @@ pub enum EventStatus {
     Published,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct CreateEventRequest {
     #[serde(rename = "type")]
@@ -36,6 +40,8 @@ pub struct CreateEventRequest {
     pub capacity: Option<i32>,
     pub allow_salad: bool,
     pub allow_cake: bool,
+    #[serde(default = "default_true")]
+    pub allow_signups: bool,
     pub status: EventStatus,
 }
 
@@ -53,6 +59,7 @@ pub struct UpdateEventRequest {
     pub clear_fields: Vec<String>,
     pub allow_salad: Option<bool>,
     pub allow_cake: Option<bool>,
+    pub allow_signups: Option<bool>,
     pub status: Option<EventStatus>,
 }
 
@@ -79,6 +86,7 @@ pub struct EventSummary {
     pub capacity: Option<i32>,
     pub allow_salad: bool,
     pub allow_cake: bool,
+    pub allow_signups: bool,
     pub status: EventStatus,
     pub signup_people_count: i32,
 }

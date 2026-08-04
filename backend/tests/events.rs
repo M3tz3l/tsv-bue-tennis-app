@@ -39,6 +39,7 @@ fn event_request() -> CreateEventRequest {
         capacity: Some(20),
         allow_salad: true,
         allow_cake: false,
+        allow_signups: true,
         status: EventStatus::Published,
     }
 }

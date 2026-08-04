@@ -76,6 +76,7 @@ fn event_request(status: EventStatus) -> CreateEventRequest {
         capacity: Some(2),
         allow_salad: true,
         allow_cake: true,
+        allow_signups: true,
         status,
     }
 }
