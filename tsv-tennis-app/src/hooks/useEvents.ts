@@ -46,6 +46,7 @@ export function useEvents(userId?: string, authenticated = true) {
     queryKey: EVENTS_QUERY_KEY(userId),
     queryFn: async () => throwOnFailure(await BackendService.getEvents()),
     enabled: authenticated && !!userId,
+    staleTime: 1000 * 60,
   });
 }
 
@@ -54,6 +55,7 @@ export function useEvent(userId?: string, eventId?: number, enabled = true) {
     queryKey: EVENT_DETAIL_QUERY_KEY(userId, eventId),
     queryFn: async () => throwOnFailure(await BackendService.getEvent(eventId!)),
     enabled: enabled && !!userId && eventId !== undefined,
+    staleTime: 1000 * 60,
   });
 }
 
@@ -62,6 +64,7 @@ export function useEventSignups(userId?: string, eventId?: number, enabled = tru
     queryKey: EVENT_SIGNUPS_QUERY_KEY(userId, eventId),
     queryFn: async () => throwOnFailure(await BackendService.getEventSignups(eventId!)),
     enabled: enabled && !!userId && eventId !== undefined,
+    staleTime: 1000 * 30,
   });
 }
 

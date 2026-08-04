@@ -48,6 +48,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const [includeGreeting, setIncludeGreeting] = useState(true);
 
   useEffect(() => {
+    if (!isOpen || countsLoaded) return;
     const fetchCounts = async () => {
       try {
         const response = await BackendService.getMemberCounts();
@@ -62,7 +63,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     };
 
     void fetchCounts();
-  }, []);
+  }, [isOpen, countsLoaded]);
 
   // Clean up polling and reset timeout on unmount
   useEffect(() => {
