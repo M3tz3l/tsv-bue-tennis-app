@@ -89,7 +89,30 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
     if (!pending) onClose();
   };
 
-  if (event && !event.allow_signups) return null;
+  if (event && !event.allow_signups) {
+    if (!signup) return null;
+    return (
+      <ModalShell
+        isOpen={isOpen}
+        onClose={close}
+        title={event.title}
+        disableClose={pending}
+        backdropTestId="modal-backdrop"
+        footer={null}
+        footerActions={{
+          destructive: <button type="button" onClick={() => void cancelSignup()} disabled={pending} className={buttonVariants.destructive}>Abmelden</button>,
+          secondary: <button type="button" onClick={close} disabled={pending} className={buttonVariants.secondary}>Abbrechen</button>,
+        }}
+      >
+        <div className={`${stackMdClass} px-6 py-5`}>
+          <p className="text-sm font-medium text-[var(--body)]">Ihre Anmeldung: {signup.people_count} Personen</p>
+          {signup.salad_count > 0 && <p className="text-sm text-[var(--body)]">Salate: {signup.salad_count}</p>}
+          {signup.cake_count > 0 && <p className="text-sm text-[var(--body)]">Kuchen: {signup.cake_count}</p>}
+          {signup.comment && <p className="text-sm text-[var(--body)]">Kommentar: {signup.comment}</p>}
+        </div>
+      </ModalShell>
+    );
+  }
 
   return (
     <ModalShell

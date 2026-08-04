@@ -26,7 +26,7 @@ Add `allow_signups: bool` to the event:
 - `create_signup` / `update_signup`: return `EventError::Conflict` ("signups are disabled for this event") when `allow_signups` is false.
 - `delete_signup`: still allowed regardless of `allow_signups` (members can cancel an existing signup).
 - `update_event`: may toggle `allow_signups` freely; any existing signups remain and new ones are blocked.
-- `list_events` / `get_event` / `list_signups` responses include `allow_signups`.
+- `list_events` / `get_event` responses include `allow_signups` (the field is on the event payload, not the signup summary).
 
 ## Frontend Behavior
 

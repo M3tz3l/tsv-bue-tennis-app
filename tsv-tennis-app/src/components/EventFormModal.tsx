@@ -9,7 +9,7 @@ import { isOrgaRole } from '../utils/roles';
 import ModalShell from './ModalShell';
 
 type Props = { isOpen: boolean; onClose: () => void; initialData?: EventSummary | null };
-type FormState = Omit<CreateEventRequest, 'type'> & { type: EventType };
+type FormState = Omit<CreateEventRequest, 'type' | 'allow_signups'> & { type: EventType; allow_signups: boolean };
 
 const emptyForm: FormState = { type: 'event', title: '', description: null, event_date: '', start_time: null, end_time: null, location: null, signup_deadline: null, capacity: null, allow_salad: false, allow_cake: false, allow_signups: true, status: 'draft' };
 
@@ -44,7 +44,7 @@ const EventFormModal = ({ isOpen, onClose, initialData = null }: Props) => {
           .filter((field) => payload[field] === null);
         const updatePayload: UpdateEventRequest = {
           ...payload,
-          allow_signups: form.allow_signups ?? true,
+          allow_signups: form.allow_signups,
           clear_fields,
           ...Object.fromEntries(clear_fields.map((field) => [field, undefined])),
         };

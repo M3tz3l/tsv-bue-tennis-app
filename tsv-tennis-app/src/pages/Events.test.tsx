@@ -44,9 +44,12 @@ const event = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const renderEvents = (overrides: Record<string, unknown> = {}) => {
+const renderEvents = (overrides: Record<string, unknown> = {}, detailOverrides: Record<string, unknown> | null = null) => {
   if (Object.keys(overrides).length > 0) {
     mocks.useEvents.mockReturnValue({ data: [event(overrides), event({ id: 2, title: 'Vergangen', event_date: '2000-01-01' }), event({ id: 3, title: 'Entwurf', status: 'draft' })], isLoading: false, error: null });
+  }
+  if (detailOverrides) {
+    mocks.useEvent.mockReturnValue({ data: { event: event(overrides), own_signup: null, ...detailOverrides }, isLoading: false, error: null });
   }
   return render(<MemoryRouter><Events /></MemoryRouter>);
 };
@@ -81,6 +84,22 @@ describe('Events', () => {
     mocks.useEvent.mockReturnValue({ data: { event: event({ allow_signups: false }), own_signup: null }, isLoading: false, error: null });
     renderEvents({ allow_signups: false });
     expect(screen.queryByRole('button', { name: /anmelden|ausgebucht|anmeldeschluss/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the own signup and a cancel button for a disabled event the member signed up for', async () => {
+    const user = userEvent.setup();
+    renderEvents({ allow_signups: false }, { own_signup: { people_count: 2 } });
+
+    expect(screen.getByText(/Ihre Anmeldung: 2 Personen/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Stornieren/i }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Signup modal for 1');
+  });
+
+  it('hides signup UI for a disabled event the member did not sign up for', () => {
+    renderEvents({ allow_signups: false }, { own_signup: null });
+
+    expect(screen.queryByText(/Ihre Anmeldung/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Stornieren/i })).not.toBeInTheDocument();
   });
 
   it('shows only the current member signup status and opens the modal', async () => {

@@ -47,10 +47,26 @@ describe('EventSignupModal', () => {
     mocks.remove.mockResolvedValue({});
   });
 
-  it('renders nothing when the event does not allow signups', () => {
+  it('renders nothing when signups are disabled and the member has no signup', () => {
     mocks.useEvent.mockReturnValue({ data: detail({ event: { ...detail().event, allow_signups: false } }), isLoading: false, error: null });
     render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('renders a read-only cancel state when signups are disabled but the member signed up', async () => {
+    const user = userEvent.setup();
+    mocks.useEvent.mockReturnValue({ data: detail({ event: { ...detail().event, allow_signups: false }, own_signup: { id: 7, event_id: 1, member_id: 'member-1', people_count: 2, salad_count: 1, cake_count: 0, comment: 'Hi' } }), isLoading: false, error: null });
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByText(/Ihre Anmeldung: 2 Personen/)).toBeInTheDocument();
+    expect(screen.getByText(/Salate: 1/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Personen/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Salat/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Kuchen/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Anmelden|Aktualisieren|Speichern/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Abmelden/i }));
+    expect(mocks.remove).toHaveBeenCalledWith(1);
   });
 
   it('defaults people to one and renders enabled contribution fields only', () => {
