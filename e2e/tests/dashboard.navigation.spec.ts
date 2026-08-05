@@ -34,7 +34,7 @@ test.describe('Dashboard Navigation', () => {
     const tokenBefore = await page.evaluate(() => localStorage.getItem('authToken'));
     expect(tokenBefore).toBeTruthy();
 
-    await page.locator('button:has-text("Abmelden")').click();
+    await page.getByRole('button', { name: 'Abmelden' }).click();
 
     await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
     const tokenAfter = await page.evaluate(() => localStorage.getItem('authToken'));
@@ -48,7 +48,7 @@ test.describe('Dashboard Navigation', () => {
     await loginViaBrowser(page, user!.email, getFixtures().password);
     await expect(page).toHaveURL(/dashboard/);
 
-    await page.locator('button:has-text("Abmelden")').click();
+    await page.getByRole('button', { name: 'Abmelden' }).click();
     await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
 
     await page.goto('/dashboard');
@@ -67,6 +67,7 @@ test.describe('Dashboard Navigation', () => {
 
       // Dashboard loads after seeding so the current-year entry is visible
       await loginViaBrowser(page, user!.email, getFixtures().password);
+      await page.goto('/dashboard/arbeitsstunden');
       await expect(page.locator('table').getByText(description)).toBeVisible({ timeout: 10_000 });
 
       const yearSelect = page.locator('select');

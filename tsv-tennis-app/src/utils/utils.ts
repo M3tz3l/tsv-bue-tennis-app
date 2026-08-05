@@ -24,9 +24,6 @@ export const sortEntriesByDate = (entries: WorkHourEntry[]): WorkHourEntry[] =>
 export const getProgressPercentage = (completed: number, required: number): number =>
     required > 0 ? Math.min(100, (completed / required) * 100) : 100;
 
-export const getProgressColor = (percentage: number): string =>
-    percentage >= 100 ? 'bg-green-500' : percentage >= 75 ? 'bg-yellow-500' : 'bg-red-500';
-
 export function hasDuplicateEntry(
     existingEntries: WorkHourEntry[] = [],
     formData: { Datum?: string;[key: string]: unknown },

@@ -70,9 +70,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     const verifyToken = async () => {
         try {
-            console.log('🔍 AuthContext: Verifying token:', token?.substring(0, 20) + '...');
             const response = await backendService.verifyToken();
-            console.log('🔍 AuthContext: Token verification response:', response);
             if (response.success && response.user) {
                 setUser(response.user);
                 localStorage.setItem(AUTH_USER_KEY, JSON.stringify(response.user));
@@ -82,8 +80,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             } else {
                 throw new Error(response.message || 'Token-Überprüfung fehlgeschlagen');
             }
-        } catch (error) {
-            console.error('🚨 AuthContext: Token verification failed:', error);
+        } catch {
             logout();
         } finally {
             setLoading(false);
@@ -92,10 +89,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     const login = async (email: string, password: string): Promise<AuthResult | MemberSelectionResult> => {
         try {
-            console.log('🔍 AuthContext: Starting login for:', email);
             const response = await backendService.login(email, password);
-
-            console.log('🔍 AuthContext: Login response:', response);
 
             if (isApiError(response)) {
                 const errorMessage = response.message || 'Anmeldung fehlgeschlagen';
@@ -120,10 +114,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 const newToken = loginResponse.token;
                 const userData = loginResponse.user;
 
-                console.log('🔍 AuthContext: Setting token and user data');
-                console.log('🔍 AuthContext: Token length:', newToken?.length);
-                console.log('🔍 AuthContext: User data:', userData);
-
                 setToken(newToken);
                 setUser(userData);
                 localStorage.setItem('authToken', newToken);
@@ -133,7 +123,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
             return { success: false, message: 'Unerwartetes Login-Format' };
         } catch (error: unknown) {
-            console.error('🚨 AuthContext: Login error:', error);
             return {
                 success: false,
                 multiple: false,
@@ -144,16 +133,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     const selectMember = async (memberId: string, selectionToken: string): Promise<AuthResult> => {
         try {
-            console.log('🔍 AuthContext: Selecting member:', memberId);
             const response = await backendService.selectMember(memberId, selectionToken);
-
-            console.log('🔍 AuthContext: Member selection response:', response);
 
             if (response.success && response.token && response.user) {
                 const newToken = response.token;
                 const userData = response.user;
-
-                console.log('🔍 AuthContext: Setting token and user data after selection');
 
                 setToken(newToken);
                 setUser(userData);
@@ -165,7 +149,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 return { success: false, message: errorMessage };
             }
         } catch (error: unknown) {
-            console.error('🚨 AuthContext: Member selection error:', error);
             return {
                 success: false,
                 message: getApiErrorMessage(error, 'Mitgliederauswahl fehlgeschlagen. Bitte versuchen Sie es erneut.')

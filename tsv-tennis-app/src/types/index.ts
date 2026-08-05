@@ -23,4 +23,13 @@ export type {
     SendBulkMailRequest,
     MailJob,
     MailJobStatus,
+    EventType,
+    EventStatus,
+    CreateEventRequest,
+    UpdateEventRequest,
+    SignupRequest,
+    EventSummary,
+    EventDetail,
+    EventSignup,
+    SignupSummary,
 } from './types';

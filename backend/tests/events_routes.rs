@@ -112,7 +112,7 @@ async fn regular_members_only_see_published_events_and_own_signup() {
         .authorization(format!("Bearer {}", token("member-1", None)))
         .await;
     response.assert_status_ok();
-    response.assert_json(&json!([json!({"id": published.id, "type": "event", "title": "Club event", "description": null, "event_date": published.event_date, "start_time": null, "end_time": null, "location": null, "signup_deadline": null, "capacity": 2, "allow_salad": true, "allow_cake": true, "allow_signups": true, "status": "published", "signup_people_count": 1})]));
+    response.assert_json(&json!([json!({"event": {"id": published.id, "type": "event", "title": "Club event", "description": null, "event_date": published.event_date, "start_time": null, "end_time": null, "location": null, "signup_deadline": null, "capacity": 2, "allow_salad": true, "allow_cake": true, "allow_signups": true, "status": "published", "signup_people_count": 1}, "own_signup": {"id": 1, "event_id": published.id, "member_id": "member-1", "member_name": null, "people_count": 1, "salad_count": 0, "cake_count": 0, "comment": null}})]));
 
     let detail = server
         .get(&format!("/events/{}", published.id))
@@ -140,7 +140,7 @@ async fn orga_list_includes_drafts_and_past_events() {
     response.assert_status_ok();
     let events = response.json::<Vec<serde_json::Value>>();
     assert_eq!(events.len(), 1);
-    assert_eq!(events[0]["status"], "draft");
+    assert_eq!(events[0]["event"]["status"], "draft");
 }
 
 #[tokio::test]

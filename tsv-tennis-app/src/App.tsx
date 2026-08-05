@@ -11,6 +11,8 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
+import DashboardOverview from "./pages/DashboardOverview";
+import Events from "./pages/Events";
 import Impressum from "./pages/Impressum";
 import Datenschutz from "./pages/Datenschutz";
 import 'react-toastify/dist/ReactToastify.css';
@@ -31,7 +33,7 @@ const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
             <AuthProvider>
-                <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
+                <div className="min-h-screen bg-[var(--canvas)] flex flex-col">
                     <ToastContainer
                         position="top-right"
                         autoClose={5000}
@@ -57,11 +59,24 @@ const App = () => {
                                 <Route path="/dashboard"
                                     element={
                                         <ProtectedRoute>
+                                             <DashboardOverview />
+                                        </ProtectedRoute>
+                                    } />
+                                <Route path="/dashboard/arbeitsstunden"
+                                    element={
+                                        <ProtectedRoute>
                                             <Dashboard />
+                                        </ProtectedRoute>
+                                    } />
+                                <Route path="/dashboard/veranstaltungen"
+                                    element={
+                                        <ProtectedRoute>
+                                            <Events />
                                         </ProtectedRoute>
                                     } />
                                 <Route path="/impressum" element={<Impressum />} />
                                 <Route path="/datenschutz" element={<Datenschutz />} />
+                                <Route path="*" element={<HomeRedirect />} />
                             </Routes>
                         </div>
                         <Footer />

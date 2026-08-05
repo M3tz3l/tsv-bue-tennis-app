@@ -153,6 +153,36 @@ impl EventRepository {
         Ok(rows.iter().map(summary).collect())
     }
 
+    pub async fn list_published_future_with_signup(
+        &self,
+        member_id: &str,
+    ) -> EventResult<Vec<EventDetail>> {
+        let event_rows = sqlx::query(
+            "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE status='published' AND event_date >= date('now') ORDER BY event_date,start_time",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let signup_rows = sqlx::query("SELECT id,event_id,member_id,people_count,salad_count,cake_count,comment FROM event_signups WHERE member_id=?")
+            .bind(member_id)
+            .fetch_all(&self.pool)
+            .await?;
+        let signups_by_event: std::collections::HashMap<i64, EventSignup> = signup_rows
+            .iter()
+            .map(|row| {
+                let s = signup(row);
+                (s.event_id, s)
+            })
+            .collect();
+        Ok(event_rows
+            .iter()
+            .map(|row| {
+                let event = summary(row);
+                let own_signup = signups_by_event.get(&event.id).cloned();
+                EventDetail { event, own_signup }
+            })
+            .collect())
+    }
+
     pub async fn list_all_events(&self) -> EventResult<Vec<EventSummary>> {
         let rows = sqlx::query(
             "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events ORDER BY event_date,start_time",

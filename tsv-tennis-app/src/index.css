@@ -1,1 +1,117 @@
 @import "tailwindcss";
+
+@theme {
+  --radius: 0px;
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
+  /* --radius-full intentionally left for avatars/pills */
+}
+
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("/fonts/archivo-latin.woff2") format("woff2");
+}
+
+:root {
+  /* inOpera "Modernist" design tokens — cool gray canvas, red voltage, sharp corners */
+  --canvas: #f3f2f2;
+  --canvas-soft: #f8f4f4;
+  --ink: #201e1d;
+  --body: #4a4845;
+  --muted: #7d7979;
+  --muted-soft: #9b9797;
+  --hairline: #e4e2e2;
+  --hairline-soft: #eae7e7;
+  --hairline-strong: #d7d3d3;
+  --primary: #ec3013;
+  --primary-active: #c5260f;
+  --on-primary: #ffffff;
+  --success: #1f7a52;
+  --error: #cf2d56;
+}
+
+body {
+  overflow-x: hidden;
+  background-color: var(--canvas);
+  color: var(--ink);
+  font-family: "Archivo", system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Archivo", system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.015em;
+    line-height: 1.12;
+    margin: 0 0 0.5rem;
+  }
+}
+
+.hr {
+  height: 2px;
+  border: 0;
+  margin: 1rem 0;
+  background: var(--hairline-strong);
+}
+
+.touch-control {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+.action-control {
+  min-height: 2.75rem;
+  padding-inline: 1rem;
+}
+
+.card-shell {
+  border-radius: 0;
+  border: 1px solid var(--hairline);
+  background-color: #ffffff;
+  padding: 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .card-shell {
+    padding: 1.5rem;
+  }
+}
+
+.stack-md {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .club-navigation-motion,
+  .club-navigation-motion * {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

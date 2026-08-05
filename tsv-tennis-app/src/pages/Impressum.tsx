@@ -1,8 +1,8 @@
 const Impressum = () => {
     return (
         <div className="max-w-3xl mx-auto px-4 py-10">
-            <h1 className="text-2xl font-semibold mb-4">Impressum</h1>
-            <div className="space-y-4 text-gray-800">
+            <h1 className="text-2xl font-extrabold mb-4">Impressum</h1>
+            <div className="space-y-4 text-[var(--ink)]">
                 <div>
                     TSV Bad Überkingen 1889 e.V.<br />
                     Türkheimer Str. 21<br />
