@@ -3,14 +3,16 @@ import { useAuth } from '../context/AuthContext';
 import BackendService, { getApiErrorMessage } from '../services/backendService.ts';
 import { PencilIcon, PlusIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
-import type { WorkHourEntry, MemberContribution } from '../types';
+import type { WorkHourEntry } from '../types';
 import useDashboard from '../hooks/useDashboard';
 import { useWorkHourSave } from '../hooks/useWorkHourSave';
 import ArbeitsstundenFormModal from '../components/ArbeitsstundenFormModal';
 import DashboardShell from '../components/DashboardShell';
 import WorkHoursOverviewCard from '../components/WorkHoursOverviewCard';
+import Spinner from '../components/Spinner';
 import {
     getCurrentYear,
+    getFamilyMemberEntries,
     formatHours,
     sortEntriesByDate,
 } from '../utils/utils';
@@ -56,11 +58,7 @@ const Dashboard = () => {
     // Consolidate current user's entries from personal + family data
     const renderArbeitsstundenTable = () => {
         if (isLoading) {
-            return (
-                <div className="flex justify-center items-center py-12">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary)]"></div>
-                </div>
-            );
+            return <Spinner />;
         }
 
         if (error || !dashboardData?.success) {
@@ -81,9 +79,7 @@ const Dashboard = () => {
 
         // Get work hours data from personal or family context
         // Use personal entries if available; otherwise use entries for the current family member only
-        const currentMemberEntries = dashboardData?.family?.memberContributions
-            ?.filter((m: MemberContribution) => m.id === user?.id)
-            .flatMap((m: MemberContribution) => m.entries || []) || [];
+        const currentMemberEntries = getFamilyMemberEntries(dashboardData, user?.id);
 
         const data = sortEntriesByDate(
             dashboardData?.personal?.entries?.length ? dashboardData.personal.entries : currentMemberEntries,

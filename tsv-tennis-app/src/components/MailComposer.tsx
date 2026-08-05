@@ -486,6 +486,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     type="button"
                     role="switch"
                     aria-checked={includeGreeting}
+                    aria-labelledby="greeting-switch-label"
                     onClick={() => setIncludeGreeting(!includeGreeting)}
                     disabled={isBusy}
                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -498,13 +499,10 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                       }`}
                     />
                   </button>
-                  <label
-                    className="text-sm text-[var(--body)] cursor-pointer select-none"
-                    onClick={() => !isBusy && setIncludeGreeting(!includeGreeting)}
-                  >
+                  <span id="greeting-switch-label" className="text-sm text-[var(--body)]">
                     Persönliche Anrede
                     <span className="text-[var(--muted-soft)] ml-1">(Vorname des Empfängers)</span>
-                  </label>
+                  </span>
                 </div>
 
                 {/* Attachments */}

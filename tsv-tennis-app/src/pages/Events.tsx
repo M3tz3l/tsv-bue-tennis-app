@@ -11,7 +11,8 @@ import EventSignupsModal from '../components/EventSignupsModal';
 import DashboardShell from '../components/DashboardShell';
 import { isOrgaRole } from '../utils/roles';
 import { buttonVariants, cardShellClass } from '../styles/tokens';
-import { formatDate, isPast, parseEventDate } from '../utils/dates';
+import { isPast, parseEventDate } from '../utils/dates';
+import EventDetails from '../components/EventDetails';
 
 const EventCard = ({ detail, isOrga, onSelect, onEdit, onSignups }: { detail: EventDetail; isOrga: boolean; onSelect: (id: number) => void; onEdit: (event: EventSummary) => void; onSignups: (id: number) => void }) => {
   const event = detail.event;
@@ -24,13 +25,7 @@ const EventCard = ({ detail, isOrga, onSelect, onEdit, onSignups }: { detail: Ev
     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">{event.type === 'work-duty' ? 'Arbeitsdienst' : 'Veranstaltung'}</p>
     <h2 className="mt-1 text-lg font-extrabold tracking-tight text-[var(--ink)]">{event.title}</h2>
     {event.description && <p className="mt-2 text-sm text-[var(--muted)]">{event.description}</p>}
-    <dl className="mt-3 space-y-1 text-sm">
-      <div><dt className="inline text-[var(--muted)]">Datum: </dt><dd className="inline font-medium text-[var(--ink)]">{formatDate(event.event_date)}</dd></div>
-      {(event.start_time || event.end_time) && <div><dt className="inline text-[var(--muted)]">Zeit: </dt><dd className="inline font-medium text-[var(--ink)]">{event.start_time ?? ''}{event.end_time ? ` - ${event.end_time}` : ''}</dd></div>}
-      {event.location && <div><dt className="inline text-[var(--muted)]">Ort: </dt><dd className="inline font-medium text-[var(--ink)]">{event.location}</dd></div>}
-      <div><dt className="inline text-[var(--muted)]">Plätze: </dt><dd className="inline font-medium text-[var(--ink)]">{event.signup_people_count}{event.capacity === null ? '' : ` / ${event.capacity}`} Personen</dd></div>
-      {event.signup_deadline && <div><dt className="inline text-[var(--muted)]">Anmeldung bis: </dt><dd className="inline font-medium text-[var(--ink)]">{formatDate(event.signup_deadline)}</dd></div>}
-    </dl>
+    <EventDetails event={event} />
     {ownSignup && <p className="mt-3 text-sm font-medium text-[var(--primary-active)]">Ihre Anmeldung: {ownSignup.people_count} Personen</p>}
     {!event.allow_signups && ownSignup && (
       <div className="mt-3">

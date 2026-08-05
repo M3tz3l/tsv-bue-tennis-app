@@ -119,7 +119,7 @@ const Login = () => {
                                         </div>
                                         <button
                                             onClick={dismissBanner}
-                                            className="ml-3 text-[var(--muted-soft)] hover:text-[var(--ink)] focus:outline-none"
+                                            className="ml-3 touch-control inline-flex items-center justify-center rounded-md text-[var(--muted-soft)] hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                                             aria-label="Banner schließen"
                                         >
                                             <XMarkIcon className="h-4 w-4" />
@@ -151,21 +151,29 @@ const Login = () => {
                                                 Passwort
                                             </label>
                                             <div className="relative ml-2">
-                                                <InformationCircleIcon
-                                                    className="h-4 w-4 text-[var(--muted-soft)] hover:text-[var(--muted)] cursor-pointer"
+                                                <button
+                                                    type="button"
+                                                    aria-label="Passwort-Hinweis anzeigen"
+                                                    aria-expanded={showTooltip}
                                                     onClick={() => setShowTooltip(!showTooltip)}
+                                                    onBlur={() => setShowTooltip(false)}
+                                                    className="touch-control inline-flex items-center justify-center rounded-md text-[var(--muted-soft)] hover:text-[var(--muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                                                     {...(hoverEnabled ? {
                                                         onMouseEnter: () => setShowTooltip(true),
                                                         onMouseLeave: () => setShowTooltip(false)
                                                     } : {})}
-                                                />
+                                                >
+                                                    <InformationCircleIcon className="h-4 w-4" />
+                                                </button>
                                                 {showTooltip && (
                                                     <div className="absolute left-0 top-6 w-64 p-2 bg-[var(--ink)] text-white text-xs rounded-md z-10">
                                                         <div className="flex justify-between items-start">
                                                             <span>Bitte setzen Sie Ihr Passwort zurück, bevor Sie sich zum ersten Mal anmelden.</span>
                                                             <button
+                                                                type="button"
                                                                 onClick={() => setShowTooltip(false)}
-                                                                className="ml-2 text-[var(--muted-soft)] hover:text-white"
+                                                                aria-label="Hinweis schließen"
+                                                                className="ml-2 touch-control inline-flex items-center justify-center rounded-md text-[var(--muted-soft)] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                                                             >
                                                                 <XMarkIcon className="h-4 w-4" />
                                                             </button>
@@ -187,7 +195,7 @@ const Login = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--muted-soft)] hover:text-[var(--muted)] focus:outline-none focus:text-[var(--muted)]"
+                                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--muted-soft)] hover:text-[var(--muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                                                 aria-label={showPassword ? 'Passwort verbergen' : 'Passwort anzeigen'}
                                             >
                                                 {showPassword ? (
