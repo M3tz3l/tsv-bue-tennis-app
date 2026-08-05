@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCreateEventSignup, useDeleteEventSignup, useEvent, useUpdateEventSignup } from '../hooks/useEvents';
 import type { SignupRequest } from '../types';
 import ModalShell from './ModalShell';
+import { formatDate } from '../utils/dates';
 
 type Props = { eventId: number; isOpen: boolean; onClose: () => void };
 
@@ -130,6 +131,18 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
     >
       {isLoading && <p className="p-6 text-[var(--muted)]">Wird geladen...</p>}
       {error && <p className="p-6 text-[var(--error)]">Fehler beim Laden der Veranstaltung</p>}
+      {data?.event && (
+        <div className="px-6 pt-5">
+          {data.event.description && <p className="text-sm text-[var(--body)]">{data.event.description}</p>}
+          <dl className="mt-3 space-y-1 text-sm">
+            <div><dt className="inline text-[var(--muted)]">Datum: </dt><dd className="inline font-medium text-[var(--ink)]">{formatDate(data.event.event_date)}</dd></div>
+            {(data.event.start_time || data.event.end_time) && <div><dt className="inline text-[var(--muted)]">Zeit: </dt><dd className="inline font-medium text-[var(--ink)]">{data.event.start_time && data.event.end_time ? `${data.event.start_time} - ${data.event.end_time}` : data.event.start_time || data.event.end_time}</dd></div>}
+            {data.event.location && <div><dt className="inline text-[var(--muted)]">Ort: </dt><dd className="inline font-medium text-[var(--ink)]">{data.event.location}</dd></div>}
+            <div><dt className="inline text-[var(--muted)]">Plätze: </dt><dd className="inline font-medium text-[var(--ink)]">{data.event.signup_people_count}{data.event.capacity === null ? '' : ` / ${data.event.capacity}`} Personen</dd></div>
+            {data.event.signup_deadline && <div><dt className="inline text-[var(--muted)]">Anmeldung bis: </dt><dd className="inline font-medium text-[var(--ink)]">{formatDate(data.event.signup_deadline)}</dd></div>}
+          </dl>
+        </div>
+      )}
       {data?.event && (
         <form id="event-signup-form" onSubmit={submit} className={`${stackMdClass} px-6 py-5`}>
               <div>

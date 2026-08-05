@@ -198,4 +198,41 @@ describe('EventSignupModal', () => {
     expect(mocks.toastError).toHaveBeenCalledWith('Serverfehler');
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it('shows the event details so a link recipient can see what the event is about', () => {
+    mocks.useEvent.mockReturnValue({ data: detail({
+      event: {
+        ...detail().event,
+        description: 'Gemeinsamer Abend mit Gesang',
+        start_time: '18:00', end_time: '22:00',
+        location: 'Clubheim', signup_deadline: '2099-07-01',
+      },
+    }), isLoading: false, error: null });
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByText('Gemeinsamer Abend mit Gesang')).toBeInTheDocument();
+    expect(screen.getByText(/12\. Juli 2099/)).toBeInTheDocument();
+    expect(screen.getByText(/18:00 - 22:00/)).toBeInTheDocument();
+    expect(screen.getByText(/Clubheim/)).toBeInTheDocument();
+    expect(screen.getByText(/Anmeldung bis/)).toBeInTheDocument();
+    expect(screen.getByText(/2 \/ 20/)).toBeInTheDocument();
+  });
+
+  it('renders only the fields that exist on the event in the details block', () => {
+    mocks.useEvent.mockReturnValue({ data: detail({ event: { ...detail().event, description: null, start_time: null, end_time: null, location: null, signup_deadline: null, capacity: null } }), isLoading: false, error: null });
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+
+    expect(screen.queryByText(/Anmeldung bis/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Clubheim/)).not.toBeInTheDocument();
+    expect(screen.getByText(/12\. Juli 2099/)).toBeInTheDocument();
+  });
+
+  it('renders a single available time without a leading separator when only end_time exists', () => {
+    mocks.useEvent.mockReturnValue({ data: detail({ event: { ...detail().event, start_time: null, end_time: '22:00' } }), isLoading: false, error: null });
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByText(/Zeit:/)).toBeInTheDocument();
+    expect(screen.queryByText(/ - 22:00/)).not.toBeInTheDocument();
+    expect(screen.getByText('22:00')).toBeInTheDocument();
+  });
 });
