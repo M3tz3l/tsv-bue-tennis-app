@@ -150,18 +150,20 @@ const Login = () => {
                                             <label htmlFor="password" className="block text-sm font-medium text-[var(--body)]">
                                                 Passwort
                                             </label>
-                                            <div className="relative ml-2">
+                                            <div
+                                                className="relative ml-2"
+                                                onBlur={() => setShowTooltip(false)}
+                                                onMouseLeave={() => hoverEnabled && setShowTooltip(false)}
+                                            >
                                                 <button
                                                     type="button"
                                                     aria-label="Passwort-Hinweis anzeigen"
                                                     aria-expanded={showTooltip}
                                                     onClick={() => setShowTooltip(!showTooltip)}
-                                                    onBlur={() => setShowTooltip(false)}
-                                                    className="touch-control inline-flex items-center justify-center rounded-md text-[var(--muted-soft)] hover:text-[var(--muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                                                     {...(hoverEnabled ? {
                                                         onMouseEnter: () => setShowTooltip(true),
-                                                        onMouseLeave: () => setShowTooltip(false)
                                                     } : {})}
+                                                    className="touch-control inline-flex items-center justify-center rounded-md text-[var(--muted-soft)] hover:text-[var(--muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                                                 >
                                                     <InformationCircleIcon className="h-4 w-4" />
                                                 </button>
