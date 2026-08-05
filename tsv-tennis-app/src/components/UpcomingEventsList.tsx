@@ -2,7 +2,7 @@ import { CalendarIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
 import { Link } from 'react-router-dom';
 import type { EventDetail } from '../types';
 import { cardShellClass, stackMdClass } from '../styles/tokens';
-import { eventTimestamp, formatDate, isFutureEvent } from '../utils/dates';
+import { eventTimestamp, formatDate, formatTimeRange, isFutureEvent } from '../utils/dates';
 
 type UpcomingEventsListProps = {
     events?: EventDetail[];
@@ -26,7 +26,7 @@ const EventRow = ({ detail }: { detail: EventDetail }) => {
                     ) : (
                       <span className="mt-1 block text-base font-semibold text-[var(--ink)]">{event.title}</span>
                     )}
-                    <p className="mt-1 text-sm text-[var(--body)]">{formatDate(event.event_date)}{event.start_time ? `, ${event.start_time} Uhr` : ''}</p>
+                    <p className="mt-1 text-sm text-[var(--body)]">{formatDate(event.event_date)}{formatTimeRange(event.start_time, event.end_time) ? `, ${formatTimeRange(event.start_time, event.end_time)} Uhr` : ''}</p>
                     {(event.location || event.description) && <p className="mt-1 text-sm text-[var(--muted)]">{event.location || event.description}</p>}
                 </div>
                 {ownSignup && <p className="shrink-0 text-sm font-medium text-[var(--primary-active)]">Ihre Anmeldung: {ownSignup.people_count} Personen</p>}

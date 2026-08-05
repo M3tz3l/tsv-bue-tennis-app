@@ -7,10 +7,17 @@ export const getMemberEntries = (
     dashboard: DashboardResponse | undefined,
     userId: string | undefined,
 ): WorkHourEntry[] => {
-    const familyEntries = (dashboard?.family?.memberContributions ?? [])
+    return [...(dashboard?.personal?.entries ?? []), ...getFamilyMemberEntries(dashboard, userId)];
+};
+
+/** Entries belonging to the current member's family record, or empty. */
+export const getFamilyMemberEntries = (
+    dashboard: DashboardResponse | undefined,
+    userId: string | undefined,
+): WorkHourEntry[] => {
+    return (dashboard?.family?.memberContributions ?? [])
         .filter((member: MemberContribution) => member.id === userId)
         .flatMap((member: MemberContribution) => member.entries ?? []);
-    return [...(dashboard?.personal?.entries ?? []), ...familyEntries];
 };
 
 export const sortEntriesByDate = (entries: WorkHourEntry[]): WorkHourEntry[] =>

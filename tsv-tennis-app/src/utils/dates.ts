@@ -23,3 +23,13 @@ export const eventTimestamp = (event: Pick<EventSummary, 'event_date' | 'start_t
   const timestamp = new Date(value).getTime();
   return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
 };
+
+/** Formats an event's start/end time as "HH:MM - HH:MM", or a single time
+ * when only one endpoint is set. Returns null when neither is set. */
+export const formatTimeRange = (
+  startTime: string | null | undefined,
+  endTime: string | null | undefined,
+): string | null => {
+  if (startTime && endTime) return `${startTime} - ${endTime}`;
+  return startTime || endTime || null;
+};
