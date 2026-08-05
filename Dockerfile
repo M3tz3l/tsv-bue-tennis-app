@@ -27,8 +27,8 @@ RUN npm ci --silent
 # Copy source (includes scripts/sync-fonts.sh; the woff2 is not committed)
 COPY tsv-tennis-app/ .
 
-# Install tools needed by sync-fonts.sh and download the Archivo font
-RUN apk add --no-cache bash curl python3 && ./scripts/sync-fonts.sh
+# Install tools needed by sync-fonts.sh; npm run build's prebuild hook runs it
+RUN apk add --no-cache bash curl python3
 
 # Copy generated TypeScript types from Rust backend
 COPY --from=backend-builder /app/bindings/types.ts ./src/types/
