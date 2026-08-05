@@ -794,11 +794,27 @@ mod tests {
         let missing = server.get("/fonts/does-not-exist.woff2").await;
         assert_eq!(missing.status_code(), 404);
 
-        // SPA navigation routes serve index.html.
+        // SPA navigation routes serve index.html when the client asks for HTML.
         std::env::set_var("STATIC_DIR", &static_dir);
-        let spa = server.get("/dashboard/veranstaltungen").await;
+        let spa = server
+            .get("/dashboard/veranstaltungen")
+            .add_header("accept", "text/html")
+            .await;
         assert_eq!(spa.status_code(), 200);
         assert_eq!(spa.text(), "<html>tsv-spa</html>");
+
+        // A dotted navigation path is still a navigation, not an asset.
+        let dotted = server
+            .get("/members/alice.smith")
+            .add_header("accept", "text/html")
+            .await;
+        assert_eq!(dotted.status_code(), 200);
+        assert_eq!(dotted.text(), "<html>tsv-spa</html>");
+
+        // A non-HTML request for a missing path 404s (e.g. an API-ish/asset
+        // request that was not served by ServeDir).
+        let non_html = server.get("/members/alice.smith").await;
+        assert_eq!(non_html.status_code(), 404);
         std::env::remove_var("STATIC_DIR");
 
         std::fs::remove_dir_all(&static_dir).ok();
