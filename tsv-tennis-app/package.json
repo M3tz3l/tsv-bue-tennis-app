@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "deploy": "npm run build:prod && gh-pages -d dist",
     "sync-types": "./sync-types.sh",
-    "predev": "echo 'ℹ️  Run npm run sync-types if backend types changed'"
+    "sync-fonts": "../sync-fonts.sh",
+    "predev": "npm run sync-fonts && echo 'ℹ️  Run npm run sync-types if backend types changed'"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.6",

@@ -23,6 +23,9 @@ tsv-tennis-app/dist/
 tsv-tennis-app/.vite/
 tsv-tennis-app/coverage/
 
+# Self-hosted fonts are fetched at build time (see sync-fonts.sh)
+tsv-tennis-app/public/fonts/
+
 # Logs
 *.log
 logs/
