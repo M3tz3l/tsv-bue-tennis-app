@@ -154,8 +154,18 @@ pub async fn spa_fallback(uri: axum::http::Uri) -> Response {
         return (StatusCode::NOT_FOUND, "API endpoint not found").into_response();
     }
 
-    // For all other routes, serve the index.html file for React Router
-    match tokio::fs::read_to_string("/app/static/index.html").await {
+    // A path with a file extension (e.g. /fonts/x.woff2, /assets/x.js) that
+    // was not served by ServeDir is a missing asset — return 404 rather than
+    // serving index.html as the asset's content.
+    if has_file_extension(path) {
+        return (StatusCode::NOT_FOUND, "Not found").into_response();
+    }
+
+    // For all other routes, serve the index.html file for React Router.
+    // The static dir is configurable for tests, defaulting to /app/static in
+    // the Docker image.
+    let static_dir = std::env::var("STATIC_DIR").unwrap_or_else(|_| "/app/static".to_string());
+    match tokio::fs::read_to_string(format!("{static_dir}/index.html")).await {
         Ok(content) => Html(content).into_response(),
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -163,4 +173,16 @@ pub async fn spa_fallback(uri: axum::http::Uri) -> Response {
         )
             .into_response(),
     }
+}
+
+/// True when the last path segment contains a '.' (a file extension), which
+/// distinguishes asset requests (fonts, images, scripts) from HTML navigation
+/// routes like `/dashboard/veranstaltungen`.
+fn has_file_extension(path: &str) -> bool {
+    path.rsplit('/').next().is_some_and(|seg| {
+        !seg.is_empty()
+            && seg
+                .rsplit_once('.')
+                .is_some_and(|(name, _)| !name.is_empty())
+    })
 }

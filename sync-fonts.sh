@@ -14,13 +14,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FONT_DIR="$SCRIPT_DIR/tsv-tennis-app/public/fonts"
 FONT_FILE="$FONT_DIR/archivo-latin.woff2"
 UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+# Bound connection/total time and add a few retries so a stalled network
+# cannot block predev or the Docker build indefinitely.
+CURL_OPTS=(--connect-timeout 10 --max-time 60 --retry 3 --retry-delay 2)
 
 mkdir -p "$FONT_DIR"
 
 # Resolve the current latin-subset woff2 URL from the Google Fonts CSS API so
 # we don't pin a hash URL that can rotate over time.
 CSS_URL="https://fonts.googleapis.com/css2?family=Archivo:wght@400..800&display=swap"
-CSS="$(curl -fsSL -A "$UA" "$CSS_URL")"
+CSS="$(curl -fsSL "${CURL_OPTS[@]}" -A "$UA" "$CSS_URL")"
 
 FONT_URL="$(printf '%s' "$CSS" \
   | python3 -c '
@@ -40,5 +43,5 @@ if [[ -z "$FONT_URL" ]]; then
 fi
 
 echo "sync-fonts: downloading $FONT_URL"
-curl -fsSL "$FONT_URL" -o "$FONT_FILE"
+curl -fsSL "${CURL_OPTS[@]}" "$FONT_URL" -o "$FONT_FILE"
 echo "sync-fonts: wrote $FONT_FILE ($(du -h "$FONT_FILE" | cut -f1))"
