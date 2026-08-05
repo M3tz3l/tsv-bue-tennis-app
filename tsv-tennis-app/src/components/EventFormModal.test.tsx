@@ -25,7 +25,7 @@ import EventFormModal from './EventFormModal';
 
 const event = {
   id: 4, type: 'event' as const, title: 'Sommerfest', description: 'Abend', event_date: '2099-07-12',
-  start_time: null, end_time: '22:00', location: 'Clubheim', signup_deadline: null, capacity: null,
+  start_time: '18:00', end_time: '22:00', location: 'Clubheim', signup_deadline: null, capacity: null,
   allow_salad: true, allow_cake: false, allow_signups: true, status: 'draft' as const, signup_people_count: 0,
 };
 
@@ -56,6 +56,7 @@ describe('EventFormModal', () => {
     render(<EventFormModal isOpen onClose={vi.fn()} />);
     await user.type(screen.getByLabelText(/Titel/i), 'Sommerfest');
     await user.type(screen.getByLabelText(/Datum/i), '2099-07-12');
+    await user.type(screen.getByLabelText(/Startzeit/i), '18:00');
     await user.type(screen.getByLabelText(/Endzeit/i), '22:00');
     await user.type(screen.getByLabelText(/Beschreibung/i), 'Abend');
     await user.type(screen.getByLabelText(/Ort/i), 'Clubheim');
@@ -64,9 +65,24 @@ describe('EventFormModal', () => {
 
     expect(mocks.create).toHaveBeenCalledWith({
       type: 'event', title: 'Sommerfest', description: 'Abend', event_date: '2099-07-12',
-      start_time: null, end_time: '22:00', location: 'Clubheim', signup_deadline: null,
+      start_time: '18:00', end_time: '22:00', location: 'Clubheim', signup_deadline: null,
       capacity: null, allow_salad: true, allow_cake: false, allow_signups: true, status: 'draft',
     });
+  });
+
+  it('disables end time until a start time is set, and clears end time when start time is removed', async () => {
+    const user = userEvent.setup();
+    render(<EventFormModal isOpen onClose={vi.fn()} />);
+
+    const end = screen.getByLabelText(/Endzeit/i);
+    expect(end).toBeDisabled();
+
+    await user.type(screen.getByLabelText(/Startzeit/i), '18:00');
+    expect(end).toBeEnabled();
+
+    await user.clear(screen.getByLabelText(/Startzeit/i));
+    expect(end).toBeDisabled();
+    expect(end).toHaveValue('');
   });
 
   it('publishes an edited event and confirms deletion', async () => {
