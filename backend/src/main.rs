@@ -1,5 +1,6 @@
 use axum::{
     extract::{Json, State},
+    handler::HandlerWithoutStateExt,
     http::{HeaderMap, Method, StatusCode},
     middleware,
     response::IntoResponse,
@@ -12,7 +13,7 @@ use tokio::net::TcpListener;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::services::{ServeDir, ServeFile};
+use tower_http::services::ServeDir;
 use tracing::{debug, error, info};
 use tsv_tennis_backend::config::Config;
 use tsv_tennis_backend::database::Database;
@@ -251,12 +252,13 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .nest("/api", api_routes)
-        // Serve static files first
-        .nest_service("/assets", ServeDir::new("/app/static/assets"))
-        .route_service("/favicon.ico", ServeFile::new("/app/static/favicon.ico"))
-        .route_service("/vite.svg", ServeFile::new("/app/static/vite.svg"))
-        // Fallback to SPA handler for all other routes
-        .fallback(state::spa_fallback)
+        // Serve static files (assets, fonts, favicon). Missing files fall
+        // through to spa_fallback, which serves index.html for navigation
+        // routes but 404s missing asset files (fonts, images, scripts).
+        .nest_service(
+            "/",
+            ServeDir::new("/app/static").fallback(state::spa_fallback.into_service()),
+        )
         .layer(cors)
         .with_state(state);
 
@@ -760,18 +762,62 @@ mod tests {
     #[serial_test::serial]
     #[tokio::test]
     async fn test_static_file_serving() {
-        let app = create_test_app().await;
+        // Build a static-serving router against a temporary fixture dir so the
+        // test exercises ServeDir + the SPA fallback for real.
+        let static_dir =
+            std::env::temp_dir().join(format!("tsv-static-test-{}", std::process::id()));
+        let fonts_dir = static_dir.join("fonts");
+        std::fs::create_dir_all(&fonts_dir).unwrap();
+        std::fs::write(fonts_dir.join("archivo-latin.woff2"), b"fake-woff2-bytes").unwrap();
+        std::fs::write(static_dir.join("index.html"), b"<html>tsv-spa</html>").unwrap();
+
+        let app = Router::new()
+            .nest_service(
+                "/",
+                ServeDir::new(&static_dir).fallback(state::spa_fallback.into_service()),
+            )
+            .with_state(create_test_app().await);
         let server = TestServer::new(app).unwrap();
 
-        // These should return 404 since static files don't exist in test
-        let response = server.get("/assets/test.js").await;
-        assert_eq!(response.status_code(), 404);
+        // Existing font serves its bytes with the font content type.
+        let font = server.get("/fonts/archivo-latin.woff2").await;
+        assert_eq!(font.status_code(), 200);
+        assert_eq!(font.text(), "fake-woff2-bytes");
+        assert!(font
+            .headers()
+            .get("content-type")
+            .map(|v| v.to_str().unwrap())
+            .unwrap_or("")
+            .contains("font"));
 
-        let response = server.get("/favicon.ico").await;
-        assert_eq!(response.status_code(), 404);
+        // Missing asset returns 404, not index.html.
+        let missing = server.get("/fonts/does-not-exist.woff2").await;
+        assert_eq!(missing.status_code(), 404);
 
-        let response = server.get("/vite.svg").await;
-        assert_eq!(response.status_code(), 404);
+        // SPA navigation routes serve index.html when the client asks for HTML.
+        std::env::set_var("STATIC_DIR", &static_dir);
+        let spa = server
+            .get("/dashboard/veranstaltungen")
+            .add_header("accept", "text/html")
+            .await;
+        assert_eq!(spa.status_code(), 200);
+        assert_eq!(spa.text(), "<html>tsv-spa</html>");
+
+        // A dotted navigation path is still a navigation, not an asset.
+        let dotted = server
+            .get("/members/alice.smith")
+            .add_header("accept", "text/html")
+            .await;
+        assert_eq!(dotted.status_code(), 200);
+        assert_eq!(dotted.text(), "<html>tsv-spa</html>");
+
+        // A non-HTML request for a missing path 404s (e.g. an API-ish/asset
+        // request that was not served by ServeDir).
+        let non_html = server.get("/members/alice.smith").await;
+        assert_eq!(non_html.status_code(), 404);
+        std::env::remove_var("STATIC_DIR");
+
+        std::fs::remove_dir_all(&static_dir).ok();
     }
 
     #[serial_test::serial]

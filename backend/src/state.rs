@@ -146,7 +146,7 @@ pub async fn auth_middleware(
 }
 
 // SPA fallback for React Router
-pub async fn spa_fallback(uri: axum::http::Uri) -> Response {
+pub async fn spa_fallback(uri: axum::http::Uri, headers: axum::http::HeaderMap) -> Response {
     let path = uri.path();
 
     // If it's an API request, return 404
@@ -154,8 +154,20 @@ pub async fn spa_fallback(uri: axum::http::Uri) -> Response {
         return (StatusCode::NOT_FOUND, "API endpoint not found").into_response();
     }
 
-    // For all other routes, serve the index.html file for React Router
-    match tokio::fs::read_to_string("/app/static/index.html").await {
+    // Serve index.html only for HTML navigation requests (e.g. a browser
+    // navigating to a client-side route). Missing asset requests — fonts,
+    // images, scripts — that were not served by ServeDir return 404 rather
+    // than HTML. Navigation intent is detected via the Accept header (and
+    // Sec-Fetch-Dest when present) so dotted paths like /members/alice.smith
+    // are still treated as navigation, not assets.
+    if !wants_html(&headers) {
+        return (StatusCode::NOT_FOUND, "Not found").into_response();
+    }
+
+    // Serve the index.html file for React Router. The static dir is
+    // configurable for tests, defaulting to /app/static in the Docker image.
+    let static_dir = std::env::var("STATIC_DIR").unwrap_or_else(|_| "/app/static".to_string());
+    match tokio::fs::read_to_string(format!("{static_dir}/index.html")).await {
         Ok(content) => Html(content).into_response(),
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -163,4 +175,20 @@ pub async fn spa_fallback(uri: axum::http::Uri) -> Response {
         )
             .into_response(),
     }
+}
+
+/// True when the request is a browser HTML navigation (Accept includes
+/// text/html, or Sec-Fetch-Dest is "document"), so the SPA fallback applies.
+fn wants_html(headers: &axum::http::HeaderMap) -> bool {
+    if headers
+        .get("sec-fetch-dest")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v == "document" || v == "empty")
+    {
+        return true;
+    }
+    headers
+        .get("accept")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.contains("text/html"))
 }
