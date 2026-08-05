@@ -16,7 +16,7 @@ import Events from "./pages/Events";
 import Impressum from "./pages/Impressum";
 import Datenschutz from "./pages/Datenschutz";
 import './styles/toast.css';
-import { ToastContainer } from "react-toastify";
+import { ToastContainer } from "react-toastify/unstyled";
 import Footer from "./components/Footer";
 
 // Create a client for TanStack Query

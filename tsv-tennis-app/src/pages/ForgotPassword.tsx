@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import backendService from "../services/backendService";
-import { toast } from "react-toastify";
+import { toast } from "react-toastify/unstyled";
 import AuthPageLayout from '@/components/AuthPageLayout';
 import { buttonVariants, fieldControl } from "../styles/tokens";
 

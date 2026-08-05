@@ -4,7 +4,7 @@ import { useState, FormEvent, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { MemberSelection } from "../components/MemberSelection";
-import { toast } from "react-toastify";
+import { toast } from "react-toastify/unstyled";
 import TSVLogo from "../assets/TSV_Tennis.svg";
 import { EyeIcon, EyeSlashIcon, InformationCircleIcon, KeyIcon, XMarkIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import type { UserResponse } from "@/types";
