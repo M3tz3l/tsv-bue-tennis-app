@@ -1,0 +1,105 @@
+/* Custom toast styling — overrides react-toastify defaults to match the
+ * modernist design system: sharp corners, the token palette, Archivo font.
+ * Imported in place of react-toastify/dist/ReactToastify.css. */
+
+.Toastify__toast-container {
+  z-index: 9999;
+  width: auto;
+  max-width: min(24rem, calc(100vw - 2rem));
+}
+
+.Toastify__toast {
+  font-family: Archivo, system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink);
+  background: #ffffff;
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--primary);
+  border-radius: 0;
+  box-shadow: 0 2px 8px rgb(32 30 29 / 0.12);
+  padding: 0.75rem 1rem;
+  min-height: auto;
+}
+
+.Toastify__toast--success {
+  border-left-color: var(--success);
+}
+
+.Toastify__toast--error {
+  border-left-color: var(--error);
+}
+
+.Toastify__toast--warning {
+  border-left-color: var(--primary);
+}
+
+.Toastify__toast--info {
+  border-left-color: var(--primary);
+}
+
+.Toastify__toast-body {
+  padding: 0;
+  color: var(--ink);
+  gap: 0.5rem;
+}
+
+/* Icon */
+.Toastify__toast-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-inline-end: 0;
+}
+
+.Toastify__toast--success .Toastify__toast-icon svg {
+  fill: var(--success);
+  color: var(--success);
+}
+
+.Toastify__toast--error .Toastify__toast-icon svg {
+  fill: var(--error);
+  color: var(--error);
+}
+
+.Toastify__toast--warning .Toastify__toast-icon svg,
+.Toastify__toast--info .Toastify__toast-icon svg {
+  fill: var(--primary);
+  color: var(--primary);
+}
+
+/* Close button */
+.Toastify__close-button {
+  color: var(--muted-soft);
+  opacity: 1;
+  align-self: flex-start;
+}
+
+.Toastify__close-button:hover,
+.Toastify__close-button:focus {
+  color: var(--ink);
+  opacity: 1;
+}
+
+/* Progress bar: use the type color as a thin bottom accent */
+.Toastify__progress-bar {
+  height: 2px;
+  background: var(--primary);
+}
+
+.Toastify__progress-bar--success {
+  background: var(--success);
+}
+
+.Toastify__progress-bar--error {
+  background: var(--error);
+}
+
+.Toastify__progress-bar--warning,
+.Toastify__progress-bar--info {
+  background: var(--primary);
+}
+
+/* Slide-in animation: keep a short, subtle transition */
+.Toastify__slide-enter--top-right,
+.Toastify__slide-exit--top-right {
+  animation-duration: 0.2s;
+}

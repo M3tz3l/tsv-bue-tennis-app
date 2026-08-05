@@ -15,7 +15,7 @@ import DashboardOverview from "./pages/DashboardOverview";
 import Events from "./pages/Events";
 import Impressum from "./pages/Impressum";
 import Datenschutz from "./pages/Datenschutz";
-import 'react-toastify/dist/ReactToastify.css';
+import './styles/toast.css';
 import { ToastContainer } from "react-toastify";
 import Footer from "./components/Footer";
 
