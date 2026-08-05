@@ -30,6 +30,9 @@ test.describe('Work Hours', () => {
 
   async function loginAs(page: Page, email: string) {
     await loginViaBrowser(page, email, getFixtures().password);
+    // The work-hours table lives on the Arbeitsstunden page (the dashboard
+    // landing page shows the overview); navigate there for table assertions.
+    await page.goto('/dashboard/arbeitsstunden');
   }
 
   test.afterEach(async () => {

@@ -94,21 +94,24 @@ pub async fn list_events(
 ) -> Result<impl IntoResponse, EventRouteError> {
     let claims =
         extract_auth_claims_from_headers(&state.jwt_secret, &headers).map_err(auth_error)?;
-    Ok(Json(
-        if claims
-            .role
-            .as_deref()
-            .is_some_and(|role| role.trim().eq_ignore_ascii_case("orga"))
-        {
-            state.event_repository.list_all_events().await
-        } else {
-            state
-                .event_repository
-                .list_published_future(&claims.sub)
-                .await
-        }
-        .map_err(error_response)?,
-    ))
+    let details = if claims
+        .role
+        .as_deref()
+        .is_some_and(|role| role.trim().eq_ignore_ascii_case("orga"))
+    {
+        state
+            .event_repository
+            .list_all_events_with_signup(&claims.sub)
+            .await
+            .map_err(error_response)?
+    } else {
+        state
+            .event_repository
+            .list_published_future_with_signup(&claims.sub)
+            .await
+            .map_err(error_response)?
+    };
+    Ok(Json(details))
 }
 
 pub async fn get_event(

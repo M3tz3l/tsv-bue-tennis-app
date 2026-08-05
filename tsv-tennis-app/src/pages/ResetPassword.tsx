@@ -5,44 +5,59 @@ import {
     useNavigate,
     Link
 } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "react-toastify";
 import BackendService from "../services/backendService";
 import AuthPageLayout from '@/components/AuthPageLayout';
+import { buttonVariants, fieldControl } from "../styles/tokens";
 
 const ResetPassword = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const userId = searchParams.get("id");
     const token = searchParams.get("token");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+    useEffect(() => {
+        return () => {
+            clearTimeout(timerRef.current);
+        };
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const data = new FormData(e.currentTarget);
-        const newPasswordValue = data.get("newpassword");
-        const confirmPasswordValue = data.get("confirmpassword");
-        const newpassword = typeof newPasswordValue === 'string' ? newPasswordValue : '';
-        const confirmpassword = typeof confirmPasswordValue === 'string' ? confirmPasswordValue : '';
-        if (newpassword !== confirmpassword) {
-            toast.error(`Neues Passwort und Passwort bestätigen stimmen nicht überein!`, {
-                autoClose: 5000,
-                position: "top-right",
-            });
-        } else {
-            const res = await BackendService.resetPassword(String(token ?? ""), newpassword, String(userId ?? ""));
-            if (res.success === false) {
-                toast.error(res.message, {
+        setIsSubmitting(true);
+        try {
+            const data = new FormData(e.currentTarget);
+            const newPasswordValue = data.get("newpassword");
+            const confirmPasswordValue = data.get("confirmpassword");
+            const newpassword = typeof newPasswordValue === 'string' ? newPasswordValue : '';
+            const confirmpassword = typeof confirmPasswordValue === 'string' ? confirmPasswordValue : '';
+            if (newpassword !== confirmpassword) {
+                toast.error(`Neues Passwort und Passwort bestätigen stimmen nicht überein!`, {
                     autoClose: 5000,
                     position: "top-right",
                 });
             } else {
-                toast.success(res.message, {
-                    autoClose: 5000,
-                    position: "top-right",
-                });
-                setTimeout(() => {
-                    void navigate("/login");
-                }, 2000);
+                const res = await BackendService.resetPassword(String(token ?? ""), newpassword, String(userId ?? ""));
+                if (res.success === false) {
+                    toast.error(res.message, {
+                        autoClose: 5000,
+                        position: "top-right",
+                    });
+                } else {
+                    toast.success(res.message, {
+                        autoClose: 5000,
+                        position: "top-right",
+                    });
+                    timerRef.current = setTimeout(() => {
+                        void navigate("/login");
+                    }, 2000);
+                }
             }
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -51,7 +66,7 @@ const ResetPassword = () => {
                     <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
                         <div className="space-y-4">
                             <div>
-                                <label htmlFor="newpassword" className="block text-sm font-medium text-gray-700 mb-2">
+                                <label htmlFor="newpassword" className="block text-sm font-medium text-[var(--body)] mb-2">
                                     Neues Passwort
                                 </label>
                                 <input
@@ -60,12 +75,12 @@ const ResetPassword = () => {
                                     type="password"
                                     required
                                     autoFocus
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white shadow-sm transition-all duration-200"
+                                    className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     placeholder="Ihr neues Passwort eingeben"
                                 />
                             </div>
                             <div>
-                                <label htmlFor="confirmpassword" className="block text-sm font-medium text-gray-700 mb-2">
+                                <label htmlFor="confirmpassword" className="block text-sm font-medium text-[var(--body)] mb-2">
                                     Passwort bestätigen
                                 </label>
                                 <input
@@ -73,7 +88,7 @@ const ResetPassword = () => {
                                     name="confirmpassword"
                                     type="password"
                                     required
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white shadow-sm transition-all duration-200"
+                                    className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     placeholder="Ihr neues Passwort bestätigen"
                                 />
                             </div>
@@ -82,16 +97,17 @@ const ResetPassword = () => {
                         <div>
                             <button
                                 type="submit"
-                                className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5"
+                                disabled={isSubmitting}
+                                className={`${buttonVariants.primary} w-full py-3`}
                             >
-                                Passwort aktualisieren
+                                {isSubmitting ? 'Wird aktualisiert...' : 'Passwort aktualisieren'}
                             </button>
                         </div>
 
                         <div className="text-center">
                             <Link
                                 to="/login"
-                                className="text-sm font-medium text-green-600 hover:text-green-500 transition-colors duration-200"
+                                className="text-sm font-medium text-[var(--primary-active)] hover:text-[var(--primary)] transition-colors duration-200"
                             >
                                 ← Zurück zur Anmeldung
                             </Link>

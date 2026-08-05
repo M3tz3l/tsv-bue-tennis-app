@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
+import { DialogTitle } from '@headlessui/react';
 import {
-  XMarkIcon,
   PaperAirplaneIcon,
   EnvelopeIcon,
   UserGroupIcon,
@@ -17,6 +16,8 @@ import { toast } from 'react-toastify';
 import BackendService, { getApiErrorMessage } from '../services/backendService';
 import { useAuth } from '../context/AuthContext';
 import type { SendBulkMailRequest, MailJob } from '../types';
+import { buttonVariants } from '../styles/tokens';
+import ModalShell from './ModalShell';
 
 interface MailComposerProps {
   isOpen: boolean;
@@ -47,6 +48,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const [includeGreeting, setIncludeGreeting] = useState(true);
 
   useEffect(() => {
+    if (!isOpen || countsLoaded) return;
     const fetchCounts = async () => {
       try {
         const response = await BackendService.getMemberCounts();
@@ -61,7 +63,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     };
 
     void fetchCounts();
-  }, []);
+  }, [isOpen, countsLoaded]);
 
   // Clean up polling and reset timeout on unmount
   useEffect(() => {
@@ -110,6 +112,10 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       if (response.job.status !== 'completed' && response.job.status !== 'failed') {
         pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
       }
+    } else if (response.status === 429 || (response.status ?? 0) >= 500) {
+      // Transient backend/rate-limit failure: keep the progress view alive
+      // and retry instead of tearing down the send flow.
+      pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
     } else {
       if (pollingRef.current) {
         clearTimeout(pollingRef.current);
@@ -185,14 +191,6 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
     setIsSendingTest(true);
     try {
-      const formData = new FormData();
-      formData.append('subject', subject.trim());
-      formData.append('message', message.trim());
-      formData.append('include_greeting', String(includeGreeting));
-      for (const file of attachments) {
-        formData.append('attachments', file);
-      }
-
       const response = await BackendService.sendTestMail(
         {
           subject: subject.trim(),
@@ -267,44 +265,30 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   // During active job: show progress view
   if (activeJob) {
     return (
-      <Dialog open={isOpen} onClose={handleClose} className="relative z-50">
-        <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
-        <div className="fixed inset-0 flex w-screen items-center justify-center p-4 sm:p-6">
-          <DialogPanel className="max-w-lg w-full bg-white rounded-xl shadow-2xl overflow-hidden">
-            {/* Header */}
-            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="bg-purple-100 p-2 rounded-lg">
-                  <EnvelopeIcon className="h-6 w-6 text-purple-700" />
-                </div>
-                <DialogTitle className="text-lg font-semibold text-gray-900">
-                  Mail versenden
-                </DialogTitle>
-              </div>
-              <button
-                onClick={handleClose}
-                disabled={isBusy}
-                className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                aria-label="Schließen"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
+      <ModalShell isOpen={isOpen} onClose={handleClose} title="Mail versenden" disableClose={isBusy} widthClassName="max-w-lg" headerContent={(
+            <div className="flex items-center gap-3">
+              <div className="bg-[var(--primary)]/10 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-[var(--primary)]" /></div>
+              <DialogTitle className="text-lg font-extrabold text-[var(--ink)]">Mail versenden</DialogTitle>
             </div>
-
+          )} footer={(
+            <button onClick={handleClose} disabled={isBusy} className={buttonVariants.secondary}>
+              {activeJob.status === 'completed' || activeJob.status === 'failed' ? 'Schließen' : 'Abbrechen'}
+            </button>
+          )}>
             {/* Progress content */}
             <div className="px-6 py-8">
               <div className="text-center">
                 {activeJob.status === 'completed' ? (
-                  <CheckCircleIcon className="mx-auto h-12 w-12 text-green-500" />
+                  <CheckCircleIcon className="mx-auto h-12 w-12 text-[var(--success)]" />
                 ) : activeJob.status === 'failed' ? (
-                  <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-red-500" />
+                  <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-[var(--error)]" />
                 ) : (
                   <div className="mx-auto h-12 w-12 flex items-center justify-center">
-                    <div className="animate-spin h-10 w-10 border-4 border-purple-600 border-t-transparent rounded-full" />
+                    <div className="animate-spin h-10 w-10 border-4 border-[var(--primary)] border-t-transparent rounded-full" />
                   </div>
                 )}
 
-                <h3 className="mt-4 text-lg font-medium text-gray-900">
+                <h3 className="mt-4 text-lg font-medium text-[var(--ink)]">
                   {activeJob.status === 'completed'
                     ? 'Versand abgeschlossen'
                     : activeJob.status === 'failed'
@@ -314,14 +298,14 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
                 {/* Progress bar */}
                 <div className="mt-6">
-                  <div className="flex justify-between text-sm text-gray-600 mb-2">
+                  <div className="flex justify-between text-sm text-[var(--muted)] mb-2">
                     <span>{activeJob.sent} gesendet</span>
                     <span>{activeJob.total_recipients} Empfänger</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div className="w-full bg-[var(--hairline-soft)] rounded-full h-2.5">
                     <div
                       className={`h-2.5 rounded-full transition-all duration-300 ${
-                        activeJob.status === 'failed' ? 'bg-red-500' : 'bg-purple-600'
+                        activeJob.status === 'failed' ? 'bg-[var(--error)]' : 'bg-[var(--primary)]'
                       }`}
                       style={{
                         width: `${
@@ -341,72 +325,61 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                 </div>
 
                 {activeJob.failed > 0 && (
-                  <p className="mt-3 text-sm text-red-600">
+                  <p className="mt-3 text-sm text-[var(--error)]">
                     {activeJob.failed} fehlgeschlagen
                   </p>
                 )}
 
                 {activeJob.status === 'completed' && (
-                  <p className="mt-3 text-sm text-gray-500">Fenster schließt automatisch...</p>
+                  <p className="mt-3 text-sm text-[var(--muted)]">Fenster schließt automatisch...</p>
                 )}
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="flex justify-end px-6 py-4 border-t border-gray-200">
-              <button
-                onClick={handleClose}
-                disabled={isBusy}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {activeJob.status === 'completed' || activeJob.status === 'failed'
-                  ? 'Schließen'
-                  : 'Abbrechen'}
-              </button>
-            </div>
-          </DialogPanel>
-        </div>
-      </Dialog>
+      </ModalShell>
     );
   }
 
   // Main compose view
   return (
-    <Dialog open={isOpen} onClose={handleClose} className="relative z-50">
-      <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
-      <div className="fixed inset-0 flex w-screen items-center justify-center p-4 sm:p-6">
-        <DialogPanel
-          className="max-w-4xl w-full max-h-[90vh] min-h-[60vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden"
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          {/* Header */}
-          <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 shrink-0 bg-purple-50/50">
-            <div className="flex items-center gap-3">
-              <div className="bg-purple-100 p-2 rounded-lg">
-                <EnvelopeIcon className="h-6 w-6 text-purple-700" />
-              </div>
-              <DialogTitle className="text-lg font-semibold text-gray-900">
-                Rundmail versenden
-              </DialogTitle>
-            </div>
-            <button
-              onClick={handleClose}
-              disabled={isBusy}
-              className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-              aria-label="Schließen"
-            >
-              <XMarkIcon className="h-6 w-6" />
-            </button>
+    <ModalShell
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Rundmail versenden"
+      disableClose={isBusy}
+      widthClassName="max-w-4xl"
+      panelClassName="max-h-[90vh] min-h-[60vh] flex flex-col overflow-hidden"
+      panelProps={{ onDragOver: handleDragOver, onDragLeave: handleDragLeave, onDrop: handleDrop }}
+      headerContent={(
+        <div className="flex items-center gap-3">
+          <div className="bg-[var(--primary)]/10 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-[var(--primary)]" /></div>
+          <DialogTitle className="text-lg font-extrabold text-[var(--ink)]">Rundmail versenden</DialogTitle>
+        </div>
+      )}
+      headerClassName="shrink-0 bg-[var(--primary)]/5"
+      footerClassName="shrink-0 bg-[var(--canvas-soft)]"
+      footer={(
+        <>
+          <div className="flex items-center gap-3 mr-auto">
+            <button onClick={handleClose} className={buttonVariants.secondary} disabled={isBusy}>Abbrechen</button>
+            <button onClick={handleSendTest} disabled={isBusy || !isFormValid} className={`${buttonVariants.secondary} inline-flex items-center justify-center`}>{isSendingTest ? 'Wird gesendet...' : 'Test-Mail senden'}</button>
           </div>
-
+          <div className="flex items-center gap-3">
+            {confirmSend ? <>
+              <span className="text-sm text-[var(--muted)]">An {currentRecipientCount} {recipientFilter === 'all' ? 'Mitglieder' : 'Ausschuss-Mitglieder'} senden?</span>
+              <button onClick={() => setConfirmSend(false)} disabled={isBusy} className={buttonVariants.secondary}>Zurück</button>
+              <button onClick={handleSendBulk} disabled={isBusy} className={`${buttonVariants.primary} inline-flex items-center justify-center`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />Jetzt senden</button>
+            </> : <button onClick={() => isFormValid && setConfirmSend(true)} disabled={isBusy || !isFormValid} className={`${buttonVariants.primary} inline-flex items-center justify-center`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />{isLoading ? 'Wird gestartet...' : 'Versenden'}{currentRecipientCount !== null && <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold rounded-full bg-[var(--on-primary)]/25 text-[var(--on-primary)]">{currentRecipientCount}</span>}</button>}
+          </div>
+        </>
+      )}
+    >
           {/* Drag overlay */}
           {isDragOver && (
-            <div className="absolute inset-0 z-20 bg-purple-50/90 border-2 border-dashed border-purple-400 rounded-xl flex items-center justify-center pointer-events-none">
+            <div className="absolute inset-0 z-20 bg-[var(--primary)]/5 border-2 border-dashed border-[var(--primary)] rounded-xl flex items-center justify-center pointer-events-none">
               <div className="text-center">
-                <PaperClipIcon className="mx-auto h-12 w-12 text-purple-400" />
-                <p className="mt-2 text-lg font-medium text-purple-700">
+                <PaperClipIcon className="mx-auto h-12 w-12 text-[var(--primary)]" />
+                <p className="mt-2 text-lg font-medium text-[var(--primary)]">
                   Dateien hier ablegen
                 </p>
               </div>
@@ -420,7 +393,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
               <div className="flex-1 min-w-0 space-y-5">
                 {/* Recipient Filter */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-[var(--body)] mb-2">
                     Empfängergruppe
                   </label>
                   <div className="grid grid-cols-2 gap-3">
@@ -430,8 +403,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                       disabled={isBusy}
                       className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
                         recipientFilter === 'all'
-                          ? 'border-purple-600 bg-purple-50 text-purple-800 shadow-sm'
-                          : 'border-gray-200 hover:border-purple-300 text-gray-700'
+                          ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary)]'
+                          : 'border-[var(--hairline)] hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 text-[var(--body)]'
                       } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
                       <UsersIcon className="h-4 w-4" />
@@ -440,8 +413,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                         <span
                           className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
                             recipientFilter === 'all'
-                              ? 'bg-purple-200 text-purple-800'
-                              : 'bg-gray-100 text-gray-600'
+                              ? 'bg-[var(--primary)]/15 text-[var(--primary)]'
+                              : 'bg-[var(--canvas-soft)] text-[var(--muted)]'
                           }`}
                         >
                           {memberCounts.all}
@@ -454,8 +427,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                       disabled={isBusy}
                       className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
                         recipientFilter === 'orga'
-                          ? 'border-purple-600 bg-purple-50 text-purple-800 shadow-sm'
-                          : 'border-gray-200 hover:border-purple-300 text-gray-700'
+                          ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary)]'
+                          : 'border-[var(--hairline)] hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 text-[var(--body)]'
                       } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
                       <UserGroupIcon className="h-4 w-4" />
@@ -464,8 +437,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                         <span
                           className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
                             recipientFilter === 'orga'
-                              ? 'bg-purple-200 text-purple-800'
-                              : 'bg-gray-100 text-gray-600'
+                              ? 'bg-[var(--primary)]/15 text-[var(--primary)]'
+                              : 'bg-[var(--canvas-soft)] text-[var(--muted)]'
                           }`}
                         >
                           {memberCounts.orga}
@@ -477,7 +450,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
                 {/* Subject */}
                 <div>
-                  <label htmlFor="mail-subject" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="mail-subject" className="block text-sm font-medium text-[var(--body)] mb-2">
                     Betreff
                   </label>
                   <input
@@ -486,14 +459,14 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                     placeholder="z. B. Einladung zur Jahreshauptversammlung"
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                    className="w-full px-3 py-2.5 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-sm"
                     disabled={isBusy}
                   />
                 </div>
 
                 {/* Message */}
                 <div>
-                  <label htmlFor="mail-message" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="mail-message" className="block text-sm font-medium text-[var(--body)] mb-2">
                     Nachricht
                   </label>
                   <textarea
@@ -502,7 +475,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Ihre Nachricht an die Mitglieder..."
                     rows={8}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm resize-y min-h-[120px]"
+                    className="w-full px-3 py-2.5 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-sm resize-y min-h-[120px]"
                     disabled={isBusy}
                   />
                 </div>
@@ -515,8 +488,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     aria-checked={includeGreeting}
                     onClick={() => setIncludeGreeting(!includeGreeting)}
                     disabled={isBusy}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                      includeGreeting ? 'bg-purple-600' : 'bg-gray-200'
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      includeGreeting ? 'bg-[var(--primary)]' : 'bg-[var(--hairline-soft)]'
                     }`}
                   >
                     <span
@@ -526,17 +499,17 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     />
                   </button>
                   <label
-                    className="text-sm text-gray-700 cursor-pointer select-none"
+                    className="text-sm text-[var(--body)] cursor-pointer select-none"
                     onClick={() => !isBusy && setIncludeGreeting(!includeGreeting)}
                   >
                     Persönliche Anrede
-                    <span className="text-gray-400 ml-1">(Vorname des Empfängers)</span>
+                    <span className="text-[var(--muted-soft)] ml-1">(Vorname des Empfängers)</span>
                   </label>
                 </div>
 
                 {/* Attachments */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-[var(--body)] mb-2">
                     Anhänge
                   </label>
                   <input
@@ -550,7 +523,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isBusy}
-                    className="inline-flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-purple-400 hover:text-purple-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 px-3 py-2 border border-dashed border-[var(--hairline-strong)] rounded-lg text-sm text-[var(--muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <PaperClipIcon className="h-4 w-4" />
                     Dateien anhängen
@@ -560,18 +533,18 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                       {attachments.map((file, index) => (
                         <li
                           key={`${file.name}-${index}`}
-                          className="flex items-center justify-between gap-2 px-3 py-1.5 bg-gray-50 rounded-lg text-sm"
+                          className="flex items-center justify-between gap-2 px-3 py-1.5 bg-[var(--canvas-soft)] rounded-lg text-sm"
                         >
-                          <span className="truncate text-gray-700">
+                          <span className="truncate text-[var(--body)]">
                             {file.name}{' '}
-                            <span className="text-gray-400">
+                            <span className="text-[var(--muted-soft)]">
                               ({formatFileSize(file.size)})
                             </span>
                           </span>
                           <button
                             type="button"
                             onClick={() => removeAttachment(index)}
-                            className="text-gray-400 hover:text-red-600 shrink-0"
+                            className="text-[var(--muted-soft)] hover:text-[var(--error)] shrink-0"
                             aria-label={`Datei ${file.name} entfernen`}
                           >
                             <TrashIcon className="h-4 w-4" />
@@ -590,24 +563,24 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                   <button
                     type="button"
                     onClick={() => setPreviewOpen(!previewOpen)}
-                    className="flex items-center justify-between w-full text-sm font-medium text-gray-700 mb-2 py-2"
+                    className="flex items-center justify-between w-full text-sm font-medium text-[var(--body)] mb-2 py-2"
                   >
                     <span className="flex items-center gap-2">
                       Vorschau
                       {!previewOpen && subject.trim() && (
-                        <span className="text-gray-400 truncate max-w-[200px]">
+                        <span className="text-[var(--muted-soft)] truncate max-w-[200px]">
                           — {subject.trim()}
                         </span>
                       )}
                     </span>
                     {previewOpen ? (
-                      <ChevronUpIcon className="h-4 w-4 text-gray-500" />
+                      <ChevronUpIcon className="h-4 w-4 text-[var(--muted)]" />
                     ) : (
-                      <ChevronDownIcon className="h-4 w-4 text-gray-500" />
+                      <ChevronDownIcon className="h-4 w-4 text-[var(--muted)]" />
                     )}
                   </button>
                   {previewOpen && (
-                    <div className="border border-gray-200 rounded-lg bg-gray-50 p-4 overflow-y-auto max-h-64">
+                    <div className="border border-[var(--hairline)] rounded-lg bg-[var(--canvas-soft)] p-4 overflow-y-auto max-h-64">
                       <PreviewContent
                         subject={subject}
                         message={message}
@@ -620,10 +593,10 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
                 {/* Desktop: sticky preview */}
                 <div className="hidden md:flex md:flex-col md:sticky md:top-0">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-[var(--body)] mb-2">
                     Vorschau
                   </label>
-                  <div className="flex-1 border border-gray-200 rounded-lg bg-gray-50 p-4 overflow-y-auto">
+                  <div className="flex-1 border border-[var(--hairline)] rounded-lg bg-[var(--canvas-soft)] p-4 overflow-y-auto">
                     <PreviewContent
                       subject={subject}
                       message={message}
@@ -636,69 +609,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 shrink-0 bg-gray-50/50">
-            {/* Left side: cancel + test */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={isBusy}
-              >
-                Abbrechen
-              </button>
-              <button
-                onClick={handleSendTest}
-                disabled={isBusy || !isFormValid}
-                className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isSendingTest ? 'Wird gesendet...' : 'Test-Mail senden'}
-              </button>
-            </div>
-
-            {/* Right side: send button */}
-            <div className="flex items-center gap-3">
-              {confirmSend ? (
-                <>
-                  <span className="text-sm text-gray-600">
-                    An {currentRecipientCount} {recipientFilter === 'all' ? 'Mitglieder' : 'Ausschuss-Mitglieder'} senden?
-                  </span>
-                  <button
-                    onClick={() => setConfirmSend(false)}
-                    disabled={isBusy}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium text-sm"
-                  >
-                    Zurück
-                  </button>
-                  <button
-                    onClick={handleSendBulk}
-                    disabled={isBusy}
-                    className="inline-flex items-center justify-center px-5 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
-                  >
-                    <PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />
-                    Jetzt senden
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => isFormValid && setConfirmSend(true)}
-                  disabled={isBusy || !isFormValid}
-                  className="inline-flex items-center justify-center px-5 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
-                >
-                  <PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />
-                  {isLoading ? 'Wird gestartet...' : 'Versenden'}
-                  {currentRecipientCount !== null && (
-                    <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-green-500/20">
-                      {currentRecipientCount}
-                    </span>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        </DialogPanel>
-      </div>
-    </Dialog>
+    </ModalShell>
   );
 };
 
@@ -709,23 +620,23 @@ const PreviewContent: React.FC<{
   senderFirstName: string;
   includeGreeting: boolean;
 }> = ({ subject, message, senderFirstName, includeGreeting }) => (
-  <div className="bg-white rounded-lg shadow-sm p-4 text-sm text-gray-900">
+  <div className="bg-white rounded-lg border border-[var(--hairline)] p-4 text-sm text-[var(--ink)]">
     <p className="font-medium mb-3">{subject.trim() || 'Kein Betreff'}</p>
-    {includeGreeting && <p className="text-gray-700 mb-1">Hallo [Vorname],</p>}
-    <p className="whitespace-pre-wrap text-gray-700">
+    {includeGreeting && <p className="text-[var(--body)] mb-1">Hallo [Vorname],</p>}
+    <p className="whitespace-pre-wrap text-[var(--body)]">
       {message.trim() || 'Ihre Nachricht erscheint hier...'}
     </p>
-    <div className="mt-4 pt-3 border-t border-gray-100 text-sm text-gray-700">
+    <div className="mt-4 pt-3 border-t border-[var(--hairline-soft)] text-sm text-[var(--body)]">
       <p className="mb-1">mit sportlichen Grüßen,</p>
       <p className="mb-3">
         {senderFirstName} / die Abteilungsleitung
       </p>
-      <p className="font-semibold text-gray-900">
+      <p className="font-semibold text-[var(--ink)]">
         Tennisabteilung des TSV Bad Überkingen
       </p>
       <a
         href="mailto:tennisabteilung@tsv-bad-ueberkingen.de"
-        className="text-blue-600 hover:underline"
+        className="text-[var(--primary)] hover:underline"
       >
         tennisabteilung@tsv-bad-ueberkingen.de
       </a>

@@ -19,6 +19,41 @@ use crate::token_store::TokenStore;
 
 pub use crate::models::MailJobStore;
 
+/// Cached member counts (all + orga) with a short TTL, so the mail composer
+/// does not hit the Teable API on every open. Rate-limited 429 responses are
+/// not cached; a fresh value is always fetched when the TTL has elapsed.
+#[derive(Clone, Default)]
+pub struct MemberCountCache {
+    inner: Arc<std::sync::Mutex<Option<(std::time::Instant, (usize, usize))>>>,
+    refresh_lock: Arc<tokio::sync::Mutex<()>>,
+}
+
+impl MemberCountCache {
+    const TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+    pub fn get(&self) -> Option<(usize, usize)> {
+        let guard = self.inner.lock().ok()?;
+        let (fetched_at, counts) = (*guard)?;
+        if fetched_at.elapsed() < Self::TTL {
+            Some(counts)
+        } else {
+            None
+        }
+    }
+
+    pub fn set(&self, counts: (usize, usize)) {
+        if let Ok(mut guard) = self.inner.lock() {
+            *guard = Some((std::time::Instant::now(), counts));
+        }
+    }
+
+    /// Serializes cache refreshes so concurrent requests only perform a
+    /// single Teable fetch after the TTL has elapsed.
+    pub async fn lock_refresh(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.refresh_lock.lock().await
+    }
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub http_client: Client,
@@ -28,6 +63,7 @@ pub struct AppState {
     pub database: Database,
     pub event_repository: EventRepository,
     pub mail_jobs: MailJobStore,
+    pub member_counts: MemberCountCache,
     pub jwt_secret: String,
 }
 

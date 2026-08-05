@@ -59,6 +59,7 @@ dist/
 # Temporary files
 tmp/
 temp/
+.worktrees/
 
 # E2E test artifacts
 e2e/test-results/

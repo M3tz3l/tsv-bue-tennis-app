@@ -3,8 +3,8 @@ const TODAY = new Date().toLocaleDateString('de-DE');
 const Datenschutz = () => {
     return (
         <div className="max-w-3xl mx-auto px-4 py-10">
-            <h1 className="text-2xl font-semibold mb-4">Datenschutzerklärung</h1>
-            <div className="space-y-5 text-gray-800">
+            <h1 className="text-2xl font-extrabold mb-4">Datenschutzerklärung</h1>
+            <div className="space-y-5 text-[var(--ink)]">
                 <section>
                     <h2 className="font-medium">1. Verantwortlicher</h2>
                     <p>
@@ -107,7 +107,7 @@ const Datenschutz = () => {
                     </p>
                 </section>
 
-                <p className="text-xs text-gray-500 mt-8">Stand: {TODAY}</p>
+                <p className="text-xs text-[var(--muted)] mt-8">Stand: {TODAY}</p>
             </div>
         </div>
     );

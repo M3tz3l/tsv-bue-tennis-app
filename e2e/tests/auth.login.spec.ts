@@ -8,7 +8,7 @@ test.describe('Login', () => {
 
     await loginViaBrowser(page, user!.email, getFixtures().password);
     await expect(page).toHaveURL(/dashboard/);
-    await expect(page.locator('span:has-text("Willkommen,")')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('h1:has-text("Meine Übersicht")')).toBeVisible({ timeout: 5_000 });
   });
 
   test('login with regular user and reach dashboard', async ({ page }) => {
@@ -59,6 +59,6 @@ test.describe('Login', () => {
 
     // Should land on dashboard, not login
     await expect(page).toHaveURL(/dashboard/);
-    await expect(page.locator('span:has-text("Willkommen,")')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('h1:has-text("Meine Übersicht")')).toBeVisible({ timeout: 5_000 });
   });
 });
