@@ -251,12 +251,12 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .nest("/api", api_routes)
-        // Serve static files first
-        .nest_service("/assets", ServeDir::new("/app/static/assets"))
-        .route_service("/favicon.ico", ServeFile::new("/app/static/favicon.ico"))
-        .route_service("/vite.svg", ServeFile::new("/app/static/vite.svg"))
-        // Fallback to SPA handler for all other routes
-        .fallback(state::spa_fallback)
+        // Serve static files (assets, fonts, favicon) and fall back to
+        // index.html for client-side routes.
+        .nest_service(
+            "/",
+            ServeDir::new("/app/static").fallback(ServeFile::new("/app/static/index.html")),
+        )
         .layer(cors)
         .with_state(state);
 
@@ -771,6 +771,11 @@ mod tests {
         assert_eq!(response.status_code(), 404);
 
         let response = server.get("/vite.svg").await;
+        assert_eq!(response.status_code(), 404);
+
+        // Fonts must be served from the static dir (regression: the SPA
+        // fallback previously returned index.html for /fonts/*).
+        let response = server.get("/fonts/archivo-latin.woff2").await;
         assert_eq!(response.status_code(), 404);
     }
 
