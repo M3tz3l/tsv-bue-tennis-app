@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "deploy": "npm run build:prod && gh-pages -d dist",
     "sync-types": "./sync-types.sh",
-    "sync-fonts": "../sync-fonts.sh",
+    "sync-fonts": "./scripts/sync-fonts.sh",
     "pretest": "npm run sync-fonts",
     "prebuild": "npm run sync-fonts",
     "predev": "npm run sync-fonts && echo 'ℹ️  Run npm run sync-types if backend types changed'"
