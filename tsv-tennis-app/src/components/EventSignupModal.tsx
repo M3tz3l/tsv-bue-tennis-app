@@ -136,7 +136,7 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
           {data.event.description && <p className="text-sm text-[var(--body)]">{data.event.description}</p>}
           <dl className="mt-3 space-y-1 text-sm">
             <div><dt className="inline text-[var(--muted)]">Datum: </dt><dd className="inline font-medium text-[var(--ink)]">{formatDate(data.event.event_date)}</dd></div>
-            {(data.event.start_time || data.event.end_time) && <div><dt className="inline text-[var(--muted)]">Zeit: </dt><dd className="inline font-medium text-[var(--ink)]">{data.event.start_time ?? ''}{data.event.end_time ? ` - ${data.event.end_time}` : ''}</dd></div>}
+            {(data.event.start_time || data.event.end_time) && <div><dt className="inline text-[var(--muted)]">Zeit: </dt><dd className="inline font-medium text-[var(--ink)]">{data.event.start_time && data.event.end_time ? `${data.event.start_time} - ${data.event.end_time}` : data.event.start_time || data.event.end_time}</dd></div>}
             {data.event.location && <div><dt className="inline text-[var(--muted)]">Ort: </dt><dd className="inline font-medium text-[var(--ink)]">{data.event.location}</dd></div>}
             <div><dt className="inline text-[var(--muted)]">Plätze: </dt><dd className="inline font-medium text-[var(--ink)]">{data.event.signup_people_count}{data.event.capacity === null ? '' : ` / ${data.event.capacity}`} Personen</dd></div>
             {data.event.signup_deadline && <div><dt className="inline text-[var(--muted)]">Anmeldung bis: </dt><dd className="inline font-medium text-[var(--ink)]">{formatDate(data.event.signup_deadline)}</dd></div>}

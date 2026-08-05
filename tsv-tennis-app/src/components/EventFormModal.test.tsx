@@ -79,6 +79,8 @@ describe('EventFormModal', () => {
 
     await user.type(screen.getByLabelText(/Startzeit/i), '18:00');
     expect(end).toBeEnabled();
+    await user.type(end, '22:00');
+    expect(end).toHaveValue('22:00');
 
     await user.clear(screen.getByLabelText(/Startzeit/i));
     expect(end).toBeDisabled();

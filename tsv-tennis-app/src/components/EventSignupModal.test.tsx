@@ -226,4 +226,13 @@ describe('EventSignupModal', () => {
     expect(screen.queryByText(/Clubheim/)).not.toBeInTheDocument();
     expect(screen.getByText(/12\. Juli 2099/)).toBeInTheDocument();
   });
+
+  it('renders a single available time without a leading separator when only end_time exists', () => {
+    mocks.useEvent.mockReturnValue({ data: detail({ event: { ...detail().event, start_time: null, end_time: '22:00' } }), isLoading: false, error: null });
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByText(/Zeit:/)).toBeInTheDocument();
+    expect(screen.queryByText(/ - 22:00/)).not.toBeInTheDocument();
+    expect(screen.getByText('22:00')).toBeInTheDocument();
+  });
 });
