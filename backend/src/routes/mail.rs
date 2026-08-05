@@ -437,6 +437,16 @@ pub async fn get_member_counts(
         })));
     }
 
+    // Serialize refreshes so concurrent expired-cache misses perform a single
+    // Teable fetch instead of N. Re-check the cache once the lock is held.
+    let _refresh_guard = state.member_counts.lock_refresh().await;
+    if let Some((all, orga)) = state.member_counts.get() {
+        return Ok(Json(serde_json::json!({
+            "success": true,
+            "data": { "all": all, "orga": orga }
+        })));
+    }
+
     // Fetch all active members count using Teable filtering
     let all_members =
         teable::get_all_active_members(&state.teable_config, &state.http_client, None)

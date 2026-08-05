@@ -25,6 +25,7 @@ pub use crate::models::MailJobStore;
 #[derive(Clone, Default)]
 pub struct MemberCountCache {
     inner: Arc<std::sync::Mutex<Option<(std::time::Instant, (usize, usize))>>>,
+    refresh_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl MemberCountCache {
@@ -44,6 +45,12 @@ impl MemberCountCache {
         if let Ok(mut guard) = self.inner.lock() {
             *guard = Some((std::time::Instant::now(), counts));
         }
+    }
+
+    /// Serializes cache refreshes so concurrent requests only perform a
+    /// single Teable fetch after the TTL has elapsed.
+    pub async fn lock_refresh(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.refresh_lock.lock().await
     }
 }
 
