@@ -11,7 +11,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FONT_DIR="$SCRIPT_DIR/tsv-tennis-app/public/fonts"
+# Script lives at tsv-tennis-app/scripts/, so public/fonts is one level up.
+FONT_DIR="$SCRIPT_DIR/../public/fonts"
 FONT_FILE="$FONT_DIR/archivo-latin.woff2"
 UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 # Bound connection/total time and add a few retries so a stalled network
