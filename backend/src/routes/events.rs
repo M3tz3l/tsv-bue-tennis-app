@@ -101,15 +101,9 @@ pub async fn list_events(
     {
         state
             .event_repository
-            .list_all_events()
+            .list_all_events_with_signup(&claims.sub)
             .await
             .map_err(error_response)?
-            .into_iter()
-            .map(|event| crate::models::EventDetail {
-                event,
-                own_signup: None,
-            })
-            .collect::<Vec<_>>()
     } else {
         state
             .event_repository

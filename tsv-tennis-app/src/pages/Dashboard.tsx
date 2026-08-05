@@ -242,8 +242,9 @@ const Dashboard = () => {
         >
                 {/* Year Selector */}
                 <div className="mb-4 sm:mb-6">
-                    <label className="block text-sm font-medium text-[var(--body)] mb-2">Jahr auswählen:</label>
+                    <label htmlFor="work-hours-year" className="block text-sm font-medium text-[var(--body)] mb-2">Jahr auswählen:</label>
                     <select
+                        id="work-hours-year"
                         value={selectedYear}
                         onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                         className="w-full sm:w-auto px-3 py-2 border border-[var(--hairline-strong)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"

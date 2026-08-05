@@ -126,6 +126,7 @@ async fn main() -> anyhow::Result<()> {
         database,
         event_repository,
         mail_jobs,
+        member_counts: state::MemberCountCache::default(),
         jwt_secret: config.jwt_secret.clone(),
     };
 
@@ -187,6 +188,18 @@ async fn main() -> anyhow::Result<()> {
             .expect("Failed to build write rate limiter config"),
     );
 
+    // Generous limiter for the mail job-status polling endpoint, which the UI
+    // polls repeatedly (every ~1.5s) while a bulk send is in flight. Regular
+    // polling must never be throttled into a failure.
+    let job_poll_governor_conf = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(20)
+            .burst_size(50)
+            .key_extractor(state::UserKeyExtractor::new(&config.jwt_secret))
+            .finish()
+            .expect("Failed to build job poll rate limiter config"),
+    );
+
     // Read-only protected routes with generous rate limiting
     let read_routes = Router::new()
         .route("/verify-token", get(get_user))
@@ -194,10 +207,18 @@ async fn main() -> anyhow::Result<()> {
         .route("/user", get(get_user))
         .nest("/arbeitsstunden", routes::work_hours::routes())
         .merge(routes::mail::member_count_routes())
-        .route("/mail/jobs/:job_id", get(routes::mail::get_mail_job_status))
         .merge(routes::events::read_routes())
         .layer(GovernorLayer {
             config: read_governor_conf,
+        })
+        .layer(middleware::from_fn(state::rewrite_429_to_json));
+
+    // Mail job-status polling gets its own, much higher limiter so that
+    // repeated status polls during a bulk send are never rate-limited.
+    let job_poll_routes = Router::new()
+        .route("/mail/jobs/:job_id", get(routes::mail::get_mail_job_status))
+        .layer(GovernorLayer {
+            config: job_poll_governor_conf,
         })
         .layer(middleware::from_fn(state::rewrite_429_to_json));
 
@@ -220,6 +241,7 @@ async fn main() -> anyhow::Result<()> {
     let protected_routes = Router::new()
         .merge(read_routes)
         .merge(write_routes)
+        .merge(job_poll_routes)
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             state::auth_middleware,
@@ -369,6 +391,7 @@ mod tests {
             mail_jobs: std::sync::Arc::new(tokio::sync::RwLock::new(
                 std::collections::HashMap::new(),
             )),
+            member_counts: state::MemberCountCache::default(),
             jwt_secret: TEST_JWT_SECRET.to_string(),
         };
 

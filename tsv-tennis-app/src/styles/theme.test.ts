@@ -20,7 +20,7 @@ describe('modernist foundation', () => {
   it('declares the Archivo @font-face', () => {
     const styles = css();
     expect(styles).toContain('@font-face');
-    expect(styles).toContain('font-family: "Archivo"');
+    expect(styles).toContain('font-family: Archivo');
     expect(styles).toContain('/fonts/archivo-latin.woff2');
   });
 
@@ -42,7 +42,7 @@ describe('modernist foundation', () => {
 
   it('sets Archivo as the body font and a bold modernist heading style', () => {
     const styles = css();
-    expect(styles).toMatch(/body\s*\{[^}]*font-family:\s*"Archivo"/);
+    expect(styles).toMatch(/body\s*\{[^}]*font-family:\s*Archivo/);
     expect(styles).toMatch(/font-weight:\s*800/);
     expect(styles).toMatch(/letter-spacing:\s*-0\.015em/);
   });

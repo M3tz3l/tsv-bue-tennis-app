@@ -34,7 +34,7 @@ export const MemberSelection = ({ users, selectionToken, onComplete, onCancel }:
     };
 
     return (
-        <Dialog open={true} onClose={onCancel} className="relative z-50">
+        <Dialog open={true} onClose={() => { if (!loading) onCancel(); }} className="relative z-50">
             <div className="fixed inset-0 bg-[var(--canvas)]" aria-hidden="true" />
             <div className="fixed inset-0 flex items-center justify-center p-4">
                 <DialogPanel className="bg-white p-8 border border-[var(--hairline)] max-w-md w-full mx-4">

@@ -56,7 +56,7 @@ const ModalShell = ({
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel
           {...panelProps}
-          className={`w-full ${widthClassName} rounded-xl border border-[var(--hairline)] bg-white ${panelClassName}`}
+          className={`relative w-full ${widthClassName} rounded-xl border border-[var(--hairline)] bg-white ${panelClassName}`}
         >
           <div className={`flex items-center justify-between border-b border-[var(--hairline)] px-6 py-4 ${headerClassName}`}>
             {headerContent ?? <DialogTitle className="text-lg font-extrabold tracking-tight text-[var(--ink)]">{title}</DialogTitle>}

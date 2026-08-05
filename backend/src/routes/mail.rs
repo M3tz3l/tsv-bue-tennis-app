@@ -428,6 +428,15 @@ pub async fn get_mail_job_status(
 pub async fn get_member_counts(
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
+    // Serve cached counts within the TTL to avoid hammering the Teable API
+    // every time the mail composer is opened.
+    if let Some((all, orga)) = state.member_counts.get() {
+        return Ok(Json(serde_json::json!({
+            "success": true,
+            "data": { "all": all, "orga": orga }
+        })));
+    }
+
     // Fetch all active members count using Teable filtering
     let all_members =
         teable::get_all_active_members(&state.teable_config, &state.http_client, None)
@@ -445,6 +454,10 @@ pub async fn get_member_counts(
                 error!("Failed to fetch orga member counts: {}", e);
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR
             })?;
+
+    state
+        .member_counts
+        .set((all_members.len(), orga_members.len()));
 
     Ok(Json(serde_json::json!({
         "success": true,

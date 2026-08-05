@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -125,10 +125,16 @@ describe('Events', () => {
 
   it('clears the eventId query parameter when the signup modal closes', async () => {
     const user = userEvent.setup();
-    render(<MemoryRouter initialEntries={['/dashboard/veranstaltungen?eventId=1']}><Events /></MemoryRouter>);
+    const LocationProbe = () => <span data-testid="router-search">{useLocation().search}</span>;
+    render(
+      <MemoryRouter initialEntries={['/dashboard/veranstaltungen?eventId=1']}>
+        <Events />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
     await user.click(screen.getByRole('button', { name: 'close' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(window.location.search).toBe('');
+    expect(screen.getByTestId('router-search')).toHaveTextContent('');
   });
 
   it('keeps full events visible but does not offer an action', () => {
@@ -159,14 +165,14 @@ describe('Events', () => {
   it('does not show management controls to regular members', () => {
     renderEvents();
     expect(screen.queryByRole('button', { name: /Veranstaltung erstellen/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Anmeldungen anzeigen/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Anmeldungen/i })).not.toBeInTheDocument();
   });
 
   it('shows management controls to Orga', () => {
     mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
     renderEvents();
     expect(screen.getByRole('button', { name: /Veranstaltung erstellen/i })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Anmeldungen anzeigen/i })).not.toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: /Anmeldungen/i })).not.toHaveLength(0);
     expect(screen.getByText('Entwurf')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /^Bearbeiten$/i })).toHaveLength(3);
   });
@@ -186,7 +192,7 @@ describe('Events', () => {
     renderEvents();
 
     expect(screen.getByRole('button', { name: /Bearbeiten/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Anmeldungen anzeigen/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Anmeldungen/i })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^Anmelden$/i }));
     expect(screen.getByRole('dialog')).toHaveTextContent('Signup modal for 1');
   });

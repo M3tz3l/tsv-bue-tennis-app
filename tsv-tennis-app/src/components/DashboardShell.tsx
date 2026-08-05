@@ -11,7 +11,7 @@ interface DashboardShellProps {
 
 const DashboardShell = ({ children, title, onOpenMailComposer, isMailComposerOpen, onCloseMailComposer }: DashboardShellProps) => {
   return (
-    <div className="min-h-screen bg-[var(--canvas)]">
+    <div className="bg-[var(--canvas)]">
       <TopbarNavigation onOpenMailComposer={onOpenMailComposer} />
       <div data-testid="dashboard-shell-content" className="min-w-0 pt-12">
         <main className="mx-auto min-w-0 max-w-7xl px-3 py-6 sm:px-6 sm:py-10 lg:px-8">

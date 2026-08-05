@@ -27,7 +27,7 @@ const EventRow = ({ detail }: { detail: EventDetail }) => {
                       <span className="mt-1 block text-base font-semibold text-[var(--ink)]">{event.title}</span>
                     )}
                     <p className="mt-1 text-sm text-[var(--body)]">{formatDate(event.event_date)}{event.start_time ? `, ${event.start_time} Uhr` : ''}</p>
-                    {(event.location || event.description) && <p className="mt-1 text-sm text-[var(--muted)]">{event.location ?? event.description}</p>}
+                    {(event.location || event.description) && <p className="mt-1 text-sm text-[var(--muted)]">{event.location || event.description}</p>}
                 </div>
                 {ownSignup && <p className="shrink-0 text-sm font-medium text-[var(--primary-active)]">Ihre Anmeldung: {ownSignup.people_count} Personen</p>}
             </div>

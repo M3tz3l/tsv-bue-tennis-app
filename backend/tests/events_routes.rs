@@ -47,6 +47,7 @@ async fn app_with_teable_url(teable_url: &str) -> (TestServer, EventRepository) 
         database,
         event_repository: repository.clone(),
         mail_jobs: Arc::new(tokio::sync::RwLock::new(Default::default())),
+        member_counts: state::MemberCountCache::default(),
         jwt_secret: SECRET.into(),
     };
     let app = Router::new()
@@ -141,6 +142,40 @@ async fn orga_list_includes_drafts_and_past_events() {
     let events = response.json::<Vec<serde_json::Value>>();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["event"]["status"], "draft");
+}
+
+#[tokio::test]
+#[serial]
+async fn orga_list_includes_own_signup() {
+    let (server, repository) = app().await;
+    let published = repository
+        .create_event("orga-1", event_request(EventStatus::Published))
+        .await
+        .unwrap();
+    repository
+        .create_signup(
+            published.id,
+            "orga-1",
+            tsv_tennis_backend::models::SignupRequest {
+                people_count: 2,
+                salad_count: 1,
+                cake_count: 0,
+                comment: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    let response = server
+        .get("/events")
+        .authorization(format!("Bearer {}", token("orga-1", Some("orga"))))
+        .await;
+    response.assert_status_ok();
+    let events = response.json::<Vec<serde_json::Value>>();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["event"]["status"], "published");
+    assert_eq!(events[0]["own_signup"]["member_id"], "orga-1");
+    assert_eq!(events[0]["own_signup"]["people_count"], 2);
 }
 
 #[tokio::test]

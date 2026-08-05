@@ -36,7 +36,7 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
       setCakeCount('0');
       setComment('');
     }
-  }, [signup, isOpen]);
+  }, [signup, isOpen, eventId]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();

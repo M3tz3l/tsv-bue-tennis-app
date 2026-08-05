@@ -112,6 +112,10 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       if (response.job.status !== 'completed' && response.job.status !== 'failed') {
         pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
       }
+    } else if (response.status === 429 || (response.status ?? 0) >= 500) {
+      // Transient backend/rate-limit failure: keep the progress view alive
+      // and retry instead of tearing down the send flow.
+      pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
     } else {
       if (pollingRef.current) {
         clearTimeout(pollingRef.current);

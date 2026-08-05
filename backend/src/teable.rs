@@ -2,7 +2,7 @@
 
 use crate::models::{Member, TeableResponse, WorkHour};
 use anyhow::{Context, Result};
-use reqwest::Client;
+use reqwest::{Client, RequestBuilder};
 use serde_json::Value;
 use tracing::{debug, error, info, warn};
 
@@ -162,6 +162,35 @@ async fn make_teable_request(
         .await?;
 
     Ok(response)
+}
+
+/// Sends a Teable request with retry/backoff on HTTP 429 (rate limited).
+/// Returns the final response after retries are exhausted.
+async fn send_with_retry(request: RequestBuilder, operation: &str) -> Result<reqwest::Response> {
+    const MAX_ATTEMPTS: u32 = 4;
+    let mut attempt: u32 = 0;
+
+    loop {
+        let request = request
+            .try_clone()
+            .ok_or_else(|| anyhow::anyhow!("Teable request could not be cloned for retry"))?;
+
+        let response = request.send().await?;
+        let status = response.status();
+
+        if status == reqwest::StatusCode::TOO_MANY_REQUESTS && attempt < MAX_ATTEMPTS {
+            attempt += 1;
+            let backoff = std::time::Duration::from_millis(500 * u64::from(attempt));
+            warn!(
+                "Teable {} rate limited (429), retrying in {:?} (attempt {}/{})",
+                operation, backoff, attempt, MAX_ATTEMPTS
+            );
+            tokio::time::sleep(backoff).await;
+            continue;
+        }
+
+        return Ok(response);
+    }
 }
 
 /// Handles Teable API response with consistent error handling
@@ -794,7 +823,7 @@ pub async fn get_all_active_members(
             req = req.query(&[("projection[]", *field)]);
         }
 
-        let response = req.send().await?;
+        let response = send_with_retry(req, "all_active_members").await?;
         let response_text = handle_teable_response(response, "all_active_members").await?;
         let teable_response: Value = serde_json::from_str(&response_text)?;
 

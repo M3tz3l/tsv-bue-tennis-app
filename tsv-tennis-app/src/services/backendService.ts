@@ -345,7 +345,7 @@ class BackendService {
     }
   }
 
-  async getMailJobStatus(jobId: string): Promise<{ success: boolean; job?: MailJob; message?: string }> {
+  async getMailJobStatus(jobId: string): Promise<{ success: boolean; job?: MailJob; status?: number; message?: string }> {
     try {
       const response = await this.api.get(`/mail/jobs/${jobId}`);
       return response.data;
@@ -353,6 +353,7 @@ class BackendService {
       logApiError('Error fetching mail job status:', error);
       return {
         success: false,
+        status: getApiErrorStatus(error),
         message: getApiErrorMessage(error, 'Job-Status konnte nicht abgerufen werden')
       };
     }
