@@ -1,7 +1,7 @@
 //Login.tsx
 
 import { useState, FormEvent, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { MemberSelection } from "../components/MemberSelection";
 import { toast } from "react-toastify";
@@ -23,6 +23,14 @@ const Login = () => {
     const [hoverEnabled, setHoverEnabled] = useState<boolean>(false);
     const { login } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // If the user was redirected here from a protected route, send them back
+    // to that page after a successful login. Otherwise fall back to /dashboard.
+    const redirectTo = (location.state as { from?: { pathname?: string; search?: string; hash?: string } } | null)?.from;
+    const redirectPath = redirectTo?.pathname
+        ? redirectTo.pathname + (redirectTo.search ?? '') + (redirectTo.hash ?? '')
+        : "/dashboard";
 
     const dismissBanner = () => {
         setShowBanner(false);
@@ -62,7 +70,7 @@ const Login = () => {
                 } else {
                     // Single user login successful
                     toast.success("Anmeldung erfolgreich! Willkommen zurück.");
-                    void navigate("/dashboard");
+                    void navigate(redirectPath);
                 }
             } else {
                 toast.error(result.message || "Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.");
@@ -79,7 +87,7 @@ const Login = () => {
     const handleMemberSelectionComplete = () => {
         setShowMemberSelection(false);
         toast.success("Anmeldung erfolgreich! Willkommen zurück.");
-        void navigate("/dashboard");
+        void navigate(redirectPath);
     };
 
     const handleMemberSelectionCancel = () => {

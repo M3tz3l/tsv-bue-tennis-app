@@ -57,6 +57,18 @@ describe('dashboard routes', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/login'));
   });
 
+  it('preserves the intended destination in login state for redirect-back', async () => {
+    mocks.useAuth.mockReturnValue({ user: null, loading: false });
+    window.history.pushState({}, '', '/dashboard/veranstaltungen');
+
+    render(<App />);
+
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
+
+    const from = window.history.state?.usr?.from;
+    expect(from?.pathname).toBe('/dashboard/veranstaltungen');
+  });
+
   it('redirects an unknown path to the dashboard for authenticated users', async () => {
     window.history.pushState({}, '', '/does-not-exist');
 
