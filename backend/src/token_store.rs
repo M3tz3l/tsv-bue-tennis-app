@@ -63,11 +63,6 @@ impl TokenStore {
         token_id
     }
 
-    pub async fn get_reset_token(&self, token: &str) -> Option<ResetToken> {
-        let tokens = self.tokens.read().await;
-        tokens.get(token).cloned()
-    }
-
     pub async fn consume_reset_token(&self, token: &str) -> Option<ResetToken> {
         let mut tokens = self.tokens.write().await;
         let mut user_tokens = self.user_tokens.write().await;
@@ -78,35 +73,6 @@ impl TokenStore {
             Some(reset_token)
         } else {
             None
-        }
-    }
-
-    pub async fn is_token_valid(&self, token: &str) -> bool {
-        if let Some(reset_token) = self.get_reset_token(token).await {
-            reset_token.expires_at > Utc::now()
-        } else {
-            false
-        }
-    }
-
-    // Clean up expired tokens periodically
-    #[allow(dead_code)]
-    pub async fn cleanup_expired_tokens(&self) {
-        let now = Utc::now();
-        let mut tokens = self.tokens.write().await;
-        let mut user_tokens = self.user_tokens.write().await;
-
-        let expired_tokens: Vec<String> = tokens
-            .iter()
-            .filter(|(_, token)| token.expires_at <= now)
-            .map(|(id, token)| {
-                user_tokens.remove(&token.user_id);
-                id.clone()
-            })
-            .collect();
-
-        for token_id in expired_tokens {
-            tokens.remove(&token_id);
         }
     }
 }

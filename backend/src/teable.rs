@@ -549,7 +549,6 @@ pub async fn get_work_hours_for_member_by_year(
     })
 }
 
-#[allow(dead_code)]
 pub async fn create_work_hour(
     config: &TeableConfig,
     client: &Client,
@@ -622,7 +621,6 @@ pub async fn create_work_hour(
     })
 }
 
-#[allow(dead_code)]
 pub async fn update_work_hour(
     config: &TeableConfig,
     client: &Client,
