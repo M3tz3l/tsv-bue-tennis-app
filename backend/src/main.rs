@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::services::ServeDir;
 use tracing::{debug, error, info};
 use tsv_tennis_backend::config::Config;
@@ -131,20 +131,7 @@ async fn main() -> anyhow::Result<()> {
         jwt_secret: config.jwt_secret.clone(),
     };
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods([
-            Method::GET,
-            Method::POST,
-            Method::PUT,
-            Method::DELETE,
-            Method::OPTIONS,
-        ])
-        .allow_headers([
-            axum::http::header::CONTENT_TYPE,
-            axum::http::header::AUTHORIZATION,
-            axum::http::header::ACCEPT,
-        ]);
+    let cors = build_cors(&config.frontend_url)?;
 
     // Configure rate limiting for authentication and security-sensitive endpoints (restrictive)
     let auth_governor_conf = Arc::new(
@@ -283,6 +270,82 @@ async fn health_check() -> impl IntoResponse {
     }))
 }
 
+/// Builds the CORS layer restricted to the frontend origin(s).
+///
+/// The browser never needs to reach the API cross-origin in production (the
+/// SPA is served same-origin by this backend, and the Vite dev server proxies
+/// `/api`). Allowing arbitrary origins would let any site read bearer-token
+/// responses. We only permit the configured frontend URL (and the common
+/// localhost dev origins) so local development keeps working.
+///
+/// The configured value is normalized to its scheme-and-authority origin
+/// (e.g. `https://app.example.com/reset` -> `https://app.example.com`)
+/// because `AllowOrigin::list` compares against the browser's Origin header,
+/// which never includes a path. Values that are not absolute http(s) URLs,
+/// like `null` or `/relative`, are rejected.
+fn build_cors(frontend_url: &str) -> anyhow::Result<CorsLayer> {
+    if frontend_url.trim().is_empty() {
+        anyhow::bail!("FRONTEND_URL must not be empty");
+    }
+
+    // Parse the configured URL and derive its normalized origin. Keep the
+    // original URL intact elsewhere (password-reset links use it verbatim);
+    // this only validates it and computes the CORS origin.
+    let parsed = url::Url::parse(frontend_url)
+        .map_err(|e| anyhow::anyhow!("FRONTEND_URL is not a valid URL: {e}"))?;
+    let configured_origin = normalize_origin(&parsed)?;
+
+    let mut origins = vec![
+        "http://localhost:5173".to_string(),
+        "http://127.0.0.1:5173".to_string(),
+        configured_origin,
+    ];
+    origins.sort();
+    origins.dedup();
+
+    let allowed = origins
+        .into_iter()
+        .map(|origin| {
+            origin
+                .parse::<axum::http::HeaderValue>()
+                .map_err(|_| anyhow::anyhow!("FRONTEND_URL is not a valid origin: {origin:?}"))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    Ok(CorsLayer::new()
+        .allow_origin(AllowOrigin::list(allowed))
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::ACCEPT,
+        ]))
+}
+
+/// Returns the scheme-and-authority origin for an absolute http(s) URL.
+///
+/// Rejects non-http(s) schemes (e.g. `javascript:`, `file:`) and URLs without
+/// an authority, so values like `null` or `/relative` are not accepted.
+fn normalize_origin(parsed: &url::Url) -> anyhow::Result<String> {
+    let scheme = parsed.scheme();
+    if scheme != "http" && scheme != "https" {
+        anyhow::bail!("FRONTEND_URL must be an absolute http(s) URL, got scheme: {scheme:?}");
+    }
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| anyhow::anyhow!("FRONTEND_URL has no host: {parsed}"))?;
+    match parsed.port() {
+        Some(port) => Ok(format!("{scheme}://{host}:{port}")),
+        None => Ok(format!("{scheme}://{host}")),
+    }
+}
+
 async fn get_user(
     State(state): State<state::AppState>,
     headers: HeaderMap,
@@ -358,9 +421,6 @@ mod tests {
     }
 
     async fn create_test_app_with_teable_url(teable_url: &str) -> Router {
-        use axum::http::Method;
-        use tower_http::cors::{Any, CorsLayer};
-
         set_test_env(teable_url);
 
         // Create a test state with minimal setup
@@ -397,20 +457,7 @@ mod tests {
             jwt_secret: TEST_JWT_SECRET.to_string(),
         };
 
-        let cors = CorsLayer::new()
-            .allow_origin(Any)
-            .allow_methods([
-                Method::GET,
-                Method::POST,
-                Method::PUT,
-                Method::DELETE,
-                Method::OPTIONS,
-            ])
-            .allow_headers([
-                axum::http::header::CONTENT_TYPE,
-                axum::http::header::AUTHORIZATION,
-                axum::http::header::ACCEPT,
-            ]);
+        let cors = build_cors("http://localhost:5173").expect("valid test CORS origin");
 
         // Simple routes for testing - no rate limiting to keep tests simple
         let health_routes = Router::new().route("/health", get(health_check));
@@ -656,14 +703,100 @@ mod tests {
         let app = create_test_app().await;
         let server = TestServer::new(app).unwrap();
 
+        // Allowed origin (frontend dev URL) should receive CORS headers
         let response = server
             .get("/api/health")
-            .add_header("Origin", "http://localhost:3000")
+            .add_header("Origin", "http://localhost:5173")
             .add_header("Access-Control-Request-Method", "GET")
             .await;
 
-        // Should have CORS headers
         assert_eq!(response.status_code(), 200);
+        assert_eq!(
+            response.headers().get("access-control-allow-origin"),
+            Some(&axum::http::HeaderValue::from_static(
+                "http://localhost:5173"
+            ))
+        );
+    }
+
+    #[serial_test::serial]
+    #[tokio::test]
+    async fn test_cors_rejects_unknown_origin() {
+        let app = create_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Unknown origin should not receive CORS allow-origin headers
+        let response = server
+            .get("/api/health")
+            .add_header("Origin", "http://evil.example.com")
+            .add_header("Access-Control-Request-Method", "GET")
+            .await;
+
+        assert_eq!(response.status_code(), 200);
+        assert_eq!(response.headers().get("access-control-allow-origin"), None);
+    }
+
+    #[test]
+    fn test_build_cors_rejects_wildcard_frontend_url() {
+        assert!(
+            build_cors("*").is_err(),
+            "wildcard FRONTEND_URL must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_build_cors_rejects_null_frontend_url() {
+        assert!(build_cors("null").is_err(), "\"null\" must be rejected");
+    }
+
+    #[test]
+    fn test_build_cors_rejects_relative_frontend_url() {
+        assert!(
+            build_cors("/relative").is_err(),
+            "relative FRONTEND_URL must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_build_cors_rejects_non_http_scheme() {
+        assert!(
+            build_cors("javascript:alert(1)").is_err(),
+            "non-http(s) scheme must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_build_cors_rejects_malformed_frontend_url() {
+        // Unterminated IPv6 bracket / invalid port is rejected by the URL parser.
+        assert!(
+            build_cors("http://example.com:99999").is_err() || build_cors("http://[::1").is_err(),
+            "malformed FRONTEND_URL must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_build_cors_accepts_valid_frontend_url() {
+        let cors = build_cors("https://tsv-bue-tennis.de")
+            .expect("valid FRONTEND_URL should build a CORS layer");
+        let _ = cors;
+    }
+
+    #[test]
+    fn test_build_cors_normalizes_path_bearing_frontend_url() {
+        // A path-bearing URL must be normalized to its scheme-and-authority
+        // origin, since the browser Origin header never includes a path.
+        let cors = build_cors("https://tsv-bue-tennis.de/dashboard/veranstaltungen")
+            .expect("path-bearing FRONTEND_URL should build a CORS layer");
+        let _ = cors;
+        assert_eq!(
+            normalize_origin(&url::Url::parse("https://tsv-bue-tennis.de/dashboard").unwrap())
+                .unwrap(),
+            "https://tsv-bue-tennis.de"
+        );
+        assert_eq!(
+            normalize_origin(&url::Url::parse("http://localhost:8080/app").unwrap()).unwrap(),
+            "http://localhost:8080"
+        );
     }
 
     #[serial_test::serial]
@@ -1465,9 +1598,6 @@ mod tests {
         // Test that we can create and validate JWT tokens properly
         let test_user_id = "jwt_test_user_456";
 
-        // Debug: Check if environment variables are set
-        tracing::debug!("JWT_SECRET env var: {:?}", std::env::var("JWT_SECRET"));
-
         // Create a token
         let token = auth::create_token(TEST_JWT_SECRET, test_user_id, None)
             .expect("Failed to create token");
@@ -1477,8 +1607,6 @@ mod tests {
         // For now, just verify it's a valid JWT format (3 parts separated by dots)
         let parts: Vec<&str> = token.split('.').collect();
         assert_eq!(parts.len(), 3, "JWT should have 3 parts separated by dots");
-
-        tracing::info!("Created valid JWT token: {}", token);
     }
 
     #[serial_test::serial]
