@@ -27,9 +27,9 @@ const Login = () => {
 
     // If the user was redirected here from a protected route, send them back
     // to that page after a successful login. Otherwise fall back to /dashboard.
-    const redirectTo = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
+    const redirectTo = (location.state as { from?: { pathname?: string; search?: string; hash?: string } } | null)?.from;
     const redirectPath = redirectTo?.pathname
-        ? redirectTo.pathname + (redirectTo.search ?? '')
+        ? redirectTo.pathname + (redirectTo.search ?? '') + (redirectTo.hash ?? '')
         : "/dashboard";
 
     const dismissBanner = () => {
