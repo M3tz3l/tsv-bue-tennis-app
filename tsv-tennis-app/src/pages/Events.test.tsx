@@ -67,10 +67,16 @@ describe('Events', () => {
 
     expect(screen.getByText('Sommerfest')).toBeInTheDocument();
     expect(screen.getByText(/Clubheim/)).toBeInTheDocument();
-    expect(screen.getByText(/3 \/ 20 Personen/)).toBeInTheDocument();
+    expect(screen.getByText(/3 von 20/)).toBeInTheDocument();
     expect(screen.getByText(/Anmeldung bis/)).toBeInTheDocument();
     expect(screen.queryByText('Vergangen')).not.toBeInTheDocument();
     expect(screen.queryByText('Entwurf')).not.toBeInTheDocument();
+  });
+
+  it('hides the Belegt row when the event has no capacity limit', () => {
+    renderEvents([detail({ capacity: null, signup_people_count: 0 })]);
+
+    expect(screen.queryByText(/Belegt:/)).not.toBeInTheDocument();
   });
 
   it('uses the shared card shell for event cards', () => {

@@ -16,7 +16,7 @@ const EventDetails = ({ event, className = 'mt-3 space-y-1 text-sm' }: EventDeta
       <div><dt className="inline text-[var(--muted)]">Datum: </dt><dd className="inline font-medium text-[var(--ink)]">{formatDate(event.event_date)}</dd></div>
       {timeRange && <div><dt className="inline text-[var(--muted)]">Zeit: </dt><dd className="inline font-medium text-[var(--ink)]">{timeRange}</dd></div>}
       {event.location && <div><dt className="inline text-[var(--muted)]">Ort: </dt><dd className="inline font-medium text-[var(--ink)]">{event.location}</dd></div>}
-      <div><dt className="inline text-[var(--muted)]">Plätze: </dt><dd className="inline font-medium text-[var(--ink)]">{event.signup_people_count}{event.capacity === null ? '' : ` / ${event.capacity}`} Personen</dd></div>
+      {event.capacity !== null && <div><dt className="inline text-[var(--muted)]">Belegt: </dt><dd className="inline font-medium text-[var(--ink)]">{event.signup_people_count} von {event.capacity}</dd></div>}
       {event.signup_deadline && <div><dt className="inline text-[var(--muted)]">Anmeldung bis: </dt><dd className="inline font-medium text-[var(--ink)]">{formatDate(event.signup_deadline)}</dd></div>}
     </dl>
   );
