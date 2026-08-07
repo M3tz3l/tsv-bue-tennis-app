@@ -179,8 +179,20 @@ describe('Events', () => {
     renderEvents();
     expect(screen.getByRole('button', { name: /Veranstaltung erstellen/i })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Anmeldungen/i })).not.toHaveLength(0);
-    expect(screen.getByText('Entwurf')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /^Bearbeiten$/i })).toHaveLength(3);
+  });
+
+  it('shows an Entwurf badge on draft events for Orga', () => {
+    mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
+    renderEvents([detail({ id: 9, title: 'Draft Event', status: 'draft' }), detail({ id: 10, title: 'Pub Event', status: 'published' })]);
+
+    // Only the draft event carries the badge.
+    expect(screen.getAllByText('Entwurf')).toHaveLength(1);
+  });
+
+  it('does not show an Entwurf badge to members', () => {
+    renderEvents([detail({ id: 9, title: 'Draft Event', status: 'draft' })]);
+    expect(screen.queryByText('Entwurf')).not.toBeInTheDocument();
   });
 
   it('uses shared button variants for event actions', () => {
