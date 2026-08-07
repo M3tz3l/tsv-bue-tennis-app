@@ -277,15 +277,28 @@ async fn health_check() -> impl IntoResponse {
 /// `/api`). Allowing arbitrary origins would let any site read bearer-token
 /// responses. We only permit the configured frontend URL (and the common
 /// localhost dev origins) so local development keeps working.
+///
+/// The configured value is normalized to its scheme-and-authority origin
+/// (e.g. `https://app.example.com/reset` -> `https://app.example.com`)
+/// because `AllowOrigin::list` compares against the browser's Origin header,
+/// which never includes a path. Values that are not absolute http(s) URLs,
+/// like `null` or `/relative`, are rejected.
 fn build_cors(frontend_url: &str) -> anyhow::Result<CorsLayer> {
-    if frontend_url.trim().is_empty() || frontend_url == "*" {
-        anyhow::bail!("FRONTEND_URL must be a concrete origin, not empty or a wildcard");
+    if frontend_url.trim().is_empty() {
+        anyhow::bail!("FRONTEND_URL must not be empty");
     }
+
+    // Parse the configured URL and derive its normalized origin. Keep the
+    // original URL intact elsewhere (password-reset links use it verbatim);
+    // this only validates it and computes the CORS origin.
+    let parsed = url::Url::parse(frontend_url)
+        .map_err(|e| anyhow::anyhow!("FRONTEND_URL is not a valid URL: {e}"))?;
+    let configured_origin = normalize_origin(&parsed)?;
 
     let mut origins = vec![
         "http://localhost:5173".to_string(),
         "http://127.0.0.1:5173".to_string(),
-        frontend_url.to_string(),
+        configured_origin,
     ];
     origins.sort();
     origins.dedup();
@@ -313,6 +326,24 @@ fn build_cors(frontend_url: &str) -> anyhow::Result<CorsLayer> {
             axum::http::header::AUTHORIZATION,
             axum::http::header::ACCEPT,
         ]))
+}
+
+/// Returns the scheme-and-authority origin for an absolute http(s) URL.
+///
+/// Rejects non-http(s) schemes (e.g. `javascript:`, `file:`) and URLs without
+/// an authority, so values like `null` or `/relative` are not accepted.
+fn normalize_origin(parsed: &url::Url) -> anyhow::Result<String> {
+    let scheme = parsed.scheme();
+    if scheme != "http" && scheme != "https" {
+        anyhow::bail!("FRONTEND_URL must be an absolute http(s) URL, got scheme: {scheme:?}");
+    }
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| anyhow::anyhow!("FRONTEND_URL has no host: {parsed}"))?;
+    match parsed.port() {
+        Some(port) => Ok(format!("{scheme}://{host}:{port}")),
+        None => Ok(format!("{scheme}://{host}")),
+    }
 }
 
 async fn get_user(
@@ -714,10 +745,31 @@ mod tests {
     }
 
     #[test]
-    fn test_build_cors_rejects_malformed_frontend_url() {
-        // Contains a control character, which is invalid in an HTTP HeaderValue.
+    fn test_build_cors_rejects_null_frontend_url() {
+        assert!(build_cors("null").is_err(), "\"null\" must be rejected");
+    }
+
+    #[test]
+    fn test_build_cors_rejects_relative_frontend_url() {
         assert!(
-            build_cors("http://example.com/\u{1}").is_err(),
+            build_cors("/relative").is_err(),
+            "relative FRONTEND_URL must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_build_cors_rejects_non_http_scheme() {
+        assert!(
+            build_cors("javascript:alert(1)").is_err(),
+            "non-http(s) scheme must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_build_cors_rejects_malformed_frontend_url() {
+        // Unterminated IPv6 bracket / invalid port is rejected by the URL parser.
+        assert!(
+            build_cors("http://example.com:99999").is_err() || build_cors("http://[::1").is_err(),
             "malformed FRONTEND_URL must be rejected"
         );
     }
@@ -727,6 +779,24 @@ mod tests {
         let cors = build_cors("https://tsv-bue-tennis.de")
             .expect("valid FRONTEND_URL should build a CORS layer");
         let _ = cors;
+    }
+
+    #[test]
+    fn test_build_cors_normalizes_path_bearing_frontend_url() {
+        // A path-bearing URL must be normalized to its scheme-and-authority
+        // origin, since the browser Origin header never includes a path.
+        let cors = build_cors("https://tsv-bue-tennis.de/dashboard/veranstaltungen")
+            .expect("path-bearing FRONTEND_URL should build a CORS layer");
+        let _ = cors;
+        assert_eq!(
+            normalize_origin(&url::Url::parse("https://tsv-bue-tennis.de/dashboard").unwrap())
+                .unwrap(),
+            "https://tsv-bue-tennis.de"
+        );
+        assert_eq!(
+            normalize_origin(&url::Url::parse("http://localhost:8080/app").unwrap()).unwrap(),
+            "http://localhost:8080"
+        );
     }
 
     #[serial_test::serial]
