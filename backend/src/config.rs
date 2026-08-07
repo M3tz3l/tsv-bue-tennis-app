@@ -25,7 +25,7 @@ impl Config {
         Ok(Config {
             port,
             database_url: env::var("DATABASE_URL").context("DATABASE_URL must be set")?,
-            jwt_secret: env::var("JWT_SECRET").unwrap_or_else(|_| "your-secret-key".to_string()),
+            jwt_secret: env::var("JWT_SECRET").context("JWT_SECRET must be set")?,
             frontend_url: env::var("FRONTEND_URL")
                 .unwrap_or_else(|_| "http://localhost:5173".to_string()),
             teable_api_url: env::var("TEABLE_API_URL").context("TEABLE_API_URL must be set")?,

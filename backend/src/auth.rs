@@ -1,7 +1,7 @@
 //! JWT authentication: token creation, verification, and selection tokens.
 
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -46,10 +46,12 @@ pub fn create_token(
 }
 
 pub fn verify_token(secret: &str, token: &str) -> Result<AuthClaims, jsonwebtoken::errors::Error> {
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.validate_exp = true;
     decode::<AuthClaims>(
         token,
         &DecodingKey::from_secret(secret.as_ref()),
-        &Validation::default(),
+        &validation,
     )
     .map(|data| data.claims)
 }
@@ -75,10 +77,11 @@ pub fn verify_selection_token(
     secret: &str,
     token: &str,
 ) -> Result<String, jsonwebtoken::errors::Error> {
+    let validation = Validation::new(Algorithm::HS256);
     let token_data: jsonwebtoken::TokenData<SelectionTokenClaims> = decode::<SelectionTokenClaims>(
         token,
         &DecodingKey::from_secret(secret.as_ref()),
-        &Validation::default(),
+        &validation,
     )?;
     if token_data.claims.typ != "selection" {
         return Err(jsonwebtoken::errors::Error::from(

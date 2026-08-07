@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::services::ServeDir;
 use tracing::{debug, error, info};
 use tsv_tennis_backend::config::Config;
@@ -131,20 +131,7 @@ async fn main() -> anyhow::Result<()> {
         jwt_secret: config.jwt_secret.clone(),
     };
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods([
-            Method::GET,
-            Method::POST,
-            Method::PUT,
-            Method::DELETE,
-            Method::OPTIONS,
-        ])
-        .allow_headers([
-            axum::http::header::CONTENT_TYPE,
-            axum::http::header::AUTHORIZATION,
-            axum::http::header::ACCEPT,
-        ]);
+    let cors = build_cors(&config.frontend_url);
 
     // Configure rate limiting for authentication and security-sensitive endpoints (restrictive)
     let auth_governor_conf = Arc::new(
@@ -283,6 +270,46 @@ async fn health_check() -> impl IntoResponse {
     }))
 }
 
+/// Builds the CORS layer restricted to the frontend origin(s).
+///
+/// The browser never needs to reach the API cross-origin in production (the
+/// SPA is served same-origin by this backend, and the Vite dev server proxies
+/// `/api`). Allowing arbitrary origins would let any site read bearer-token
+/// responses. We only permit the configured frontend URL (and the common
+/// localhost dev origins) so local development keeps working.
+fn build_cors(frontend_url: &str) -> CorsLayer {
+    let mut origins = vec![
+        "http://localhost:5173".to_string(),
+        "http://127.0.0.1:5173".to_string(),
+        frontend_url.to_string(),
+    ];
+    origins.sort();
+    origins.dedup();
+
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list(origins.into_iter().map(|origin| {
+            origin
+                .parse::<axum::http::HeaderValue>()
+                .unwrap_or_else(|_| {
+                    // Fall back to a permissive value for invalid config so
+                    // an unparseable FRONTEND_URL does not break the server.
+                    axum::http::HeaderValue::from_static("*")
+                })
+        })))
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::ACCEPT,
+        ])
+}
+
 async fn get_user(
     State(state): State<state::AppState>,
     headers: HeaderMap,
@@ -358,9 +385,6 @@ mod tests {
     }
 
     async fn create_test_app_with_teable_url(teable_url: &str) -> Router {
-        use axum::http::Method;
-        use tower_http::cors::{Any, CorsLayer};
-
         set_test_env(teable_url);
 
         // Create a test state with minimal setup
@@ -397,20 +421,7 @@ mod tests {
             jwt_secret: TEST_JWT_SECRET.to_string(),
         };
 
-        let cors = CorsLayer::new()
-            .allow_origin(Any)
-            .allow_methods([
-                Method::GET,
-                Method::POST,
-                Method::PUT,
-                Method::DELETE,
-                Method::OPTIONS,
-            ])
-            .allow_headers([
-                axum::http::header::CONTENT_TYPE,
-                axum::http::header::AUTHORIZATION,
-                axum::http::header::ACCEPT,
-            ]);
+        let cors = build_cors("http://localhost:5173");
 
         // Simple routes for testing - no rate limiting to keep tests simple
         let health_routes = Router::new().route("/health", get(health_check));
@@ -656,14 +667,37 @@ mod tests {
         let app = create_test_app().await;
         let server = TestServer::new(app).unwrap();
 
+        // Allowed origin (frontend dev URL) should receive CORS headers
         let response = server
             .get("/api/health")
-            .add_header("Origin", "http://localhost:3000")
+            .add_header("Origin", "http://localhost:5173")
             .add_header("Access-Control-Request-Method", "GET")
             .await;
 
-        // Should have CORS headers
         assert_eq!(response.status_code(), 200);
+        assert_eq!(
+            response.headers().get("access-control-allow-origin"),
+            Some(&axum::http::HeaderValue::from_static(
+                "http://localhost:5173"
+            ))
+        );
+    }
+
+    #[serial_test::serial]
+    #[tokio::test]
+    async fn test_cors_rejects_unknown_origin() {
+        let app = create_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Unknown origin should not receive CORS allow-origin headers
+        let response = server
+            .get("/api/health")
+            .add_header("Origin", "http://evil.example.com")
+            .add_header("Access-Control-Request-Method", "GET")
+            .await;
+
+        assert_eq!(response.status_code(), 200);
+        assert_eq!(response.headers().get("access-control-allow-origin"), None);
     }
 
     #[serial_test::serial]
@@ -1465,9 +1499,6 @@ mod tests {
         // Test that we can create and validate JWT tokens properly
         let test_user_id = "jwt_test_user_456";
 
-        // Debug: Check if environment variables are set
-        tracing::debug!("JWT_SECRET env var: {:?}", std::env::var("JWT_SECRET"));
-
         // Create a token
         let token = auth::create_token(TEST_JWT_SECRET, test_user_id, None)
             .expect("Failed to create token");
@@ -1477,8 +1508,6 @@ mod tests {
         // For now, just verify it's a valid JWT format (3 parts separated by dots)
         let parts: Vec<&str> = token.split('.').collect();
         assert_eq!(parts.len(), 3, "JWT should have 3 parts separated by dots");
-
-        tracing::info!("Created valid JWT token: {}", token);
     }
 
     #[serial_test::serial]

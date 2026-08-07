@@ -6,7 +6,7 @@ use axum::{
     routing::post,
     Router,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 use crate::auth;
 use crate::member_selection::{LoginResponseVariant, MemberSelectionResponse, SelectMemberRequest};
@@ -234,7 +234,7 @@ pub async fn forgot_password(
 
     // Create reset token
     let reset_token = state.token_store.create_reset_token(user.id.clone()).await;
-    info!("Created reset token for user {}: {}", user.id, reset_token);
+    info!("Created password reset token for user {}", user.id);
 
     // Send password reset email
     match state
@@ -266,9 +266,6 @@ pub async fn reset_password(
     State(state): State<AppState>,
     Json(payload): Json<ResetPasswordRequest>,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    debug!("Password reset attempt for token: {}", payload.token);
-    debug!("Reset password payload: {:?}", payload);
-
     // Atomically consume and validate the reset token (single lock + expiry check)
     let reset_token_info = state.token_store.consume_reset_token(&payload.token).await;
 
@@ -278,7 +275,7 @@ pub async fn reset_password(
             info
         }
         None => {
-            warn!("Failed to consume reset token: {}", payload.token);
+            warn!("Failed to consume password reset token");
             return Ok(axum::Json(serde_json::json!({
                 "success": false,
                 "message": "Invalid or expired reset token"
