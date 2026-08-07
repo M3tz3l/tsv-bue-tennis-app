@@ -43,7 +43,7 @@
     "oxlint": "^1.33.2",
     "oxlint-tsgolint": "7.0.2001",
     "postcss": "^8.5.25",
-    "tailwindcss": "^4.1.11",
+    "tailwindcss": "^4.3.3",
     "typescript": "7.0.2",
     "vite": "^7.0.4",
     "vite-plugin-dts": "^4.5.4",
