@@ -164,7 +164,14 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
               {errors.contributions && <p className="text-sm text-[var(--error)]">{errors.contributions}</p>}
               
               <label className="block text-sm font-medium text-[var(--body)]">Kommentar
-                <textarea value={comment} onChange={(e) => setComment(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 border-[var(--hairline-strong)]`} />
+                <textarea
+                  aria-label="Kommentar"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  disabled={pending}
+                  placeholder={data.event.type === 'event' ? 'z.B. Anzahl Kinder, Ankunftszeit, Essenswünsche' : undefined}
+                  className={`${fieldControl} mt-1 border-[var(--hairline-strong)]`}
+                />
               </label>
         </form>
       )}
