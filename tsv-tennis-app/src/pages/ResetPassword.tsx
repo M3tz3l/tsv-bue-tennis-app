@@ -6,7 +6,7 @@ import {
     Link
 } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { toast } from "react-toastify/unstyled";
+import { toast } from "react-toastify";
 import BackendService from "../services/backendService";
 import AuthPageLayout from '@/components/AuthPageLayout';
 import { buttonVariants, fieldControl } from "../styles/tokens";
