@@ -20,7 +20,7 @@ describe('EventSignupsModal', () => {
   });
 
   it('shows signup details and aggregate totals to Orga', () => {
-    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
+    render(<EventSignupsModal eventId={4} allowSalad allowCake isOpen onClose={vi.fn()} />);
 
     const table = screen.getByRole('table');
     expect(within(table).getByText('Anna A')).toBeInTheDocument();
@@ -39,27 +39,37 @@ describe('EventSignupsModal', () => {
     mocks.useEventSignups.mockReturnValue({ data: {
       signups: [], total_people: 0, total_salad: 0, total_cake: 0,
     }, isLoading: false, error: null });
-    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
+    render(<EventSignupsModal eventId={4} allowSalad allowCake isOpen onClose={vi.fn()} />);
 
     expect(screen.getByText('Noch keine Anmeldungen')).toBeInTheDocument();
   });
 
+  it('hides the Salate and Kuchen columns when they are not enabled for the event', () => {
+    render(<EventSignupsModal eventId={4} allowSalad={false} allowCake={false} isOpen onClose={vi.fn()} />);
+
+    const table = screen.getByRole('table');
+    expect(within(table).queryByText('Salate')).not.toBeInTheDocument();
+    expect(within(table).queryByText('Kuchen')).not.toBeInTheDocument();
+    expect(within(table).getByText('Anna A')).toBeInTheDocument();
+    expect(within(table).getByText('Kommt spaeter')).toBeInTheDocument();
+  });
+
   it('does not render signup details for regular members', () => {
     mocks.useAuth.mockReturnValue({ user: { id: 'member-1', role: 'member' } });
-    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
+    render(<EventSignupsModal eventId={4} allowSalad allowCake isOpen onClose={vi.fn()} />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(mocks.useEventSignups).toHaveBeenCalledWith('member-1', 4, false);
   });
 
   it('keeps the signups table scrollable on narrow screens', () => {
-    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
+    render(<EventSignupsModal eventId={4} allowSalad allowCake isOpen onClose={vi.fn()} />);
 
     const table = screen.getByRole('table');
     expect(table.parentElement).toHaveClass('overflow-x-auto');
   });
 
   it('uses shared minimum touch and action control classes and accessibility styles', () => {
-    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
+    render(<EventSignupsModal eventId={4} allowSalad allowCake isOpen onClose={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Schließen' })).toHaveClass('touch-control');
 

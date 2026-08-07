@@ -14,7 +14,7 @@ import { buttonVariants, cardShellClass } from '../styles/tokens';
 import { isPast, parseEventDate } from '../utils/dates';
 import EventDetails from '../components/EventDetails';
 
-const EventCard = ({ detail, isOrga, onSelect, onEdit, onSignups }: { detail: EventDetail; isOrga: boolean; onSelect: (id: number) => void; onEdit: (event: EventSummary) => void; onSignups: (id: number) => void }) => {
+const EventCard = ({ detail, isOrga, onSelect, onEdit, onSignups }: { detail: EventDetail; isOrga: boolean; onSelect: (id: number) => void; onEdit: (event: EventSummary) => void; onSignups: (event: { id: number; allow_salad: boolean; allow_cake: boolean }) => void }) => {
   const event = detail.event;
   const ownSignup = detail.own_signup;
   const full = event.capacity !== null && event.signup_people_count >= event.capacity;
@@ -36,7 +36,7 @@ const EventCard = ({ detail, isOrga, onSelect, onEdit, onSignups }: { detail: Ev
     {isOrga && (
       <div className="flex gap-2">
         <button onClick={() => onEdit(event)} className={`${buttonVariants.secondary} flex-1`}>Bearbeiten</button>
-        <button onClick={() => onSignups(event.id)} className={`${buttonVariants.secondary} flex-1`}>Anmeldungen</button>
+        <button onClick={() => onSignups(event)} className={`${buttonVariants.secondary} flex-1`}>Anmeldungen</button>
       </div>
     )}
     {event.allow_signups && (
@@ -53,7 +53,7 @@ const Events = () => {
   const signupModal = useModalRoute('eventId');
   const isOrga = isOrgaRole(user?.role);
   const [editingEvent, setEditingEvent] = useState<EventSummary | null | undefined>(undefined);
-  const [signupsId, setSignupsId] = useState<number | null>(null);
+  const [signupsEvent, setSignupsEvent] = useState<{ id: number; allow_salad: boolean; allow_cake: boolean } | null>(null);
   const [showMailComposer, setShowMailComposer] = useState(false);
   const visibleEvents = (events ?? []).filter((detail) => isOrga || (detail.event.status === 'published' && !isPast(detail.event.event_date)));
 
@@ -69,10 +69,10 @@ const Events = () => {
   return (
     <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}>
         <div className="mb-6 flex items-center justify-between">{isOrga && <button onClick={() => setEditingEvent(null)} className={buttonVariants.primary}>Veranstaltung erstellen</button>}</div>
-        {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-[var(--muted)]"><CalendarIcon className="mx-auto mb-3 h-12 w-12 text-[var(--hairline)]" /><p>Keine anstehenden Veranstaltungen</p></div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((detail) => <EventCard key={detail.event.id} detail={detail} isOrga={isOrga} onSelect={signupModal.open} onEdit={setEditingEvent} onSignups={setSignupsId} />)}</div>}
+        {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-[var(--muted)]"><CalendarIcon className="mx-auto mb-3 h-12 w-12 text-[var(--hairline)]" /><p>Keine anstehenden Veranstaltungen</p></div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((detail) => <EventCard key={detail.event.id} detail={detail} isOrga={isOrga} onSelect={signupModal.open} onEdit={setEditingEvent} onSignups={setSignupsEvent} />)}</div>}
       {signupModal.value !== null && <EventSignupModal eventId={signupModal.value} isOpen onClose={signupModal.close} />}
       {editingEvent !== undefined && <EventFormModal initialData={editingEvent} isOpen onClose={() => setEditingEvent(undefined)} />}
-      {signupsId !== null && <EventSignupsModal eventId={signupsId} isOpen onClose={() => setSignupsId(null)} />}
+      {signupsEvent !== null && <EventSignupsModal eventId={signupsEvent.id} allowSalad={signupsEvent.allow_salad} allowCake={signupsEvent.allow_cake} isOpen onClose={() => setSignupsEvent(null)} />}
     </DashboardShell>
   );
 };
