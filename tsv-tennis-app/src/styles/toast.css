@@ -4,38 +4,42 @@
  * Loaded after react-toastify/dist/ReactToastify.css. react-toastify injects
  * its default styles via JS after our imports, so equal-specificity rules
  * would lose the cascade. Prefix selectors with .Toastify__toast-container
- * (or use a descendant) to raise specificity above the injected defaults. */
+ * (or use a descendant) to raise specificity above the injected defaults.
+ *
+ * Colors reference the shared design tokens (--ink, --success, --error,
+ * --primary) from index.css so the toasts stay in sync with the rest of the
+ * UI. */
 
 .Toastify__toast-container .Toastify__toast {
   font-family: Archivo, system-ui, sans-serif;
-  color: #201e1d;
+  color: var(--ink);
 }
 
 .Toastify__toast--success .Toastify__toast-icon svg {
-  fill: #1f7a52;
-  color: #1f7a52;
+  fill: var(--success);
+  color: var(--success);
 }
 
 .Toastify__toast--error .Toastify__toast-icon svg {
-  fill: #cf2d56;
-  color: #cf2d56;
+  fill: var(--error);
+  color: var(--error);
 }
 
 .Toastify__toast--warning .Toastify__toast-icon svg,
 .Toastify__toast--info .Toastify__toast-icon svg {
-  fill: #ec3013;
-  color: #ec3013;
+  fill: var(--primary);
+  color: var(--primary);
 }
 
 .Toastify__toast-container .Toastify__progress-bar--success {
-  background: #1f7a52;
+  background: var(--success);
 }
 
 .Toastify__toast-container .Toastify__progress-bar--error {
-  background: #cf2d56;
+  background: var(--error);
 }
 
 .Toastify__toast-container .Toastify__progress-bar--warning,
 .Toastify__toast-container .Toastify__progress-bar--info {
-  background: #ec3013;
+  background: var(--primary);
 }
