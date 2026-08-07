@@ -1,0 +1,45 @@
+/* Toast styling: keep react-toastify's default layout, spacing, corners, and
+ * animations. Only swap colors and font to match the TSV design system.
+ *
+ * Loaded after react-toastify/dist/ReactToastify.css. react-toastify injects
+ * its default styles via JS after our imports, so equal-specificity rules
+ * would lose the cascade. Prefix selectors with .Toastify__toast-container
+ * (or use a descendant) to raise specificity above the injected defaults.
+ *
+ * Colors reference the shared design tokens (--ink, --success, --error,
+ * --primary) from index.css so the toasts stay in sync with the rest of the
+ * UI. */
+
+.Toastify__toast-container .Toastify__toast {
+  font-family: Archivo, system-ui, sans-serif;
+  color: var(--ink);
+}
+
+.Toastify__toast--success .Toastify__toast-icon svg {
+  fill: var(--success);
+  color: var(--success);
+}
+
+.Toastify__toast--error .Toastify__toast-icon svg {
+  fill: var(--error);
+  color: var(--error);
+}
+
+.Toastify__toast--warning .Toastify__toast-icon svg,
+.Toastify__toast--info .Toastify__toast-icon svg {
+  fill: var(--primary);
+  color: var(--primary);
+}
+
+.Toastify__toast-container .Toastify__progress-bar--success {
+  background: var(--success);
+}
+
+.Toastify__toast-container .Toastify__progress-bar--error {
+  background: var(--error);
+}
+
+.Toastify__toast-container .Toastify__progress-bar--warning,
+.Toastify__toast-container .Toastify__progress-bar--info {
+  background: var(--primary);
+}
