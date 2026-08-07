@@ -224,7 +224,14 @@ describe('EventSignupModal', () => {
 
     expect(screen.queryByText(/Anmeldung bis/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Clubheim/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Plätze:/)).not.toBeInTheDocument();
     expect(screen.getByText(/12\. Juli 2099/)).toBeInTheDocument();
+  });
+
+  it('shows the Plätze row only when the event has a capacity', () => {
+    mocks.useEvent.mockReturnValue({ data: detail(), isLoading: false, error: null });
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+    expect(screen.getByText(/2 \/ 20/)).toBeInTheDocument();
   });
 
   it('renders a single available time without a leading separator when only end_time exists', () => {

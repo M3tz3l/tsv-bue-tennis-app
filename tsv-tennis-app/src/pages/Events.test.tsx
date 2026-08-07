@@ -73,6 +73,13 @@ describe('Events', () => {
     expect(screen.queryByText('Entwurf')).not.toBeInTheDocument();
   });
 
+  it('hides the Plätze row when the event has no capacity limit', () => {
+    renderEvents([detail({ capacity: null, signup_people_count: 0 })]);
+
+    expect(screen.queryByText(/Plätze:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Personen/)).not.toBeInTheDocument();
+  });
+
   it('uses the shared card shell for event cards', () => {
     renderEvents();
 
