@@ -242,4 +242,15 @@ describe('EventSignupModal', () => {
     expect(screen.queryByText(/ - 22:00/)).not.toBeInTheDocument();
     expect(screen.getByText('22:00')).toBeInTheDocument();
   });
+
+  it('shows event-specific comment placeholders for events but not work-duty', () => {
+    mocks.useEvent.mockReturnValue({ data: detail({ event: { ...detail().event, type: 'event' } }), isLoading: false, error: null });
+    const { unmount } = render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+    expect(screen.getByLabelText(/Kommentar/i)).toHaveAttribute('placeholder', expect.stringMatching(/Essenswünsche/));
+    unmount();
+
+    mocks.useEvent.mockReturnValue({ data: detail({ event: { ...detail().event, type: 'work-duty' } }), isLoading: false, error: null });
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+    expect(screen.getByLabelText(/Kommentar/i)).not.toHaveAttribute('placeholder');
+  });
 });
