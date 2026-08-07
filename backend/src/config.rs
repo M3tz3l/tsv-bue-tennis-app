@@ -22,10 +22,15 @@ impl Config {
             .parse::<u16>()
             .context("PORT must be a valid port number")?;
 
+        let jwt_secret = env::var("JWT_SECRET").context("JWT_SECRET must be set")?;
+        if jwt_secret.trim().is_empty() {
+            anyhow::bail!("JWT_SECRET must not be empty");
+        }
+
         Ok(Config {
             port,
             database_url: env::var("DATABASE_URL").context("DATABASE_URL must be set")?,
-            jwt_secret: env::var("JWT_SECRET").context("JWT_SECRET must be set")?,
+            jwt_secret,
             frontend_url: env::var("FRONTEND_URL")
                 .unwrap_or_else(|_| "http://localhost:5173".to_string()),
             teable_api_url: env::var("TEABLE_API_URL").context("TEABLE_API_URL must be set")?,

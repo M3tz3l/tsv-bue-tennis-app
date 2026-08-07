@@ -131,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
         jwt_secret: config.jwt_secret.clone(),
     };
 
-    let cors = build_cors(&config.frontend_url);
+    let cors = build_cors(&config.frontend_url)?;
 
     // Configure rate limiting for authentication and security-sensitive endpoints (restrictive)
     let auth_governor_conf = Arc::new(
@@ -277,7 +277,11 @@ async fn health_check() -> impl IntoResponse {
 /// `/api`). Allowing arbitrary origins would let any site read bearer-token
 /// responses. We only permit the configured frontend URL (and the common
 /// localhost dev origins) so local development keeps working.
-fn build_cors(frontend_url: &str) -> CorsLayer {
+fn build_cors(frontend_url: &str) -> anyhow::Result<CorsLayer> {
+    if frontend_url.trim().is_empty() || frontend_url == "*" {
+        anyhow::bail!("FRONTEND_URL must be a concrete origin, not empty or a wildcard");
+    }
+
     let mut origins = vec![
         "http://localhost:5173".to_string(),
         "http://127.0.0.1:5173".to_string(),
@@ -286,16 +290,17 @@ fn build_cors(frontend_url: &str) -> CorsLayer {
     origins.sort();
     origins.dedup();
 
-    CorsLayer::new()
-        .allow_origin(AllowOrigin::list(origins.into_iter().map(|origin| {
+    let allowed = origins
+        .into_iter()
+        .map(|origin| {
             origin
                 .parse::<axum::http::HeaderValue>()
-                .unwrap_or_else(|_| {
-                    // Fall back to a permissive value for invalid config so
-                    // an unparseable FRONTEND_URL does not break the server.
-                    axum::http::HeaderValue::from_static("*")
-                })
-        })))
+                .map_err(|_| anyhow::anyhow!("FRONTEND_URL is not a valid origin: {origin:?}"))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    Ok(CorsLayer::new()
+        .allow_origin(AllowOrigin::list(allowed))
         .allow_methods([
             Method::GET,
             Method::POST,
@@ -307,7 +312,7 @@ fn build_cors(frontend_url: &str) -> CorsLayer {
             axum::http::header::CONTENT_TYPE,
             axum::http::header::AUTHORIZATION,
             axum::http::header::ACCEPT,
-        ])
+        ]))
 }
 
 async fn get_user(
@@ -421,7 +426,7 @@ mod tests {
             jwt_secret: TEST_JWT_SECRET.to_string(),
         };
 
-        let cors = build_cors("http://localhost:5173");
+        let cors = build_cors("http://localhost:5173").expect("valid test CORS origin");
 
         // Simple routes for testing - no rate limiting to keep tests simple
         let health_routes = Router::new().route("/health", get(health_check));
@@ -698,6 +703,30 @@ mod tests {
 
         assert_eq!(response.status_code(), 200);
         assert_eq!(response.headers().get("access-control-allow-origin"), None);
+    }
+
+    #[test]
+    fn test_build_cors_rejects_wildcard_frontend_url() {
+        assert!(
+            build_cors("*").is_err(),
+            "wildcard FRONTEND_URL must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_build_cors_rejects_malformed_frontend_url() {
+        // Contains a control character, which is invalid in an HTTP HeaderValue.
+        assert!(
+            build_cors("http://example.com/\u{1}").is_err(),
+            "malformed FRONTEND_URL must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_build_cors_accepts_valid_frontend_url() {
+        let cors = build_cors("https://tsv-bue-tennis.de")
+            .expect("valid FRONTEND_URL should build a CORS layer");
+        let _ = cors;
     }
 
     #[serial_test::serial]
