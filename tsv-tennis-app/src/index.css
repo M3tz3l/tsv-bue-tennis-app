@@ -35,8 +35,8 @@
   --primary: #ec3013;
   --primary-active: #c5260f;
   --on-primary: #ffffff;
-  --success: #1f7a52;
-  --error: #cf2d56;
+  --success: #009100;
+  --error: #d32f2f;
 }
 
 body {
