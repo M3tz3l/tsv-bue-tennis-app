@@ -22,7 +22,10 @@ const EventCard = ({ detail, isOrga, onSelect, onEdit, onSignups }: { detail: Ev
   const unavailable = full || deadlinePassed;
 
   return <article className={`flex flex-col ${cardShellClass}`}>
-    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">{event.type === 'work-duty' ? 'Arbeitsdienst' : 'Veranstaltung'}</p>
+    <div className="flex items-center justify-between gap-2">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">{event.type === 'work-duty' ? 'Arbeitsdienst' : 'Veranstaltung'}</p>
+      {isOrga && event.status === 'draft' && <span className="rounded bg-[var(--hairline-strong)] px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ink)]">Entwurf</span>}
+    </div>
     <h2 className="mt-1 text-lg font-extrabold tracking-tight text-[var(--ink)]">{event.title}</h2>
     {event.description && <p className="mt-2 text-sm text-[var(--muted)]">{event.description}</p>}
     <EventDetails event={event} />
