@@ -52,7 +52,7 @@ test.describe('Event draft badge', () => {
     const created = await createEventViaApi({ title: 'E2E Event Draft' });
 
     await loginViaBrowser(page, member.email, getFixtures().password);
-    await page.goto('/dashboard/veranstaltungen');
+    await gotoEventsAndWaitForLoad(page);
 
     await expect(page.getByText(created.title)).not.toBeVisible();
     await expect(page.getByText('Entwurf', { exact: true })).toHaveCount(0);
