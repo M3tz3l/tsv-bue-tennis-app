@@ -9,7 +9,7 @@ test.describe('Event draft badge', () => {
 
   test('shows an Entwurf badge on draft events for Orga', async ({ page }) => {
     const orga = getOrgaUser()!;
-    const created = await createEventViaApi({ title: 'E2E Draft Event' });
+    const created = await createEventViaApi({ title: 'E2E Event Draft' });
 
     await loginViaBrowser(page, orga.email, getFixtures().password);
     await page.goto('/dashboard/veranstaltungen');
@@ -22,7 +22,7 @@ test.describe('Event draft badge', () => {
 
   test('does not show draft events (or the badge) to regular members', async ({ page }) => {
     const member = getTestUser(10); // a regular (non-orga) member
-    const created = await createEventViaApi({ title: 'E2E Draft Event' });
+    const created = await createEventViaApi({ title: 'E2E Event Draft' });
 
     await loginViaBrowser(page, member.email, getFixtures().password);
     await page.goto('/dashboard/veranstaltungen');
