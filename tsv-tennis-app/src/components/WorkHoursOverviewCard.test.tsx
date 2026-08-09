@@ -68,6 +68,23 @@ describe('WorkHoursOverviewCard', () => {
         expect(screen.getByText('6.5 / 8 Std')).toBeInTheDocument();
   });
 
+  it('links the overview heading to the work-hours page', () => {
+    renderCard(dashboard({
+      family: {
+        name: 'Familie Mitglied',
+        members: [
+          { id: 'member-1', name: 'Anna Mitglied', email: 'anna@example.com' },
+          { id: 'member-2', name: 'Bernd Mitglied', email: 'bernd@example.com' },
+        ],
+        required: 8, completed: 4, remaining: 4, percentage: 50,
+        memberContributions: [],
+      },
+    }));
+
+    const headingLink = screen.getByRole('heading', { name: 'Arbeitsstunden 2026' }).closest('a');
+    expect(headingLink).toHaveAttribute('href', '/dashboard/arbeitsstunden');
+  });
+
     it('hides the heading in the detail variant', () => {
         render(
             <MemoryRouter>

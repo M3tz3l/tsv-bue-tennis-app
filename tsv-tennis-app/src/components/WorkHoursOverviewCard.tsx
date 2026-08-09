@@ -1,4 +1,5 @@
 import { PlusIcon } from '@heroicons/react/24/outline';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import type { DashboardResponse, MemberContribution } from '../types';
 import { formatHours, getProgressPercentage } from '../utils/utils';
@@ -41,7 +42,9 @@ const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview', onAdd
 
     const header = showChrome && (
         <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-lg font-extrabold tracking-tight text-[var(--ink)]">{title}</h2>
+            <Link to="/dashboard/arbeitsstunden" className="group">
+                <h2 className="text-lg font-extrabold tracking-tight text-[var(--ink)] group-hover:text-[var(--primary)] transition-colors">{title}</h2>
+            </Link>
             {addButton}
         </div>
     );
