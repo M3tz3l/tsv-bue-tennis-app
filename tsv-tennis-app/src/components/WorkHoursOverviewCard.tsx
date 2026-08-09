@@ -72,31 +72,33 @@ const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview', onAdd
                         <span className="font-semibold text-base text-[var(--ink)]">{formatHours(data.family.completed)} Std von {formatHours(data.family.required)} Std</span>
                     </div>
                     {renderProgress(data.family.percentage, 'Familien-Fortschritt')}
-                    <h3 className="mt-4 mb-1 text-sm font-medium text-[var(--muted)]">Familienmitglieder</h3>
-                    <ul className="divide-y divide-[var(--hairline-soft)]">
-                        {[...data.family.memberContributions]
-                            .sort((a: MemberContribution, b: MemberContribution) => a.name.localeCompare(b.name, 'de'))
-                            .map((member: MemberContribution) => {
-                                const isCurrentUser = user?.id === member.id;
-                                return (
-                                    <li key={member.id} className="flex items-center justify-between gap-3 py-2">
-                                        <div className="min-w-0 flex flex-col">
-                                            <span className={`truncate font-medium ${isCurrentUser ? 'text-[var(--ink)]' : 'text-[var(--body)]'}`}>
-                                                {member.name} {isCurrentUser ? '(Sie)' : ''}
+                    <div className="hidden md:block">
+                        <h3 className="mt-4 mb-1 text-sm font-medium text-[var(--muted)]">Familienmitglieder</h3>
+                        <ul className="divide-y divide-[var(--hairline-soft)]">
+                            {[...data.family.memberContributions]
+                                .sort((a: MemberContribution, b: MemberContribution) => a.name.localeCompare(b.name, 'de'))
+                                .map((member: MemberContribution) => {
+                                    const isCurrentUser = user?.id === member.id;
+                                    return (
+                                        <li key={member.id} className="flex items-center justify-between gap-3 py-2">
+                                            <div className="min-w-0 flex flex-col">
+                                                <span className={`truncate font-medium ${isCurrentUser ? 'text-[var(--ink)]' : 'text-[var(--body)]'}`}>
+                                                    {member.name} {isCurrentUser ? '(Sie)' : ''}
+                                                </span>
+                                                {member.exemption_reason && (
+                                                    <span className="truncate text-sm text-[var(--muted)] italic">Befreit: {member.exemption_reason}</span>
+                                                )}
+                                            </div>
+                                            <span className={`shrink-0 text-base font-semibold ${member.exemption_reason ? 'text-[var(--success)]' : isCurrentUser ? 'text-[var(--ink)]' : 'text-[var(--body)]'}`}>
+                                                {member.exemption_reason
+                                                    ? (member.hours > 0 ? `${formatHours(member.hours)} Std / Befreit` : 'Befreit')
+                                                    : `${formatHours(member.hours)} / ${formatHours(member.required)} Std`}
                                             </span>
-                                            {member.exemption_reason && (
-                                                <span className="truncate text-sm text-[var(--muted)] italic">Befreit: {member.exemption_reason}</span>
-                                            )}
-                                        </div>
-                                        <span className={`shrink-0 text-base font-semibold ${member.exemption_reason ? 'text-[var(--success)]' : isCurrentUser ? 'text-[var(--ink)]' : 'text-[var(--body)]'}`}>
-                                            {member.exemption_reason
-                                                ? (member.hours > 0 ? `${formatHours(member.hours)} Std / Befreit` : 'Befreit')
-                                                : `${formatHours(member.hours)} / ${formatHours(member.required)} Std`}
-                                        </span>
-                                    </li>
-                                );
-                            })}
-                    </ul>
+                                        </li>
+                                    );
+                                })}
+                        </ul>
+                    </div>
                     {data.family.remaining > 0 && (
                         <div className="flex items-center justify-between gap-3 border-t border-[var(--hairline-soft)] pt-2 mt-2 text-sm">
                             <span className="font-medium text-[var(--muted)]">Noch zu erledigen</span>
