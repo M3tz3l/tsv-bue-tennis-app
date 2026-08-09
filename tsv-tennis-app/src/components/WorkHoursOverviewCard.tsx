@@ -18,6 +18,10 @@ const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview', onAdd
     if (!data.family && !data.personal) return null;
 
     const showChrome = variant === 'overview';
+    // The overview variant sits inside a grid whose gap provides vertical
+    // spacing, so it needs no bottom margin on small screens. The detail
+    // variant (followed by the table) keeps a margin.
+    const sectionMargin = showChrome ? '' : 'mb-6';
 
     const addButton = showChrome && onAdd && (
         <button
@@ -63,7 +67,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview', onAdd
     };
 
     return (
-        <section className={`${cardShellClass} mb-6 sm:mb-8`}>
+        <section className={`${cardShellClass} ${sectionMargin}`}>
             {hasFamilyView && data.family ? (
                 <>
                     {header}
@@ -72,7 +76,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview', onAdd
                         <span className="font-semibold text-base text-[var(--ink)]">{formatHours(data.family.completed)} Std von {formatHours(data.family.required)} Std</span>
                     </div>
                     {renderProgress(data.family.percentage, 'Familien-Fortschritt')}
-                    <div className="hidden md:block">
+                    <div className={showChrome ? 'hidden md:block' : ''}>
                         <h3 className="mt-4 mb-1 text-sm font-medium text-[var(--muted)]">Familienmitglieder</h3>
                         <ul className="divide-y divide-[var(--hairline-soft)]">
                             {[...data.family.memberContributions]
