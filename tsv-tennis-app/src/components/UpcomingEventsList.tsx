@@ -16,18 +16,20 @@ const EventRow = ({ detail }: { detail: EventDetail }) => {
     const ownSignup = detail.own_signup;
 
     return (
-            <article className="relative border-t border-[var(--hairline)] py-4 pl-5 first:border-t-0 sm:pl-6">
-            <span aria-hidden="true" className="absolute left-0 top-6 h-2.5 w-2.5 rounded-full bg-[var(--primary)]" />
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <article className="relative border-t border-[var(--hairline)] py-3 pl-4 first:border-t-0 sm:py-4 sm:pl-6">
+            <span aria-hidden="true" className="absolute left-0 top-4 h-2 w-2 rounded-full bg-[var(--primary)] sm:top-6 sm:h-2.5 sm:w-2.5" />
+            <div className="flex items-start justify-between gap-3 sm:flex-row sm:gap-4">
                 <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">{event.type === 'work-duty' ? 'Arbeitsdienst' : 'Veranstaltung'}</p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="hidden text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)] sm:block">{event.type === 'work-duty' ? 'Arbeitsdienst' : 'Veranstaltung'}</p>
+                        <p className="text-sm text-[var(--body)]">{formatDate(event.event_date)}{formatTimeRange(event.start_time, event.end_time) ? `, ${formatTimeRange(event.start_time, event.end_time)} Uhr` : ''}</p>
+                    </div>
                     {event.allow_signups ? (
-                      <Link className="mt-1 flex min-h-11 items-center text-base font-semibold text-[var(--ink)] underline decoration-[var(--hairline)] underline-offset-4 hover:decoration-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20" to={`/dashboard/veranstaltungen?eventId=${event.id}`}>{event.title}</Link>
+                      <Link className="mt-0.5 flex min-h-11 items-center text-base font-semibold text-[var(--ink)] underline decoration-[var(--hairline)] underline-offset-4 hover:decoration-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20" to={`/dashboard/veranstaltungen?eventId=${event.id}`}>{event.title}</Link>
                     ) : (
-                      <span className="mt-1 block text-base font-semibold text-[var(--ink)]">{event.title}</span>
+                      <span className="mt-0.5 block text-base font-semibold text-[var(--ink)]">{event.title}</span>
                     )}
-                    <p className="mt-1 text-sm text-[var(--body)]">{formatDate(event.event_date)}{formatTimeRange(event.start_time, event.end_time) ? `, ${formatTimeRange(event.start_time, event.end_time)} Uhr` : ''}</p>
-                    {(event.location || event.description) && <p className="mt-1 text-sm text-[var(--muted)]">{event.location || event.description}</p>}
+                    {event.location && <p className="mt-0.5 text-sm text-[var(--muted)]">{event.location}</p>}
                 </div>
                 {ownSignup && <p className="shrink-0 text-sm font-medium text-[var(--primary-active)]">Ihre Anmeldung: {ownSignup.people_count} Personen</p>}
             </div>
@@ -58,7 +60,9 @@ const UpcomingEventsList = ({ events, limit = 3, isLoading = false, error }: Upc
     return (
         <section aria-label="Nächste Veranstaltungen" className={`${cardShellClass} min-h-56`}>
             <div className="flex items-center justify-between gap-3">
-                <h2 className="text-lg font-extrabold tracking-tight text-[var(--ink)]">Nächste Veranstaltungen</h2>
+                <Link to="/dashboard/veranstaltungen" className="group min-w-0">
+                    <h2 className="text-lg font-extrabold tracking-tight text-[var(--ink)] group-hover:text-[var(--primary)] transition-colors">Nächste Veranstaltungen</h2>
+                </Link>
                 <Link
                     to="/dashboard/veranstaltungen"
                     aria-label="Alle Veranstaltungen anzeigen"

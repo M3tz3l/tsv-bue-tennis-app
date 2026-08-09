@@ -48,6 +48,13 @@ describe('UpcomingEventsList', () => {
     expect(container.querySelector('.stack-md')).toBeInTheDocument();
   });
 
+  it('links the headline to the events page', () => {
+    render(<MemoryRouter><UpcomingEventsList events={[detail()]} /></MemoryRouter>);
+
+    const headingLink = screen.getByRole('heading', { name: 'Nächste Veranstaltungen' }).closest('a');
+    expect(headingLink).toHaveAttribute('href', '/dashboard/veranstaltungen');
+  });
+
   it('filters published future events, sorts them, and limits the rows', () => {
     render(
       <MemoryRouter>

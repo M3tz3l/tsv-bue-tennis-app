@@ -68,6 +68,23 @@ describe('WorkHoursOverviewCard', () => {
         expect(screen.getByText('6.5 / 8 Std')).toBeInTheDocument();
   });
 
+  it('links the overview heading to the work-hours page', () => {
+    renderCard(dashboard({
+      family: {
+        name: 'Familie Mitglied',
+        members: [
+          { id: 'member-1', name: 'Anna Mitglied', email: 'anna@example.com' },
+          { id: 'member-2', name: 'Bernd Mitglied', email: 'bernd@example.com' },
+        ],
+        required: 8, completed: 4, remaining: 4, percentage: 50,
+        memberContributions: [],
+      },
+    }));
+
+    const headingLink = screen.getByRole('heading', { name: 'Arbeitsstunden 2026' }).closest('a');
+    expect(headingLink).toHaveAttribute('href', '/dashboard/arbeitsstunden');
+  });
+
     it('hides the heading in the detail variant', () => {
         render(
             <MemoryRouter>
@@ -84,6 +101,38 @@ describe('WorkHoursOverviewCard', () => {
         );
 
         expect(screen.queryByRole('heading', { name: /Arbeitsstunden 2026/ })).not.toBeInTheDocument();
+    });
+
+    it('hides the family-members section on small screens in the overview variant only', () => {
+        const familyData = dashboard({
+            family: {
+                name: 'Familie Mitglied',
+                members: [
+                    { id: 'member-1', name: 'Anna Mitglied', email: 'anna@example.com' },
+                    { id: 'member-2', name: 'Bernd Mitglied', email: 'bernd@example.com' },
+                ],
+                required: 8, completed: 4, remaining: 4, percentage: 50,
+                memberContributions: [
+                    { id: 'member-1', name: 'Anna Mitglied', hours: 2, required: 8, entries: [], exemption_reason: null },
+                    { id: 'member-2', name: 'Bernd Mitglied', hours: 2, required: 8, entries: [], exemption_reason: null },
+                ],
+            },
+        });
+
+        // Overview variant: the Familienmitglieder wrapper is hidden below md.
+        const { unmount } = render(
+            <MemoryRouter><WorkHoursOverviewCard data={familyData} selectedYear={2026} variant="overview" /></MemoryRouter>,
+        );
+        const overviewWrapper = screen.getByRole('heading', { name: 'Familienmitglieder' }).parentElement;
+        expect(overviewWrapper).toHaveClass('hidden md:block');
+        unmount();
+
+        // Detail variant: the wrapper is always visible (no hiding class).
+        render(
+            <MemoryRouter><WorkHoursOverviewCard data={familyData} selectedYear={2026} variant="detail" /></MemoryRouter>,
+        );
+        const detailWrapper = screen.getByRole('heading', { name: 'Familienmitglieder' }).parentElement;
+        expect(detailWrapper).not.toHaveClass('hidden md:block');
     });
 
     it('renders a red add button in the overview variant that opens the add modal', async () => {

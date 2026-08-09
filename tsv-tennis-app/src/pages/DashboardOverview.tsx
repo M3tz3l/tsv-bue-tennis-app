@@ -39,7 +39,7 @@ const DashboardOverview = () => {
     return (
         <DashboardShell title="Meine Übersicht" onOpenMailComposer={() => setIsMailComposerOpen(true)} isMailComposerOpen={isMailComposerOpen} onCloseMailComposer={() => setIsMailComposerOpen(false)}>
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] lg:items-start">
-                <div className="min-h-56">
+                <div>
                     {dashboardLoading ? <div className="h-56 animate-pulse border border-[var(--hairline)] bg-white" aria-label="Arbeitsstunden werden geladen" /> : dashboardData ? <WorkHoursOverviewCard data={dashboardData} selectedYear={selectedYear} onAdd={() => setShowAddForm(true)} /> : null}
                 </div>
                 <UpcomingEventsList events={events} isLoading={eventsLoading} error={eventsError} limit={3} />
