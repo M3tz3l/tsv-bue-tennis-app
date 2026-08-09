@@ -99,6 +99,7 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
         title={event.title}
         disableClose={pending}
         backdropTestId="modal-backdrop"
+        panelClassName="max-h-[90vh] overflow-y-auto"
         footer={null}
         footerActions={{
           destructive: <button type="button" onClick={() => void cancelSignup()} disabled={pending} className={buttonVariants.destructive}>Abmelden</button>,
@@ -122,6 +123,7 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
       title={data?.event.title ?? 'Veranstaltung'}
       disableClose={pending}
       backdropTestId="modal-backdrop"
+      panelClassName="max-h-[90vh] overflow-y-auto"
        footer={null}
        footerActions={{
          destructive: signup && <button type="button" onClick={() => void cancelSignup()} disabled={pending} className={buttonVariants.destructive}>Abmelden</button>,
