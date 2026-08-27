@@ -21,7 +21,7 @@ pub fn member_count_routes() -> axum::Router<AppState> {
 }
 
 const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024;
-const BULK_MAIL_CONCURRENCY: usize = 5;
+const BULK_MAIL_CONCURRENCY: usize = 3;
 const BULK_MAIL_BATCH_SIZE: usize = 8;
 const BULK_MAIL_BATCH_DELAY_SECS: u64 = 5;
 
