@@ -297,6 +297,8 @@ pub struct BulkMailOptions {
     pub max_concurrency: usize,
     pub batch_size: usize,
     pub batch_delay: std::time::Duration,
+    pub retries: usize,
+    pub retry_delay: std::time::Duration,
 }
 
 pub struct EmailService {
@@ -385,6 +387,8 @@ impl EmailService {
             max_concurrency,
             batch_size,
             batch_delay,
+            retries,
+            retry_delay,
         } = options;
 
         // A zero batch_size makes `chunks(0)` panic and a zero max_concurrency
@@ -533,11 +537,11 @@ impl EmailService {
                         }
                     };
 
-                    let result = transport.send(email_msg).await;
+                    let result = send_with_retry(&transport, email_msg, retries, retry_delay).await;
                     drop(permit);
                     match result {
                         Ok(_) => Ok(email_addr),
-                        Err(e) => Err((email_addr, e.to_string())),
+                        Err(e) => Err((email_addr, e)),
                     }
                 }));
             }
@@ -772,6 +776,53 @@ Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese E-Mail bitte.
 }
 
 /// Build a lettre `Message` with optional attachments (shared by sync and async paths)
+/// Send with a bounded number of retries for transient failures (e.g. the SMTP
+/// server dropping the connection mid-conversation, reported by lettre as
+/// "incomplete response"). Non-transient errors fail immediately.
+async fn send_with_retry(
+    transport: &AsyncSmtpTransport<Tokio1Executor>,
+    message: Message,
+    max_retries: usize,
+    delay: std::time::Duration,
+) -> Result<(), String> {
+    let mut attempt = 0usize;
+    loop {
+        match transport.send(message.clone()).await {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                if attempt < max_retries && is_transient_smtp_error(&e) {
+                    attempt += 1;
+                    warn!(
+                        "Bulk mail send attempt {} retrying after SMTP error: {}",
+                        attempt, e
+                    );
+                    tokio::time::sleep(delay).await;
+                    continue;
+                }
+                return Err(e.to_string());
+            }
+        }
+    }
+}
+
+/// Decide whether an SMTP failure is safe to retry without risking a duplicate
+/// delivery. Permanent 5xx replies are never retried. Transient 4xx replies and
+/// timeouts are retried. For errors lettre does not classify structurally, only
+/// clearly pre-submission connection failures (e.g. refused at connect) are
+/// retried. A connection loss after the server accepted DATA — such as an
+/// "incomplete response" when reading the final reply — means delivery is
+/// indeterminate, so it is NOT retried to avoid sending the message twice.
+fn is_transient_smtp_error(err: &lettre::transport::smtp::Error) -> bool {
+    if err.is_permanent() {
+        return false;
+    }
+    if err.is_transient() || err.is_timeout() {
+        return true;
+    }
+    let msg = err.to_string().to_lowercase();
+    msg.contains("connection refused") || msg.contains("could not connect")
+}
+
 fn build_message(
     from: Mailbox,
     to: Mailbox,
