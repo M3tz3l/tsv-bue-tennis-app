@@ -22,6 +22,261 @@ pub fn escape_html(input: &str) -> String {
         .replace('\'', "&#39;")
 }
 
+/// Wrap URLs in an already HTML-escaped string into clickable `<a>` tags.
+/// Input must already be escaped via [`escape_html`]. URLs are detected by the
+/// `http://`, `https://` or `www.` prefix and terminated at whitespace, HTML
+/// markup (`<`, `>`) or trailing punctuation.
+pub fn auto_link_html(input: &str) -> String {
+    let mut out = String::with_capacity(input.len() + 32);
+    let mut pos = 0;
+    while pos < input.len() {
+        let remaining = &input[pos..];
+        let Some(rel) = find_earliest_url(remaining) else {
+            out.push_str(remaining);
+            break;
+        };
+
+        out.push_str(&remaining[..rel]);
+        let url_start = pos + rel;
+        let url_end = find_url_end(input, url_start);
+        let url = &input[url_start..url_end];
+        let href = if url.starts_with("www.") {
+            format!("http://{url}")
+        } else {
+            url.to_string()
+        };
+        out.push_str(&format!(r#"<a href="{href}">{url}</a>"#));
+        pos = url_end;
+    }
+    out
+}
+
+/// Return the byte offset at which the URL starting at `url_start` ends,
+/// operating on UTF-8 character boundaries. Whitepsace, HTML markup or a
+/// trailing punctuation run terminates the URL.
+fn find_url_end(input: &str, url_start: usize) -> usize {
+    let bytes = input.as_bytes();
+    let mut j = url_start;
+    while j < bytes.len() {
+        let c = unsafe_char_at(input, j);
+        // The input is already HTML-escaped, so `&lt;`, `&gt;`, `&quot;` and
+        // `&#39;` represent `&`-terminated markup/attribute boundaries and must
+        // not be swallowed into the URL. `&amp;` is left alone because a real
+        // `&` inside a URL is serialized as `&amp;`.
+        let rest = &bytes[j..];
+        if rest.starts_with(b"&lt;")
+            || rest.starts_with(b"&gt;")
+            || rest.starts_with(b"&quot;")
+            || rest.starts_with(b"&#39;")
+        {
+            return j;
+        }
+        if c.is_whitespace() || c == '<' || c == '>' {
+            return j;
+        }
+        if is_trail_punct(c) {
+            let run_end = scan_punct_run(input, j);
+            if run_end >= bytes.len() {
+                // Reaches the end: trailing run stays literal text.
+                return j;
+            }
+            let next = unsafe_char_at(input, run_end);
+            if next.is_whitespace() || next == '<' || next == '>' {
+                return j;
+            }
+            // Non-trailing run belongs to the URL; resume past it in one step.
+            j = run_end;
+            continue;
+        }
+        j += utf8_char_len(bytes[j]);
+    }
+    input.len()
+}
+
+/// Minimum positive length of the UTF-8 character starting at `bytes[idx]`.
+/// Only called on valid character boundaries.
+fn utf8_char_len(lead: u8) -> usize {
+    if lead < 0x80 {
+        1
+    } else if lead >> 5 == 0b110 {
+        2
+    } else if lead >> 4 == 0b1110 {
+        3
+    } else if lead >> 3 == 0b11110 {
+        4
+    } else {
+        1
+    }
+}
+
+/// First character of `input` starting at `idx`. Only called on valid boundaries.
+fn unsafe_char_at(input: &str, idx: usize) -> char {
+    input[idx..].chars().next().unwrap()
+}
+
+/// Byte offset just past the run of trailing-punctuation characters from `start`.
+fn scan_punct_run(input: &str, start: usize) -> usize {
+    let bytes = input.as_bytes();
+    let mut k = start;
+    while k < bytes.len() {
+        let c = unsafe_char_at(input, k);
+        if !is_trail_punct(c) {
+            break;
+        }
+        k += utf8_char_len(bytes[k]);
+    }
+    k
+}
+
+fn is_trail_punct(c: char) -> bool {
+    matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | ')')
+}
+
+/// Return the byte offset (relative to `input`) of the earliest valid URL
+/// candidate, searching across all supported prefixes. A candidate is rejected
+/// when preceded by an ASCII alphanumeric character (i.e. it is embedded inside
+/// a larger token such as `abchttps://x`). When a rejected candidate is skipped,
+/// scanning continues past it so a later genuine URL is still found.
+fn find_earliest_url(input: &str) -> Option<usize> {
+    const PREFIXES: [&str; 3] = ["http://", "https://", "www."];
+    let bytes = input.as_bytes();
+    let mut best: Option<usize> = None;
+    for p in PREFIXES {
+        let mut search_from = 0;
+        while let Some(rel) = input[search_from..].find(p) {
+            let pos = search_from + rel;
+            let valid = pos == 0 || !(bytes[pos - 1] as char).is_ascii_alphanumeric();
+            if valid {
+                if best.is_none_or(|b| pos < b) {
+                    best = Some(pos);
+                }
+                break;
+            }
+            search_from = pos + p.len();
+        }
+    }
+    best
+}
+
+#[cfg(test)]
+mod tests {
+    use super::auto_link_html;
+
+    #[test]
+    fn links_plain_http_url() {
+        assert_eq!(
+            auto_link_html("Besuch https://example.com jetzt"),
+            "Besuch <a href=\"https://example.com\">https://example.com</a> jetzt"
+        );
+    }
+
+    #[test]
+    fn links_www_with_http_prefix() {
+        assert_eq!(
+            auto_link_html("Siehe www.example.com/foo"),
+            "Siehe <a href=\"http://www.example.com/foo\">www.example.com/foo</a>"
+        );
+    }
+
+    #[test]
+    fn does_not_link_alphanumeric_token() {
+        assert_eq!(auto_link_html("abcwww.example.com"), "abcwww.example.com");
+    }
+
+    #[test]
+    fn does_not_link_embedded_https_token() {
+        assert_eq!(
+            auto_link_html("abchttps://example.com"),
+            "abchttps://example.com"
+        );
+    }
+
+    #[test]
+    fn does_not_link_embedded_http_token() {
+        assert_eq!(
+            auto_link_html("abcxhttp://example.com"),
+            "abcxhttp://example.com"
+        );
+    }
+
+    #[test]
+    fn links_genuine_url_after_rejected_embedded_token() {
+        assert_eq!(
+            auto_link_html("abchttps://example.com und http://pdf.com/a"),
+            "abchttps://example.com und <a href=\"http://pdf.com/a\">http://pdf.com/a</a>"
+        );
+    }
+
+    #[test]
+    fn links_earliest_of_mixed_url_types() {
+        assert_eq!(
+            auto_link_html("Siehe www.example.com/first und dann https://two.example"),
+            concat!(
+                "Siehe <a href=\"http://www.example.com/first\">www.example.com/first</a> ",
+                "und dann <a href=\"https://two.example\">https://two.example</a>"
+            )
+        );
+    }
+
+    #[test]
+    fn strips_trailing_sentence_punctuation() {
+        assert_eq!(
+            auto_link_html("Klick https://example.com."),
+            "Klick <a href=\"https://example.com\">https://example.com</a>."
+        );
+    }
+
+    #[test]
+    fn strips_trailing_punctuation_run() {
+        assert_eq!(
+            auto_link_html("Siehe (https://example.com)."),
+            "Siehe (<a href=\"https://example.com\">https://example.com</a>)."
+        );
+    }
+
+    #[test]
+    fn handles_non_ascii_whitespace_without_panicking() {
+        assert_eq!(
+            auto_link_html("https://example.com\u{00A0}weiter"),
+            "<a href=\"https://example.com\">https://example.com</a>\u{00A0}weiter"
+        );
+    }
+
+    #[test]
+    fn keeps_non_trailing_punctuation_run_inside_url() {
+        assert_eq!(
+            auto_link_html("https://example.com/path..weiter"),
+            "<a href=\"https://example.com/path..weiter\">https://example.com/path..weiter</a>"
+        );
+    }
+
+    #[test]
+    fn stops_before_escaped_quote_and_keeps_escaped_amp() {
+        assert_eq!(
+            auto_link_html("https://example.com?q=1&amp;x=2&quot;\"weiter\""),
+            "<a href=\"https://example.com?q=1&amp;x=2\">https://example.com?q=1&amp;x=2</a>&quot;\"weiter\""
+        );
+    }
+
+    #[test]
+    fn stops_at_br_tag() {
+        assert_eq!(
+            auto_link_html("https://example.com<br/>weiter"),
+            "<a href=\"https://example.com\">https://example.com</a><br/>weiter"
+        );
+    }
+
+    #[test]
+    fn leaves_escaped_html_unchanged_without_url() {
+        assert_eq!(auto_link_html("a &lt; b &gt; c"), "a &lt; b &gt; c");
+    }
+
+    #[test]
+    fn does_not_touch_plain_text() {
+        assert_eq!(auto_link_html("Hallo Mitglieder"), "Hallo Mitglieder");
+    }
+}
+
 /// Represents a file attachment for an email
 #[derive(Clone)]
 pub struct EmailAttachment {

@@ -10,7 +10,7 @@ use axum::{
 use tracing::{error, info, warn};
 
 use crate::auth;
-use crate::email::{self, escape_html};
+use crate::email::{self, auto_link_html, escape_html};
 use crate::models::{MailJob, MailJobStatus, Member, RecipientFilter};
 use crate::state::AppState;
 use crate::teable;
@@ -162,7 +162,7 @@ pub async fn send_test_mail(
     };
 
     let safe_first_name = escape_html(&user.first_name);
-    let safe_message = escape_html(&message).replace('\n', "<br/>");
+    let safe_message = auto_link_html(&escape_html(&message).replace('\n', "<br/>"));
     let (signature_html, signature_text) = build_signature(&user.first_name);
 
     let html_content = if form.include_greeting {
@@ -292,7 +292,7 @@ pub async fn send_bulk_mail(
     let total = unique_recipients.len();
 
     // Pre-build template parts (done once, not per recipient)
-    let safe_message = escape_html(&form.message).replace('\n', "<br/>");
+    let safe_message = auto_link_html(&escape_html(&form.message).replace('\n', "<br/>"));
     let (signature_html, signature_text) = build_signature(&user.first_name);
 
     // Prepare recipient data for the background task
