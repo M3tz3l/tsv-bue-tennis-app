@@ -1,15 +1,16 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 
 const { mockInstance } = vi.hoisted(() => {
-  const instance = {
+  const instance = Object.assign(vi.fn(async () => ({ data: undefined })), {
     get: vi.fn(),
     post: vi.fn(),
     put: vi.fn(),
     delete: vi.fn(),
     interceptors: {
       request: { use: vi.fn() },
+      response: { use: vi.fn() },
     },
-  };
+  });
   return { mockInstance: instance };
 });
 
@@ -19,11 +20,20 @@ vi.mock('axios', () => ({
   },
 }));
 
-import BackendService, { getApiErrorMessage } from '../services/backendService';
+import BackendService, {
+  RATE_LIMIT_MAX_RETRIES,
+  getApiErrorMessage,
+  parseRetryAfter,
+} from '../services/backendService';
+import type { AxiosRequestConfig } from 'axios';
 
 const requestInterceptor = mockInstance.interceptors.request.use.mock.calls[0][0] as (
   config: { headers: Record<string, string | undefined>; data: unknown }
 ) => unknown;
+
+const responseErrorHandler = mockInstance.interceptors.response.use.mock.calls[0][1] as (
+  error: unknown
+) => Promise<unknown>;
 
 type RequestConfig = { headers: Record<string, string | undefined>; data: unknown };
 
@@ -50,6 +60,51 @@ describe('BackendService', () => {
         message: 'Network error',
         response: { data: { message: 'Server error' } },
       }, 'Fallback')).toBe('Server error');
+    });
+  });
+
+  describe('parseRetryAfter', () => {
+    it('uses delay-seconds', () => {
+      expect(parseRetryAfter('2', 0)).toBe(2000);
+    });
+
+    it('parses an HTTP-date and never returns a negative wait', () => {
+      const future = new Date(Date.now() + 5000).toUTCString();
+      const wait = parseRetryAfter(future, 0);
+      expect(wait).toBeGreaterThan(0);
+      const past = new Date(Date.now() - 5000).toUTCString();
+      expect(parseRetryAfter(past, 0)).toBe(0);
+    });
+
+    it('falls back to linear backoff for missing/invalid values', () => {
+      expect(parseRetryAfter(undefined, 1)).toBe(1500);
+      expect(parseRetryAfter('not-a-date', 2)).toBe(2500);
+    });
+  });
+
+  describe('429 response retry interceptor', () => {
+    it('retries once and persists the count on the replayed config', async () => {
+      mockInstance.mockClear();
+      const config: AxiosRequestConfig = { url: '/events', method: 'get' };
+      await responseErrorHandler({
+        response: { status: 429, headers: { 'retry-after': '0' } },
+        config,
+      });
+      expect(config._retryCount).toBe(1);
+      expect(mockInstance).toHaveBeenCalled();
+    });
+
+    it('stops retrying once the max retries is reached', async () => {
+      mockInstance.mockClear();
+      const config: AxiosRequestConfig = {
+        url: '/events',
+        method: 'get',
+        _retryCount: RATE_LIMIT_MAX_RETRIES,
+      };
+      await expect(
+        responseErrorHandler({ response: { status: 429, headers: {} }, config }),
+      ).rejects.toBeTruthy();
+      expect(mockInstance).not.toHaveBeenCalled();
     });
   });
 

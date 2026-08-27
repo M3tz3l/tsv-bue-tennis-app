@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import type {
   LoginResponse,
   LoginResponseVariant,
@@ -34,11 +34,22 @@ export type VerifyTokenResponse = ApiResult & { user?: UserResponse; status?: nu
 export type MailSendResponse = ApiResult & { job_id?: string; total_recipients?: number };
 type SendTestMailPayload = { subject?: string; message?: string };
 
+// Tracks how many 429 retries have been attempted for a given request. Axios
+// preserves custom config fields through mergeConfig on replay, so the counter
+// stays with the request across retries.
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    _retryCount?: number;
+  }
+}
+
 type ApiErrorShape = {
   message?: unknown;
+  config?: AxiosRequestConfig;
   response?: {
     status?: unknown;
     data?: { message?: unknown };
+    headers?: { 'retry-after'?: string };
   };
 };
 
@@ -68,6 +79,31 @@ const logApiError = (label: string, error: unknown): void => {
 
 const normalizeDeleteResponse = (data: unknown): ApiResult | ApiError =>
   data === '' || data === undefined ? { success: true } : data as ApiResult | ApiError;
+
+// The backend rate-limits authenticated endpoints (Governor). A 429 is
+// transient by definition, so retry it with backoff instead of surfacing it as
+// a hard error. This self-heals UI load flakes under rate limiting.
+export const RATE_LIMIT_MAX_RETRIES = 3;
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Resolve the wait time (ms) before retrying a 429. `Retry-After` can be either
+ * delay-seconds or an HTTP-date; if neither is present/valid, fall back to
+ * linear backoff based on the attempt count.
+ */
+export function parseRetryAfter(retryAfter: string | undefined, attempts: number): number {
+  if (retryAfter !== undefined) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds)) {
+      return Math.max(0, seconds * 1000);
+    }
+    const date = Date.parse(retryAfter);
+    if (!Number.isNaN(date)) {
+      return Math.max(0, date - Date.now());
+    }
+  }
+  return attempts * 1000 + 500;
+}
 
 class BackendService {
   private api: AxiosInstance;
@@ -100,6 +136,26 @@ class BackendService {
         return config;
       },
       (error) => Promise.reject(error)
+    );
+
+    // Retry transient 429 (rate-limited) responses with backoff. The server
+    // rejects with 429 before processing the request, so retrying is safe.
+    this.api.interceptors.response.use(
+      (response) => response,
+      async (error: unknown) => {
+        const status = asApiError(error).response?.status;
+        const config = asApiError(error).config;
+        if (status === 429 && config) {
+          const attempts = config._retryCount ?? 0;
+          if (attempts < RATE_LIMIT_MAX_RETRIES) {
+            config._retryCount = attempts + 1;
+            const retryAfter = asApiError(error).response?.headers?.['retry-after'];
+            await delay(parseRetryAfter(retryAfter, attempts));
+            return this.api(config);
+          }
+        }
+        return Promise.reject(error);
+      }
     );
   }
 
