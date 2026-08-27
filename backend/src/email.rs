@@ -22,6 +22,114 @@ pub fn escape_html(input: &str) -> String {
         .replace('\'', "&#39;")
 }
 
+/// Wrap URLs in an already HTML-escaped string into clickable `<a>` tags.
+/// Input must already be escaped via [`escape_html`]. URLs are detected by the
+/// `http://`, `https://` or `www.` prefix and terminated at whitespace, HTML
+/// markup (`<`, `>`) or trailing punctuation.
+pub fn auto_link_html(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(input.len() + 32);
+    let mut i = 0;
+    while i < bytes.len() {
+        let remaining = &input[i..];
+        let start = remaining
+            .find("http://")
+            .or_else(|| remaining.find("https://"))
+            .or_else(|| {
+                remaining.find("www.").and_then(|pos| {
+                    let preceded_by_token =
+                        pos > 0 && (remaining.as_bytes()[pos - 1] as char).is_ascii_alphanumeric();
+                    if preceded_by_token {
+                        None
+                    } else {
+                        Some(pos)
+                    }
+                })
+            });
+
+        let Some(rel) = start else {
+            out.push_str(remaining);
+            break;
+        };
+
+        out.push_str(&remaining[..rel]);
+        let mut j = i + rel;
+        while j < bytes.len() {
+            let c = bytes[j] as char;
+            let terminates = c.is_whitespace() || matches!(c, '<' | '>');
+            let is_trail_punct = matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | ')')
+                && (j + 1 == bytes.len()
+                    || matches!(bytes[j + 1] as char, c2 if c2.is_whitespace() || c2 == '<'));
+            if terminates || is_trail_punct {
+                break;
+            }
+            j += 1;
+        }
+
+        let url = &input[i + rel..j];
+        let href = if url.starts_with("www.") {
+            format!("http://{url}")
+        } else {
+            url.to_string()
+        };
+        out.push_str(&format!(r#"<a href="{href}">{url}</a>"#));
+        i = j;
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::auto_link_html;
+
+    #[test]
+    fn links_plain_http_url() {
+        assert_eq!(
+            auto_link_html("Besuch https://example.com jetzt"),
+            "Besuch <a href=\"https://example.com\">https://example.com</a> jetzt"
+        );
+    }
+
+    #[test]
+    fn links_www_with_http_prefix() {
+        assert_eq!(
+            auto_link_html("Siehe www.example.com/foo"),
+            "Siehe <a href=\"http://www.example.com/foo\">www.example.com/foo</a>"
+        );
+    }
+
+    #[test]
+    fn does_not_link_alphanumeric_token() {
+        assert_eq!(auto_link_html("abcwww.example.com"), "abcwww.example.com");
+    }
+
+    #[test]
+    fn strips_trailing_sentence_punctuation() {
+        assert_eq!(
+            auto_link_html("Klick https://example.com."),
+            "Klick <a href=\"https://example.com\">https://example.com</a>."
+        );
+    }
+
+    #[test]
+    fn stops_at_br_tag() {
+        assert_eq!(
+            auto_link_html("https://example.com<br/>weiter"),
+            "<a href=\"https://example.com\">https://example.com</a><br/>weiter"
+        );
+    }
+
+    #[test]
+    fn leaves_escaped_html_unchanged_without_url() {
+        assert_eq!(auto_link_html("a &lt; b &gt; c"), "a &lt; b &gt; c");
+    }
+
+    #[test]
+    fn does_not_touch_plain_text() {
+        assert_eq!(auto_link_html("Hallo Mitglieder"), "Hallo Mitglieder");
+    }
+}
+
 /// Represents a file attachment for an email
 #[derive(Clone)]
 pub struct EmailAttachment {
