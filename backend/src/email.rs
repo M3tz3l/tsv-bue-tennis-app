@@ -42,9 +42,16 @@ pub fn auto_link_html(input: &str) -> String {
         while j < bytes.len() {
             let c = bytes[j] as char;
             let terminates = c.is_whitespace() || matches!(c, '<' | '>');
-            let is_trail_punct = matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | ')')
-                && (j + 1 == bytes.len()
-                    || matches!(bytes[j + 1] as char, c2 if c2.is_whitespace() || c2 == '<'));
+            let is_trail_punct = matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | ')') && {
+                let mut k = j;
+                while k < bytes.len()
+                    && matches!(bytes[k] as char, '.' | ',' | ';' | ':' | '!' | '?' | ')')
+                {
+                    k += 1;
+                }
+                k == bytes.len()
+                    || matches!(bytes[k] as char, c2 if c2.is_whitespace() || c2 == '<')
+            };
             if terminates || is_trail_punct {
                 break;
             }
@@ -154,6 +161,14 @@ mod tests {
         assert_eq!(
             auto_link_html("Klick https://example.com."),
             "Klick <a href=\"https://example.com\">https://example.com</a>."
+        );
+    }
+
+    #[test]
+    fn strips_trailing_punctuation_run() {
+        assert_eq!(
+            auto_link_html("Siehe (https://example.com)."),
+            "Siehe (<a href=\"https://example.com\">https://example.com</a>)."
         );
     }
 
