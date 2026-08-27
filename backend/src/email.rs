@@ -55,34 +55,77 @@ pub fn auto_link_html(input: &str) -> String {
 /// operating on UTF-8 character boundaries. Whitepsace, HTML markup or a
 /// trailing punctuation run terminates the URL.
 fn find_url_end(input: &str, url_start: usize) -> usize {
-    let chars: Vec<(usize, char)> = input[url_start..].char_indices().collect();
-    let mut i = 0;
-    while i < chars.len() {
-        let (offset, c) = chars[i];
+    let bytes = input.as_bytes();
+    let mut j = url_start;
+    while j < bytes.len() {
+        let c = unsafe_char_at(input, j);
+        // The input is already HTML-escaped, so `&lt;`, `&gt;`, `&quot;` and
+        // `&#39;` represent `&`-terminated markup/attribute boundaries and must
+        // not be swallowed into the URL. `&amp;` is left alone because a real
+        // `&` inside a URL is serialized as `&amp;`.
+        let rest = &bytes[j..];
+        if rest.starts_with(b"&lt;")
+            || rest.starts_with(b"&gt;")
+            || rest.starts_with(b"&quot;")
+            || rest.starts_with(b"&#39;")
+        {
+            return j;
+        }
         if c.is_whitespace() || c == '<' || c == '>' {
-            return url_start + offset;
+            return j;
         }
         if is_trail_punct(c) {
-            let mut k = i;
-            while k < chars.len() && is_trail_punct(chars[k].1) {
-                k += 1;
+            let run_end = scan_punct_run(input, j);
+            if run_end >= bytes.len() {
+                // Reaches the end: trailing run stays literal text.
+                return j;
             }
-            let reaches_end = k == chars.len();
-            let followed_by_delim = !reaches_end
-                && (chars[k].1.is_whitespace() || chars[k].1 == '<' || chars[k].1 == '>');
-            if reaches_end || followed_by_delim {
-                // Trailing punctuation run: it stays literal text, so the URL
-                // ends right before it.
-                return url_start + offset;
+            let next = unsafe_char_at(input, run_end);
+            if next.is_whitespace() || next == '<' || next == '>' {
+                return j;
             }
-            // The whole run belongs to the URL; resume scanning past it
-            // instead of rescanning each punctuation byte.
-            i = k;
+            // Non-trailing run belongs to the URL; resume past it in one step.
+            j = run_end;
             continue;
         }
-        i += 1;
+        j += utf8_char_len(bytes[j]);
     }
     input.len()
+}
+
+/// Minimum positive length of the UTF-8 character starting at `bytes[idx]`.
+/// Only called on valid character boundaries.
+fn utf8_char_len(lead: u8) -> usize {
+    if lead < 0x80 {
+        1
+    } else if lead >> 5 == 0b110 {
+        2
+    } else if lead >> 4 == 0b1110 {
+        3
+    } else if lead >> 3 == 0b11110 {
+        4
+    } else {
+        1
+    }
+}
+
+/// First character of `input` starting at `idx`. Only called on valid boundaries.
+fn unsafe_char_at(input: &str, idx: usize) -> char {
+    input[idx..].chars().next().unwrap()
+}
+
+/// Byte offset just past the run of trailing-punctuation characters from `start`.
+fn scan_punct_run(input: &str, start: usize) -> usize {
+    let bytes = input.as_bytes();
+    let mut k = start;
+    while k < bytes.len() {
+        let c = unsafe_char_at(input, k);
+        if !is_trail_punct(c) {
+            break;
+        }
+        k += utf8_char_len(bytes[k]);
+    }
+    k
 }
 
 fn is_trail_punct(c: char) -> bool {
@@ -204,6 +247,14 @@ mod tests {
         assert_eq!(
             auto_link_html("https://example.com/path..weiter"),
             "<a href=\"https://example.com/path..weiter\">https://example.com/path..weiter</a>"
+        );
+    }
+
+    #[test]
+    fn stops_before_escaped_quote_and_keeps_escaped_amp() {
+        assert_eq!(
+            auto_link_html("https://example.com?q=1&amp;x=2&quot;\"weiter\""),
+            "<a href=\"https://example.com?q=1&amp;x=2\">https://example.com?q=1&amp;x=2</a>&quot;\"weiter\""
         );
     }
 
