@@ -27,47 +27,66 @@ pub fn escape_html(input: &str) -> String {
 /// `http://`, `https://` or `www.` prefix and terminated at whitespace, HTML
 /// markup (`<`, `>`) or trailing punctuation.
 pub fn auto_link_html(input: &str) -> String {
-    let bytes = input.as_bytes();
     let mut out = String::with_capacity(input.len() + 32);
-    let mut i = 0;
-    while i < bytes.len() {
-        let remaining = &input[i..];
+    let mut pos = 0;
+    while pos < input.len() {
+        let remaining = &input[pos..];
         let Some(rel) = find_earliest_url(remaining) else {
             out.push_str(remaining);
             break;
         };
 
         out.push_str(&remaining[..rel]);
-        let mut j = i + rel;
-        while j < bytes.len() {
-            let c = bytes[j] as char;
-            let terminates = c.is_whitespace() || matches!(c, '<' | '>');
-            let is_trail_punct = matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | ')') && {
-                let mut k = j;
-                while k < bytes.len()
-                    && matches!(bytes[k] as char, '.' | ',' | ';' | ':' | '!' | '?' | ')')
-                {
-                    k += 1;
-                }
-                k == bytes.len()
-                    || matches!(bytes[k] as char, c2 if c2.is_whitespace() || c2 == '<')
-            };
-            if terminates || is_trail_punct {
-                break;
-            }
-            j += 1;
-        }
-
-        let url = &input[i + rel..j];
+        let url_start = pos + rel;
+        let url_end = find_url_end(input, url_start);
+        let url = &input[url_start..url_end];
         let href = if url.starts_with("www.") {
             format!("http://{url}")
         } else {
             url.to_string()
         };
         out.push_str(&format!(r#"<a href="{href}">{url}</a>"#));
-        i = j;
+        pos = url_end;
     }
     out
+}
+
+/// Return the byte offset at which the URL starting at `url_start` ends,
+/// operating on UTF-8 character boundaries. Whitepsace, HTML markup or a
+/// trailing punctuation run terminates the URL.
+fn find_url_end(input: &str, url_start: usize) -> usize {
+    let chars: Vec<(usize, char)> = input[url_start..].char_indices().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let (offset, c) = chars[i];
+        if c.is_whitespace() || c == '<' || c == '>' {
+            return url_start + offset;
+        }
+        if is_trail_punct(c) {
+            let mut k = i;
+            while k < chars.len() && is_trail_punct(chars[k].1) {
+                k += 1;
+            }
+            let reaches_end = k == chars.len();
+            let followed_by_delim = !reaches_end
+                && (chars[k].1.is_whitespace() || chars[k].1 == '<' || chars[k].1 == '>');
+            if reaches_end || followed_by_delim {
+                // Trailing punctuation run: it stays literal text, so the URL
+                // ends right before it.
+                return url_start + offset;
+            }
+            // The whole run belongs to the URL; resume scanning past it
+            // instead of rescanning each punctuation byte.
+            i = k;
+            continue;
+        }
+        i += 1;
+    }
+    input.len()
+}
+
+fn is_trail_punct(c: char) -> bool {
+    matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | ')')
 }
 
 /// Return the byte offset (relative to `input`) of the earliest valid URL
@@ -169,6 +188,22 @@ mod tests {
         assert_eq!(
             auto_link_html("Siehe (https://example.com)."),
             "Siehe (<a href=\"https://example.com\">https://example.com</a>)."
+        );
+    }
+
+    #[test]
+    fn handles_non_ascii_whitespace_without_panicking() {
+        assert_eq!(
+            auto_link_html("https://example.com\u{00A0}weiter"),
+            "<a href=\"https://example.com\">https://example.com</a>\u{00A0}weiter"
+        );
+    }
+
+    #[test]
+    fn keeps_non_trailing_punctuation_run_inside_url() {
+        assert_eq!(
+            auto_link_html("https://example.com/path..weiter"),
+            "<a href=\"https://example.com/path..weiter\">https://example.com/path..weiter</a>"
         );
     }
 
