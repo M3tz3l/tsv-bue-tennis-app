@@ -36,9 +36,11 @@ type SendTestMailPayload = { subject?: string; message?: string };
 
 type ApiErrorShape = {
   message?: unknown;
+  config?: object;
   response?: {
     status?: unknown;
     data?: { message?: unknown };
+    headers?: { 'retry-after'?: string };
   };
 };
 
@@ -68,6 +70,13 @@ const logApiError = (label: string, error: unknown): void => {
 
 const normalizeDeleteResponse = (data: unknown): ApiResult | ApiError =>
   data === '' || data === undefined ? { success: true } : data as ApiResult | ApiError;
+
+// The backend rate-limits authenticated endpoints (Governor). A 429 is
+// transient by definition, so retry it with backoff instead of surfacing it as
+// a hard error. This self-heals UI load flakes under rate limiting.
+const RATE_LIMIT_MAX_RETRIES = 3;
+const requestRetries = new WeakMap<object, number>();
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 class BackendService {
   private api: AxiosInstance;
@@ -100,6 +109,27 @@ class BackendService {
         return config;
       },
       (error) => Promise.reject(error)
+    );
+
+    // Retry transient 429 (rate-limited) responses with backoff. The server
+    // rejects with 429 before processing the request, so retrying is safe.
+    this.api.interceptors.response.use(
+      (response) => response,
+      async (error: unknown) => {
+        const status = asApiError(error).response?.status;
+        const config = asApiError(error).config;
+        if (status === 429 && config) {
+          const attempts = requestRetries.get(config) ?? 0;
+          if (attempts < RATE_LIMIT_MAX_RETRIES) {
+            requestRetries.set(config, attempts + 1);
+            const retryAfter = asApiError(error).response?.headers?.['retry-after'];
+            const wait = retryAfter ? Number(retryAfter) * 1000 : attempts * 1000 + 500;
+            await delay(wait);
+            return this.api(config);
+          }
+        }
+        return Promise.reject(error);
+      }
     );
   }
 
