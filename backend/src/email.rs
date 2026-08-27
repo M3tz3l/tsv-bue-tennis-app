@@ -32,22 +32,7 @@ pub fn auto_link_html(input: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         let remaining = &input[i..];
-        let start = remaining
-            .find("http://")
-            .or_else(|| remaining.find("https://"))
-            .or_else(|| {
-                remaining.find("www.").and_then(|pos| {
-                    let preceded_by_token =
-                        pos > 0 && (remaining.as_bytes()[pos - 1] as char).is_ascii_alphanumeric();
-                    if preceded_by_token {
-                        None
-                    } else {
-                        Some(pos)
-                    }
-                })
-            });
-
-        let Some(rel) = start else {
+        let Some(rel) = find_earliest_url(remaining) else {
             out.push_str(remaining);
             break;
         };
@@ -78,6 +63,32 @@ pub fn auto_link_html(input: &str) -> String {
     out
 }
 
+/// Return the byte offset (relative to `input`) of the earliest valid URL
+/// candidate, searching across all supported prefixes. A candidate is rejected
+/// when preceded by an ASCII alphanumeric character (i.e. it is embedded inside
+/// a larger token such as `abchttps://x`). When a rejected candidate is skipped,
+/// scanning continues past it so a later genuine URL is still found.
+fn find_earliest_url(input: &str) -> Option<usize> {
+    const PREFIXES: [&str; 3] = ["http://", "https://", "www."];
+    let bytes = input.as_bytes();
+    let mut best: Option<usize> = None;
+    for p in PREFIXES {
+        let mut search_from = 0;
+        while let Some(rel) = input[search_from..].find(p) {
+            let pos = search_from + rel;
+            let valid = pos == 0 || !(bytes[pos - 1] as char).is_ascii_alphanumeric();
+            if valid {
+                if best.is_none_or(|b| pos < b) {
+                    best = Some(pos);
+                }
+                break;
+            }
+            search_from = pos + p.len();
+        }
+    }
+    best
+}
+
 #[cfg(test)]
 mod tests {
     use super::auto_link_html;
@@ -101,6 +112,41 @@ mod tests {
     #[test]
     fn does_not_link_alphanumeric_token() {
         assert_eq!(auto_link_html("abcwww.example.com"), "abcwww.example.com");
+    }
+
+    #[test]
+    fn does_not_link_embedded_https_token() {
+        assert_eq!(
+            auto_link_html("abchttps://example.com"),
+            "abchttps://example.com"
+        );
+    }
+
+    #[test]
+    fn does_not_link_embedded_http_token() {
+        assert_eq!(
+            auto_link_html("abcxhttp://example.com"),
+            "abcxhttp://example.com"
+        );
+    }
+
+    #[test]
+    fn links_genuine_url_after_rejected_embedded_token() {
+        assert_eq!(
+            auto_link_html("abchttps://example.com und http://pdf.com/a"),
+            "abchttps://example.com und <a href=\"http://pdf.com/a\">http://pdf.com/a</a>"
+        );
+    }
+
+    #[test]
+    fn links_earliest_of_mixed_url_types() {
+        assert_eq!(
+            auto_link_html("Siehe www.example.com/first und dann https://two.example"),
+            concat!(
+                "Siehe <a href=\"http://www.example.com/first\">www.example.com/first</a> ",
+                "und dann <a href=\"https://two.example\">https://two.example</a>"
+            )
+        );
     }
 
     #[test]
