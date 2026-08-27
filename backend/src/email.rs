@@ -805,16 +805,22 @@ async fn send_with_retry(
     }
 }
 
-/// Heuristic: treat connection-level losses as transient and worth retrying.
+/// Decide whether an SMTP failure is safe to retry without risking a duplicate
+/// delivery. Permanent 5xx replies are never retried. Transient 4xx replies and
+/// timeouts are retried. For errors lettre does not classify structurally, only
+/// clearly pre-submission connection failures (e.g. refused at connect) are
+/// retried. A connection loss after the server accepted DATA — such as an
+/// "incomplete response" when reading the final reply — means delivery is
+/// indeterminate, so it is NOT retried to avoid sending the message twice.
 fn is_transient_smtp_error(err: &lettre::transport::smtp::Error) -> bool {
+    if err.is_permanent() {
+        return false;
+    }
+    if err.is_transient() || err.is_timeout() {
+        return true;
+    }
     let msg = err.to_string().to_lowercase();
-    msg.contains("incomplete response")
-        || msg.contains("connection refused")
-        || msg.contains("connection reset")
-        || msg.contains("closed")
-        || msg.contains("deadline")
-        || msg.contains("timed out")
-        || msg.contains("eof")
+    msg.contains("connection refused") || msg.contains("could not connect")
 }
 
 fn build_message(

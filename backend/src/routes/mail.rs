@@ -473,15 +473,15 @@ pub async fn get_member_counts(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR
             })?;
 
-    state
-        .member_counts
-        .set((all_members.len(), orga_members.len()));
+    let all = dedupe_recipients_by_email(all_members).len();
+    let orga = dedupe_recipients_by_email(orga_members).len();
+    state.member_counts.set((all, orga));
 
     Ok(Json(serde_json::json!({
         "success": true,
         "data": {
-            "all": dedupe_recipients_by_email(all_members).len(),
-            "orga": dedupe_recipients_by_email(orga_members).len()
+            "all": all,
+            "orga": orga
         }
     })))
 }
