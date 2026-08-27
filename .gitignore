@@ -73,3 +73,7 @@ e2e/node_modules/
 
 .mimocode/
 mimocode.json
+
+# Superpowers docs/artifacts
+.superpowers/
+docs/superpowers/
