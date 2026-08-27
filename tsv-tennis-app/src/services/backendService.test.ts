@@ -8,6 +8,7 @@ const { mockInstance } = vi.hoisted(() => {
     delete: vi.fn(),
     interceptors: {
       request: { use: vi.fn() },
+      response: { use: vi.fn() },
     },
   };
   return { mockInstance: instance };
