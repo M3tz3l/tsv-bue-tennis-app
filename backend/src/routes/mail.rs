@@ -24,6 +24,8 @@ const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024;
 const BULK_MAIL_CONCURRENCY: usize = 5;
 const BULK_MAIL_BATCH_SIZE: usize = 8;
 const BULK_MAIL_BATCH_DELAY_SECS: u64 = 5;
+const BULK_MAIL_RETRIES: usize = 3;
+const BULK_MAIL_RETRY_DELAY_SECS: u64 = 3;
 
 struct MailForm {
     subject: String,
@@ -349,6 +351,8 @@ pub async fn send_bulk_mail(
                 max_concurrency: BULK_MAIL_CONCURRENCY,
                 batch_size: BULK_MAIL_BATCH_SIZE,
                 batch_delay: std::time::Duration::from_secs(BULK_MAIL_BATCH_DELAY_SECS),
+                retries: BULK_MAIL_RETRIES,
+                retry_delay: std::time::Duration::from_secs(BULK_MAIL_RETRY_DELAY_SECS),
             };
             email_service
                 .send_bulk_mail_concurrent(
