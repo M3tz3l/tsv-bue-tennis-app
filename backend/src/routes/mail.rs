@@ -123,6 +123,20 @@ async fn require_orga_role(
     Ok(user)
 }
 
+/// Drop empty-email and duplicate-email recipients, matching how the bulk send
+/// counts recipients. Keeps the composer's preview count in sync with the
+/// actual job recipient count.
+fn dedupe_recipients_by_email(recipients: Vec<Member>) -> Vec<Member> {
+    let mut seen = std::collections::HashSet::new();
+    recipients
+        .into_iter()
+        .filter(|r| {
+            let normalized = r.email.trim().to_lowercase();
+            !normalized.is_empty() && seen.insert(normalized)
+        })
+        .collect()
+}
+
 fn build_signature(sender_first_name: &str) -> (String, String) {
     let safe_name = escape_html(sender_first_name);
     let html = format!(
@@ -268,17 +282,7 @@ pub async fn send_bulk_mail(
     }
 
     // Deduplicate recipients by email address
-    let mut seen_emails = std::collections::HashSet::new();
-    let unique_recipients: Vec<_> = recipients
-        .into_iter()
-        .filter(|r| {
-            let normalized = r.email.trim().to_lowercase();
-            if normalized.is_empty() {
-                return false;
-            }
-            seen_emails.insert(normalized)
-        })
-        .collect();
+    let unique_recipients = dedupe_recipients_by_email(recipients);
 
     if unique_recipients.is_empty() {
         warn!(
@@ -476,8 +480,8 @@ pub async fn get_member_counts(
     Ok(Json(serde_json::json!({
         "success": true,
         "data": {
-            "all": all_members.len(),
-            "orga": orga_members.len()
+            "all": dedupe_recipients_by_email(all_members).len(),
+            "orga": dedupe_recipients_by_email(orga_members).len()
         }
     })))
 }
