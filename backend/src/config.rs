@@ -50,6 +50,7 @@ pub struct EmailConfig {
     pub user: String,
     pub password: String,
     pub from_email: String,
+    pub helo_domain: String,
     pub use_implicit_tls: bool,
     pub accept_invalid_certs: bool,
 }
@@ -69,12 +70,24 @@ impl EmailConfig {
             .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
             .unwrap_or(false);
 
+        let host = env::var("EMAIL_HOST").context("EMAIL_HOST must be set")?;
+
+        // Domain announced in the SMTP EHLO command. Defaults to the relay host so
+        // receivers can reverse-confirm it; without this lettre falls back to the
+        // local system hostname, which has no matching PTR record.
+        let helo_domain = env::var("EMAIL_HELO_DOMAIN")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| host.clone());
+
         Ok(EmailConfig {
-            host: env::var("EMAIL_HOST").context("EMAIL_HOST must be set")?,
+            host,
             port,
             user: env::var("EMAIL_USER").context("EMAIL_USER must be set")?,
             password: env::var("EMAIL_PASSWORD").context("EMAIL_PASSWORD must be set")?,
             from_email: env::var("EMAIL_FROM").context("EMAIL_FROM must be set")?,
+            helo_domain,
             use_implicit_tls,
             accept_invalid_certs,
         })

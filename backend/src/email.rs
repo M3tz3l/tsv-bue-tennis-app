@@ -3,10 +3,14 @@
 use crate::config::{Config, EmailConfig};
 use crate::models::MailJobStore;
 use lettre::{
-    message::{header::ContentType, Attachment, Mailbox, Message, MultiPart, SinglePart},
+    message::{
+        header::{ContentType, HeaderName, HeaderValue},
+        Attachment, Mailbox, Message, MultiPart, SinglePart,
+    },
     transport::smtp::{
         authentication::Credentials,
         client::{Tls, TlsParameters},
+        extension::ClientId,
     },
     AsyncSmtpTransport, AsyncTransport, Tokio1Executor,
 };
@@ -160,7 +164,7 @@ fn find_earliest_url(input: &str) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::auto_link_html;
+    use super::{auto_link_html, build_message, EmailAttachment};
 
     #[test]
     fn links_plain_http_url() {
@@ -275,6 +279,101 @@ mod tests {
     fn does_not_touch_plain_text() {
         assert_eq!(auto_link_html("Hallo Mitglieder"), "Hallo Mitglieder");
     }
+
+    /// Header values longer than 78 chars are folded over CRLF + space, so unfold
+    /// before asserting on them.
+    fn formatted_and_unfolded(msg: &lettre::message::Message) -> String {
+        String::from_utf8(msg.formatted())
+            .unwrap()
+            .replace("\r\n ", "")
+    }
+
+    #[test]
+    fn bulk_message_sets_reply_to_and_list_unsubscribe() {
+        let msg = build_message(
+            "TSV BÜ Tennis App <no-reply@example.com>".parse().unwrap(),
+            "member@example.com".parse().unwrap(),
+            "Betreff",
+            "<p>Hallo</p>",
+            "Hallo",
+            &[],
+        )
+        .unwrap();
+
+        let raw = formatted_and_unfolded(&msg);
+        assert!(
+            raw.contains("Reply-To: Tennisabteilung <tennisabteilung@tsv-bad-ueberkingen.de>"),
+            "missing Reply-To header:\n{raw}"
+        );
+        assert!(
+            raw.contains(
+                "List-Unsubscribe: <mailto:tennisabteilung@tsv-bad-ueberkingen.de?subject=Abmelden>"
+            ),
+            "missing List-Unsubscribe header:\n{raw}"
+        );
+    }
+
+    #[test]
+    fn bulk_message_sets_headers_with_attachments() {
+        let attachments = [EmailAttachment {
+            filename: "info.txt".to_string(),
+            content_type: "text/plain".to_string(),
+            data: b"hallo".to_vec(),
+            content_id: None,
+        }];
+
+        let msg = build_message(
+            "TSV BÜ Tennis App <no-reply@example.com>".parse().unwrap(),
+            "member@example.com".parse().unwrap(),
+            "Betreff",
+            "<p>Hallo</p>",
+            "Hallo",
+            &attachments,
+        )
+        .unwrap();
+
+        let raw = formatted_and_unfolded(&msg);
+        assert!(
+            raw.contains("Reply-To: Tennisabteilung <tennisabteilung@tsv-bad-ueberkingen.de>"),
+            "missing Reply-To header:\n{raw}"
+        );
+        assert!(
+            raw.contains(
+                "List-Unsubscribe: <mailto:tennisabteilung@tsv-bad-ueberkingen.de?subject=Abmelden>"
+            ),
+            "missing List-Unsubscribe header:\n{raw}"
+        );
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn helo_domain_defaults_to_smtp_host() {
+        std::env::set_var("EMAIL_PORT", "465");
+        std::env::set_var("EMAIL_HOST", "mail.example.org");
+        std::env::set_var("EMAIL_USER", "user");
+        std::env::set_var("EMAIL_PASSWORD", "secret");
+        std::env::set_var("EMAIL_FROM", "no-reply@example.org");
+        std::env::remove_var("EMAIL_HELO_DOMAIN");
+
+        let cfg = crate::config::EmailConfig::from_env().unwrap();
+        assert_eq!(cfg.helo_domain, "mail.example.org");
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn helo_domain_honors_explicit_override() {
+        std::env::set_var("EMAIL_PORT", "465");
+        std::env::set_var("EMAIL_HOST", "relay.example.org");
+        std::env::set_var("EMAIL_USER", "user");
+        std::env::set_var("EMAIL_PASSWORD", "secret");
+        std::env::set_var("EMAIL_FROM", "no-reply@example.org");
+        std::env::set_var("EMAIL_HELO_DOMAIN", "mail.example.org");
+
+        let cfg = crate::config::EmailConfig::from_env().unwrap();
+        assert_eq!(cfg.helo_domain, "mail.example.org");
+
+        std::env::remove_var("EMAIL_HELO_DOMAIN");
+    }
 }
 
 /// Represents a file attachment for an email
@@ -306,6 +405,7 @@ pub struct EmailService {
     smtp_port: u16,
     smtp_user: String,
     smtp_password: String,
+    helo_domain: String,
     use_implicit_tls: bool,
     from_email: String,
     disable_send: bool,
@@ -326,6 +426,7 @@ impl EmailService {
             smtp_port: email_config.port,
             smtp_user: email_config.user,
             smtp_password: email_config.password,
+            helo_domain: email_config.helo_domain,
             use_implicit_tls: email_config.use_implicit_tls,
             from_email: email_config.from_email,
             disable_send,
@@ -363,7 +464,9 @@ impl EmailService {
         } else {
             builder
         };
-        Ok(builder.build())
+        Ok(builder
+            .hello_name(ClientId::Domain(self.helo_domain.clone()))
+            .build())
     }
 
     /// Send bulk mail in batches with bounded concurrency per batch.
@@ -823,6 +926,17 @@ fn is_transient_smtp_error(err: &lettre::transport::smtp::Error) -> bool {
     msg.contains("connection refused") || msg.contains("could not connect")
 }
 
+/// Unsubscribe target for bulk mail, per RFC 2369 (mailto form).
+/// Mail is From a no-reply address, so unsubscribes route to the department mailbox.
+const BULK_MAIL_LIST_UNSUBSCRIBE: &str =
+    "<mailto:tennisabteilung@tsv-bad-ueberkingen.de?subject=Abmelden>";
+
+/// Address bulk mail replies are sent to. Kept distinct from the From address so
+/// replies land in a monitored mailbox instead of the no-reply address.
+fn bulk_mail_reply_to() -> Result<Mailbox, anyhow::Error> {
+    Ok("Tennisabteilung <tennisabteilung@tsv-bad-ueberkingen.de>".parse()?)
+}
+
 fn build_message(
     from: Mailbox,
     to: Mailbox,
@@ -843,12 +957,14 @@ fn build_message(
                 .body(html_content.to_string()),
         );
 
-    if attachments.is_empty() {
-        Ok(Message::builder()
+    let reply_to = bulk_mail_reply_to()?;
+    let mut message = if attachments.is_empty() {
+        Message::builder()
             .from(from)
             .to(to)
+            .reply_to(reply_to)
             .subject(subject)
-            .multipart(body)?)
+            .multipart(body)?
     } else {
         let mut mixed = MultiPart::mixed().multipart(body);
         for att in attachments {
@@ -873,10 +989,20 @@ fn build_message(
                 mixed = mixed.singlepart(attachment);
             }
         }
-        Ok(Message::builder()
+        Message::builder()
             .from(from)
             .to(to)
+            .reply_to(reply_to)
             .subject(subject)
-            .multipart(mixed)?)
-    }
+            .multipart(mixed)?
+    };
+
+    // lettre has no typed List-Unsubscribe header, and its `Header` trait returns a
+    // crate-private error type, so insert the raw header instead.
+    message.headers_mut().insert_raw(HeaderValue::new(
+        HeaderName::new_from_ascii_str("List-Unsubscribe"),
+        BULK_MAIL_LIST_UNSUBSCRIBE.to_string(),
+    ));
+
+    Ok(message)
 }
