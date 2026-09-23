@@ -740,89 +740,32 @@ impl EmailService {
         let from_mailbox: Mailbox = format!("TSV BÜ Tennis App <{}>", self.from_email).parse()?;
         let to_mailbox: Mailbox = to.parse()?;
 
-        // Build the text+HTML alternative body
-        let body = MultiPart::alternative()
-            .singlepart(
-                SinglePart::builder()
-                    .header(ContentType::TEXT_PLAIN)
-                    .body(text_content.to_string()),
-            )
-            .singlepart(
-                SinglePart::builder()
-                    .header(ContentType::TEXT_HTML)
-                    .body(html_content.to_string()),
-            );
+        let email = build_message(
+            from_mailbox,
+            to_mailbox,
+            subject,
+            html_content,
+            text_content,
+            attachments,
+        )?;
 
         let transport = self.create_async_transport()?;
-
-        if attachments.is_empty() {
-            let email = Message::builder()
-                .from(from_mailbox)
-                .to(to_mailbox)
-                .subject(subject)
-                .multipart(body)?;
-
-            match transport.send(email).await {
-                Ok(response) => {
+        match transport.send(email).await {
+            Ok(response) => {
+                if attachments.is_empty() {
                     info!("Email sent successfully: {:?}", response);
-                    Ok(())
-                }
-                Err(e) => {
-                    error!("Failed to send email: {}", e);
-                    Err(e.into())
-                }
-            }
-        } else {
-            // Wrap body + attachments in multipart/mixed
-            let mut mixed = MultiPart::mixed().multipart(body);
-
-            for att in attachments {
-                let content_type: ContentType = att
-                    .content_type
-                    .parse()
-                    .unwrap_or(ContentType::parse("application/octet-stream").unwrap());
-
-                if let Some(ref cid) = att.content_id {
-                    // Inline image with Content-ID
-                    let part = SinglePart::builder()
-                        .header(content_type)
-                        .header(lettre::message::header::ContentId::from(
-                            format!("<{cid}>",),
-                        ))
-                        .header(
-                            lettre::message::header::ContentDisposition::inline_with_name(
-                                &att.filename,
-                            ),
-                        )
-                        .body(att.data.clone());
-                    mixed = mixed.singlepart(part);
                 } else {
-                    // Regular attachment
-                    let attachment =
-                        Attachment::new(att.filename.clone()).body(att.data.clone(), content_type);
-                    mixed = mixed.singlepart(attachment);
-                }
-            }
-
-            let email = Message::builder()
-                .from(from_mailbox)
-                .to(to_mailbox)
-                .subject(subject)
-                .multipart(mixed)?;
-
-            match transport.send(email).await {
-                Ok(response) => {
                     info!(
                         "Email with {} attachment(s) sent successfully: {:?}",
                         attachments.len(),
                         response
                     );
-                    Ok(())
                 }
-                Err(e) => {
-                    error!("Failed to send email with attachments: {}", e);
-                    Err(e.into())
-                }
+                Ok(())
+            }
+            Err(e) => {
+                error!("Failed to send email: {}", e);
+                Err(e.into())
             }
         }
     }
@@ -926,17 +869,19 @@ fn is_transient_smtp_error(err: &lettre::transport::smtp::Error) -> bool {
     msg.contains("connection refused") || msg.contains("could not connect")
 }
 
-/// Unsubscribe target for bulk mail, per RFC 2369 (mailto form).
+/// Unsubscribe target for Rundmail (bulk) and test mail, per RFC 2369 (mailto form).
 /// Mail is From a no-reply address, so unsubscribes route to the department mailbox.
 const BULK_MAIL_LIST_UNSUBSCRIBE: &str =
     "<mailto:tennisabteilung@tsv-bad-ueberkingen.de?subject=Abmelden>";
 
-/// Address bulk mail replies are sent to. Kept distinct from the From address so
+/// Reply-To for Rundmail (bulk) and test mail. Kept distinct from the From address so
 /// replies land in a monitored mailbox instead of the no-reply address.
-fn bulk_mail_reply_to() -> Result<Mailbox, anyhow::Error> {
+fn reply_to_mailbox() -> Result<Mailbox, anyhow::Error> {
     Ok("Tennisabteilung <tennisabteilung@tsv-bad-ueberkingen.de>".parse()?)
 }
 
+/// Shared builder for Rundmail (bulk) and test mail: applies Reply-To and
+/// List-Unsubscribe. Password-reset mail uses its own builder and stays bare.
 fn build_message(
     from: Mailbox,
     to: Mailbox,
@@ -957,7 +902,7 @@ fn build_message(
                 .body(html_content.to_string()),
         );
 
-    let reply_to = bulk_mail_reply_to()?;
+    let reply_to = reply_to_mailbox()?;
     let mut message = if attachments.is_empty() {
         Message::builder()
             .from(from)
