@@ -6,10 +6,12 @@ on:
   push:
     branches: [ main ]
 
-# Superseded runs on the same ref are cancelled; pushes to main always finish so
-# a red build is never silently replaced by a green one.
+# PR runs share a group per branch so a superseded run gets cancelled.
+# Non-PR runs (push to main, schedule, manual) get a unique group so every one of
+# them is guaranteed to run: a group keeps at most one *pending* run and cancels
+# any earlier pending one, regardless of cancel-in-progress.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:

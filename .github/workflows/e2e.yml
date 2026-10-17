@@ -14,9 +14,12 @@ on:
         required: false
         default: '20'
 
-# Superseded PR runs are cancelled. Nightly and manual runs always finish.
+# PR runs share a group per branch so a superseded run gets cancelled. Non-PR runs
+# (nightly schedule, manual dispatch, push to main) get a unique group so a nightly
+# or manual run can never be dropped by a later one: a group keeps at most one
+# *pending* run and cancels any earlier pending one, regardless of cancel-in-progress.
 concurrency:
-  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  group: e2e-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

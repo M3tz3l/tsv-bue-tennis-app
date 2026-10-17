@@ -5,8 +5,9 @@ on:
   push:
     branches: [ main ]
 
-# Deployments never overlap: a queued run waits for the in-flight one instead of
-# racing it against the same VPS directory.
+# One deployment at a time. If several pushes land while a deploy is running, the
+# intermediate ones are superseded and the newest commit gets deployed, so a stale
+# commit is never deployed after a newer one.
 concurrency:
   group: deploy-tsv-tennis-app
   cancel-in-progress: false
