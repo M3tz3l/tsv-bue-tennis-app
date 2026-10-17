@@ -23,7 +23,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up Rust toolchain
+        # Keep in sync with rust-toolchain.toml, which pins local development.
         uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.96.1
+          components: rustfmt, clippy
       - name: Install required system dependencies
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
       - name: Check formatting
