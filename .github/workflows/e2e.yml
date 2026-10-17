@@ -17,9 +17,16 @@ on:
 # Every E2E run seeds the same shared Teable instance (E2E_TEABLE_* secrets are
 # identical across runs) and tears it down again in cleanup.ts. Running two at once
 # makes them overwrite each other's members and work hours, so all runs must be
-# serialised globally - not just per branch. cancel-in-progress stays false so an
-# active run is never killed; if several runs queue up, only the most recent pending
-# one is kept, which is acceptable here because each is redundant against shared state.
+# serialised globally - not just per branch.
+#
+# Known limitation: a group keeps one active and one pending run, so a third arrival
+# cancels the pending one. For pull requests that means the lost run leaves the PR
+# without its required E2E check and blocked on merge until re-run ("Re-run all jobs").
+# queue: max would fix this, but no released actionlint (through v1.7.12) accepts the
+# key and this file is linted in CI, so the Workflow lint job would fail.
+#
+# The real fix is per-run test-data isolation, which would remove the need to
+# serialise E2E at all.
 concurrency:
   group: e2e-tsv-tennis-app
   cancel-in-progress: false
