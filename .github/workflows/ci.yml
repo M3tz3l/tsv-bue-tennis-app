@@ -6,19 +6,24 @@ on:
   push:
     branches: [ main ]
 
+# Superseded runs on the same ref are cancelled; pushes to main always finish so
+# a red build is never silently replaced by a green one.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
 jobs:
   test:
     name: Backend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
+        uses: dtolnay/rust-toolchain@master
       - name: Install required system dependencies
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
       - name: Check formatting
@@ -31,7 +36,7 @@ jobs:
         working-directory: backend
         env:
           RUST_TEST_THREADS: 1
-        run: cargo test --workspace --all-targets -- --nocapture --test-threads=1
+        run: cargo test --workspace --all-targets
       - name: Generate TypeScript bindings
         working-directory: backend
         run: cargo run --bin generate-types
@@ -43,7 +48,8 @@ jobs:
 
   frontend-checks:
     name: Frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     needs: test
     permissions:
       contents: read
@@ -73,7 +79,8 @@ jobs:
 
   workflow-lint:
     name: Workflow lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:

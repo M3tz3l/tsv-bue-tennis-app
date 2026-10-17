@@ -5,10 +5,17 @@ on:
   push:
     branches: [ main ]
 
+# Deployments never overlap: a queued run waits for the in-flight one instead of
+# racing it against the same VPS directory.
+concurrency:
+  group: deploy-tsv-tennis-app
+  cancel-in-progress: false
+
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
