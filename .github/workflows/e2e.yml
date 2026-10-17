@@ -14,13 +14,15 @@ on:
         required: false
         default: '20'
 
-# PR runs share a group per branch so a superseded run gets cancelled. Non-PR runs
-# (nightly schedule, manual dispatch, push to main) get a unique group so a nightly
-# or manual run can never be dropped by a later one: a group keeps at most one
-# *pending* run and cancels any earlier pending one, regardless of cancel-in-progress.
+# Every E2E run seeds the same shared Teable instance (E2E_TEABLE_* secrets are
+# identical across runs) and tears it down again in cleanup.ts. Running two at once
+# makes them overwrite each other's members and work hours, so all runs must be
+# serialised globally - not just per branch. cancel-in-progress stays false so an
+# active run is never killed; if several runs queue up, only the most recent pending
+# one is kept, which is acceptable here because each is redundant against shared state.
 concurrency:
-  group: e2e-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: e2e-tsv-tennis-app
+  cancel-in-progress: false
 
 jobs:
   e2e:
