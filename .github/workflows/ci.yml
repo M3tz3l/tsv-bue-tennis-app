@@ -32,6 +32,10 @@ jobs:
           components: rustfmt, clippy
       - name: Install required system dependencies
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: backend
       - name: Check formatting
         run: cargo fmt --all -- --check
         working-directory: backend
@@ -70,6 +74,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '24.18.1'
+          cache: 'npm'
+          cache-dependency-path: tsv-tennis-app/package-lock.json
       - name: Install frontend dependencies
         working-directory: tsv-tennis-app
         run: npm ci
