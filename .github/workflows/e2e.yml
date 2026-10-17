@@ -74,6 +74,13 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '24'
+          # One cache entry keyed on all three lockfiles, so the frontend, e2e and
+          # e2e/seed installs all reuse the npm cache between runs.
+          cache: 'npm'
+          cache-dependency-path: |
+            tsv-tennis-app/package-lock.json
+            e2e/package-lock.json
+            e2e/seed/package-lock.json
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
