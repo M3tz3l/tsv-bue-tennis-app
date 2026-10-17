@@ -86,6 +86,12 @@ describe('Events', () => {
     expect(screen.getByRole('article', { name: '' }).querySelector('dl')).toBeInTheDocument();
   });
 
+  it('preserves line breaks in the event description', () => {
+    renderEvents([detail({ description: 'Erste Zeile\nZweite Zeile' })]);
+
+    expect(screen.getByText(/Erste Zeile/)).toHaveClass('whitespace-pre-wrap');
+  });
+
   it('shows no signup button for an event with signups disabled', () => {
     renderEvents([detail({ allow_signups: false })]);
     expect(screen.queryByRole('button', { name: /anmelden|ausgebucht|anmeldeschluss/i })).not.toBeInTheDocument();

@@ -27,7 +27,7 @@ const EventCard = ({ detail, isOrga, onSelect, onEdit, onSignups }: { detail: Ev
       {isOrga && event.status === 'draft' && <span className="rounded bg-[var(--hairline-strong)] px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ink)]">Entwurf</span>}
     </div>
     <h2 className="mt-1 text-lg font-extrabold tracking-tight text-[var(--ink)]">{event.title}</h2>
-    {event.description && <p className="mt-2 text-sm text-[var(--muted)]">{event.description}</p>}
+    {event.description && <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--muted)]">{event.description}</p>}
     <EventDetails event={event} />
     {ownSignup && <p className="mt-3 text-sm font-medium text-[var(--primary-active)]">Ihre Anmeldung: {ownSignup.people_count} Personen</p>}
     {!event.allow_signups && ownSignup && (

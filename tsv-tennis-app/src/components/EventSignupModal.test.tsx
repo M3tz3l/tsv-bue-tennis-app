@@ -218,6 +218,13 @@ describe('EventSignupModal', () => {
     expect(screen.getByText(/2 von 20/)).toBeInTheDocument();
   });
 
+  it('preserves line breaks in the event description', () => {
+    mocks.useEvent.mockReturnValue({ data: detail({ event: { ...detail().event, description: 'Erste Zeile\nZweite Zeile' } }), isLoading: false, error: null });
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByText(/Erste Zeile/)).toHaveClass('whitespace-pre-wrap');
+  });
+
   it('renders only the fields that exist on the event in the details block', () => {
     mocks.useEvent.mockReturnValue({ data: detail({ event: { ...detail().event, description: null, start_time: null, end_time: null, location: null, signup_deadline: null, capacity: null } }), isLoading: false, error: null });
     render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
