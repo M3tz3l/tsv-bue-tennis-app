@@ -135,7 +135,7 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
       {error && <p className="p-6 text-[var(--error)]">Fehler beim Laden der Veranstaltung</p>}
       {data?.event && (
         <div className="px-6 pt-5">
-          {data.event.description && <p className="text-sm text-[var(--body)]">{data.event.description}</p>}
+          {data.event.description && <p className="whitespace-pre-wrap text-sm text-[var(--body)]">{data.event.description}</p>}
           <EventDetails event={data.event} />
         </div>
       )}
