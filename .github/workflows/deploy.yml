@@ -5,10 +5,18 @@ on:
   push:
     branches: [ main ]
 
+# One deployment at a time. If several pushes land while a deploy is running, the
+# intermediate ones are superseded and the newest commit gets deployed, so a stale
+# commit is never deployed after a newer one.
+concurrency:
+  group: deploy-tsv-tennis-app
+  cancel-in-progress: false
+
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v7

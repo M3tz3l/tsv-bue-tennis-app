@@ -14,11 +14,28 @@ on:
         required: false
         default: '20'
 
+# Every E2E run seeds the same shared Teable instance (E2E_TEABLE_* secrets are
+# identical across runs) and tears it down again in cleanup.ts. Running two at once
+# makes them overwrite each other's members and work hours, so all runs must be
+# serialised globally - not just per branch.
+#
+# Known limitation: a group keeps one active and one pending run, so a third arrival
+# cancels the pending one. For pull requests that means the lost run leaves the PR
+# without its required E2E check and blocked on merge until re-run ("Re-run all jobs").
+# queue: max would fix this, but no released actionlint (through v1.7.12) accepts the
+# key and this file is linted in CI, so the Workflow lint job would fail.
+#
+# The real fix is per-run test-data isolation, which would remove the need to
+# serialise E2E at all.
+concurrency:
+  group: e2e-tsv-tennis-app
+  cancel-in-progress: false
+
 jobs:
   e2e:
     name: E2E
     if: github.event_name != 'pull_request' || github.event.pull_request.user.login != 'dependabot[bot]'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     env:
@@ -47,7 +64,11 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        # Keep in sync with rust-toolchain.toml, which pins local development.
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.96.1
+          components: rustfmt, clippy
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -99,8 +120,16 @@ jobs:
           npx tsx seed.ts
 
       - name: Start Mailpit (SMTP capture server)
+        env:
+          # Bump both together; checksum is the digest published by the GitHub release API.
+          MAILPIT_VERSION: v1.31.6
+          MAILPIT_SHA256: 10fa12ccc610f653d4ed4df848c1817f9935dcf4e9a6a458a19ab0fa02093f91
         run: |
-          curl -sL https://github.com/axllent/mailpit/releases/latest/download/mailpit-linux-amd64.tar.gz | tar xz -C /tmp
+          curl -sL --fail --max-time 120 \
+            -o /tmp/mailpit.tar.gz \
+            "https://github.com/axllent/mailpit/releases/download/${MAILPIT_VERSION}/mailpit-linux-amd64.tar.gz"
+          echo "${MAILPIT_SHA256}  /tmp/mailpit.tar.gz" | sha256sum -c -
+          tar xzf /tmp/mailpit.tar.gz -C /tmp
           /tmp/mailpit \
             --smtp-tls-cert sans:localhost \
             --smtp-tls-key sans:localhost \
@@ -136,7 +165,6 @@ jobs:
         working-directory: tsv-tennis-app
         run: |
           npm run dev -- --port 5173 &
-          sleep 5
 
       - name: Verify servers
         run: |
