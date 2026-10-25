@@ -324,15 +324,16 @@ async fn main() -> anyhow::Result<()> {
         .layer(request_tracing);
     let api_routes = Router::new().merge(health_routes).merge(traced_api_routes);
 
+    // Serve static files (assets, fonts, favicon) from the router fallback
+    // rather than a catch-all route, so an unmatched `/api/...` request reaches
+    // the traced API fallback first. Missing files fall through to spa_fallback,
+    // which serves index.html for navigation routes but 404s missing asset
+    // files (fonts, images, scripts).
+    let static_service = ServeDir::new("/app/static").fallback(state::spa_fallback.into_service());
+
     let app = Router::new()
         .nest("/api", api_routes)
-        // Serve static files (assets, fonts, favicon). Missing files fall
-        // through to spa_fallback, which serves index.html for navigation
-        // routes but 404s missing asset files (fonts, images, scripts).
-        .nest_service(
-            "/",
-            ServeDir::new("/app/static").fallback(state::spa_fallback.into_service()),
-        )
+        .fallback_service(static_service)
         .layer(cors)
         .with_state(state);
 
@@ -1006,6 +1007,45 @@ mod tests {
 
         let response = server.get("/api/nonexistent").await;
         assert_eq!(response.status_code(), 404);
+    }
+
+    #[serial_test::serial]
+    #[tokio::test]
+    async fn test_unknown_api_route_is_traced() {
+        let request_id_header = HeaderName::from_static(REQUEST_ID_HEADER);
+        let traced = Router::new()
+            .route("/known", get(|| async { "ok" }))
+            .fallback(api_not_found)
+            .layer(
+                ServiceBuilder::new()
+                    .layer(SetRequestIdLayer::new(
+                        request_id_header.clone(),
+                        MakeRequestUuid,
+                    ))
+                    .layer(middleware::from_fn(access_log))
+                    .layer(PropagateRequestIdLayer::new(request_id_header.clone())),
+            );
+        let health = Router::new().route("/health", get(|| async { "ok" }));
+        let app = Router::new()
+            .nest("/api", Router::new().merge(health).merge(traced))
+            // Simulate the outer static service so this test also covers the
+            // case where a root fallback would otherwise swallow API 404s.
+            .fallback(|| async { "spa" });
+        let server = TestServer::new(app).unwrap();
+
+        let response = server.get("/api/nonexistent").await;
+        assert_eq!(response.status_code(), 404);
+        assert!(
+            response.headers().get(REQUEST_ID_HEADER).is_some(),
+            "unmatched API responses must propagate a request ID"
+        );
+
+        let response = server.get("/api/health").await;
+        assert_eq!(response.status_code(), 200);
+        assert!(
+            response.headers().get(REQUEST_ID_HEADER).is_none(),
+            "health route must stay outside request tracing"
+        );
     }
 
     #[serial_test::serial]
