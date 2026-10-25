@@ -1,7 +1,8 @@
 // Discover every Docker container on the host and ship its stdout/stderr
-// stream to the local Loki instance.
+// stream to the local Loki instance. Access goes through the read-only
+// docker-socket-proxy sidecar instead of mounting the socket into Alloy.
 discovery.docker "containers" {
-  host = "unix:///var/run/docker.sock"
+  host = "tcp://docker-proxy:2375"
 }
 
 // Turn Docker metadata into stable Loki labels so dashboards can filter by
@@ -27,7 +28,7 @@ discovery.relabel "containers" {
 }
 
 loki.source.docker "containers" {
-  host       = "unix:///var/run/docker.sock"
+  host       = "tcp://docker-proxy:2375"
   targets    = discovery.relabel.containers.output
   labels     = { job = "docker" }
   forward_to = [loki.write.local.receiver]

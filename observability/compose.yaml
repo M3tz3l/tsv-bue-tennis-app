@@ -20,6 +20,24 @@ services:
       - monitoring
     logging: *default-logging
 
+  # Route Docker API access through an allowlist proxy. Mounting the socket
+  # with :ro still grants the full Docker API, including container creation.
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:v0.5.0
+    restart: unless-stopped
+    environment:
+      # Read-only container endpoints needed to discover and read logs.
+      CONTAINERS: "1"
+      INFO: "1"
+      # EVENTS, PING and VERSION are allowed by default; POST stays disabled.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - monitoring
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+
   alloy:
     image: grafana/alloy:v1.7.5
     restart: unless-stopped
@@ -27,17 +45,14 @@ services:
       - run
       - --storage.path=/var/lib/alloy
       - /etc/alloy/config.alloy
-    # Read-only Docker socket access is required to discover containers and
-    # stream their logs. Root is needed to read the root-owned socket.
-    user: "0:0"
     volumes:
       - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - alloy_data:/var/lib/alloy
     networks:
       - monitoring
     depends_on:
       - loki
+      - docker-proxy
     logging: *default-logging
 
   grafana:

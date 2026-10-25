@@ -15,7 +15,7 @@ the logging services.
    at the VPS. Traefik obtains the TLS certificate automatically.
 2. The external `traefik_proxy` Docker network must already exist.
 3. `/var/run/docker.sock` must be readable by the Docker daemon's client (the
-   stack mounts it read-only into Alloy).
+   stack mounts it read-only into the `docker-socket-proxy` sidecar, not Alloy).
 
 ## Deploy
 
@@ -32,7 +32,7 @@ sudo cat /opt/stacks/observability/.env
 
 Then open <https://grafana.tsv-bue-tennis.de> and log in as `admin`.
 
-To change the hostname, password, or retention, edit
+To change the hostname or retention, edit
 `/opt/stacks/observability/.env` and run:
 
 ```bash
@@ -40,11 +40,26 @@ cd /opt/stacks/observability
 docker-compose -f compose.yaml up -d
 ```
 
+### Rotating the Grafana admin password
+
+`GF_SECURITY_ADMIN_PASSWORD` only seeds the admin user on first start. Changing
+it later does not update the existing `grafana_data` database. Reset it with the
+Grafana CLI instead:
+
+```bash
+cd /opt/stacks/observability
+docker-compose -f compose.yaml exec grafana \
+  grafana cli admin reset-admin-password 'new-strong-password'
+```
+
+Then update `GRAFANA_ADMIN_PASSWORD` in `.env` so the stored value matches.
+
 ## Manual startup
 
 ```bash
 cd observability
 cp .env.example .env
+chmod 600 .env
 # edit .env and set GRAFANA_ADMIN_PASSWORD
 docker-compose -f compose.yaml up -d
 ```
@@ -61,9 +76,11 @@ from disk.
 
 ## Security notes
 
-Alloy mounts the Docker socket read-only, but Docker API access is still
-powerful. Keep the host restricted to trusted administrators. Grafana is exposed
-through Traefik with authentication enabled; do not enable anonymous access.
+The Docker socket is mounted only into `docker-socket-proxy`, which allows
+read-only container endpoints and blocks POST operations. The proxy still has
+Docker daemon access, so keep the host restricted to trusted administrators.
+Grafana is exposed through Traefik with authentication enabled; do not enable
+anonymous access.
 
 ## Useful queries
 
