@@ -95,7 +95,7 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         port: ${{ secrets.VPS_PORT || 22 }}
         source: "observability"
-        target: "/opt/stacks/tsv-tennis-app/"
+        target: "/opt/stacks/"
 
     - name: Start observability stack
       uses: appleboy/ssh-action@v1.2.5
@@ -105,7 +105,7 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         port: ${{ secrets.VPS_PORT || 22 }}
         script: |
-          cd /opt/stacks/tsv-tennis-app/observability
+          cd /opt/stacks/observability
 
           # Preserve an existing .env so passwords and retention survive deploys.
           if [ ! -f .env ]; then
@@ -113,13 +113,13 @@ jobs:
             {
               echo "GRAFANA_HOST=grafana.tsv-bue-tennis.de"
               echo "GRAFANA_ADMIN_USER=admin"
-              echo "GRAFANA_ADMIN_PASSWORD=$(openssl rand -base64 24)"
+              echo "GRAFANA_ADMIN_PASSWORD=$(openssl rand -hex 24)"
               echo "LOKI_RETENTION=720h"
             } > .env
             chmod 600 .env
-            echo "Generated observability/.env with a random Grafana admin password."
-            echo "Retrieve it with: sudo cat /opt/stacks/tsv-tennis-app/observability/.env"
+            echo "Generated /opt/stacks/observability/.env with a random Grafana admin password."
+            echo "Retrieve it with: sudo cat /opt/stacks/observability/.env"
           fi
 
-          docker-compose up -d
-          docker-compose ps
+          docker-compose -f compose.yaml up -d
+          docker-compose -f compose.yaml ps

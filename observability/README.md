@@ -20,24 +20,24 @@ the logging services.
 ## Deploy
 
 The `Deploy to VPS` workflow copies this directory to
-`/opt/stacks/tsv-tennis-app/observability` and starts it on every push to
-`main`. On the first run it creates `observability/.env` with a random Grafana
-admin password if the file does not exist.
+`/opt/stacks/observability` and starts it on every push to
+`main`. On the first run it creates `/opt/stacks/observability/.env` with a
+random Grafana admin password if the file does not exist.
 
 Retrieve the generated password once:
 
 ```bash
-sudo cat /opt/stacks/tsv-tennis-app/observability/.env
+sudo cat /opt/stacks/observability/.env
 ```
 
 Then open <https://grafana.tsv-bue-tennis.de> and log in as `admin`.
 
 To change the hostname, password, or retention, edit
-`/opt/stacks/tsv-tennis-app/observability/.env` and run:
+`/opt/stacks/observability/.env` and run:
 
 ```bash
-cd /opt/stacks/tsv-tennis-app/observability
-docker-compose up -d
+cd /opt/stacks/observability
+docker-compose -f compose.yaml up -d
 ```
 
 ## Manual startup
@@ -46,7 +46,7 @@ docker-compose up -d
 cd observability
 cp .env.example .env
 # edit .env and set GRAFANA_ADMIN_PASSWORD
-docker-compose up -d
+docker-compose -f compose.yaml up -d
 ```
 
 ## Data and retention
