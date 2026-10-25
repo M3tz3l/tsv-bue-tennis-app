@@ -1,0 +1,85 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  loki:
+    image: grafana/loki:3.4.2
+    restart: unless-stopped
+    command:
+      - -config.file=/etc/loki/config.yaml
+      - -config.expand-env=true
+    environment:
+      LOKI_RETENTION: ${LOKI_RETENTION:-720h}
+    volumes:
+      - ./loki/config.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/loki
+    networks:
+      - monitoring
+    logging: *default-logging
+
+  alloy:
+    image: grafana/alloy:v1.7.5
+    restart: unless-stopped
+    command:
+      - run
+      - --storage.path=/var/lib/alloy
+      - /etc/alloy/config.alloy
+    # Read-only Docker socket access is required to discover containers and
+    # stream their logs. Root is needed to read the root-owned socket.
+    user: "0:0"
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in observability/.env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_SERVER_ROOT_URL: https://${GRAFANA_HOST:-grafana.tsv-bue-tennis.de}
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/tsv-tennis-logs.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - monitoring
+      - proxy
+    depends_on:
+      - loki
+    logging: *default-logging
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tsv-tennis-grafana.rule=Host(`${GRAFANA_HOST:-grafana.tsv-bue-tennis.de}`)
+      - traefik.http.routers.tsv-tennis-grafana.tls=true
+      - traefik.http.routers.tsv-tennis-grafana.tls.certresolver=letsencrypt
+      - traefik.http.routers.tsv-tennis-grafana.service=tsv-tennis-grafana
+      - traefik.http.routers.tsv-tennis-grafana.middlewares=security-headers@file
+      - traefik.http.services.tsv-tennis-grafana.loadbalancer.server.port=3000
+      - traefik.docker.network=traefik_proxy
+
+volumes:
+  loki_data:
+  alloy_data:
+  grafana_data:
+
+networks:
+  monitoring:
+    driver: bridge
+  proxy:
+    name: traefik_proxy
+    external: true
