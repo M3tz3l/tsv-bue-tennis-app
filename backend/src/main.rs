@@ -1,20 +1,25 @@
 use axum::{
     extract::{Json, State},
     handler::HandlerWithoutStateExt,
-    http::{HeaderMap, Method, StatusCode},
+    http::{HeaderMap, HeaderName, Method, StatusCode},
     middleware,
     response::IntoResponse,
     routing::get,
     Router,
 };
 use reqwest::Client;
+use std::io::IsTerminal;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tower::ServiceBuilder;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::services::ServeDir;
-use tracing::{debug, error, info};
+use tower_http::trace::{DefaultOnFailure, TraceLayer};
+use tracing::{debug, error, info, warn, Level};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use tsv_tennis_backend::config::Config;
 use tsv_tennis_backend::database::Database;
 use tsv_tennis_backend::email::EmailService;
@@ -28,12 +33,34 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 // Re-export for tests (which use `use super::*`)
 
+/// Installs the tracing subscriber.
+///
+/// `RUST_LOG` controls the filter. When unset we default to `info` for this
+/// crate and the HTTP tracing layer while keeping known-noisy dependencies at
+/// `warn`, instead of the `error`-only default of `EnvFilter::from_default_env`.
+/// `LOG_FORMAT=json` switches to line-delimited JSON for log collectors.
+fn init_tracing() {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new("tsv_tennis_backend=info,tower_http=info,hyper=warn,reqwest=warn,sqlx=warn")
+    });
+
+    let registry = tracing_subscriber::registry().with(filter);
+
+    if std::env::var("LOG_FORMAT").as_deref() == Ok("json") {
+        registry.with(fmt::layer().json()).init();
+    } else {
+        registry
+            .with(fmt::layer().with_ansi(std::io::stdout().is_terminal()))
+            .init();
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Load .env file
     dotenvy::dotenv().ok();
 
-    tracing_subscriber::fmt::init();
+    init_tracing();
 
     // Load configuration
     let config = Config::from_env()?;
@@ -47,9 +74,9 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Startup diagnostics ──────────────────────────────────────────────────
     info!("Running startup diagnostics...");
-    info!("  Teable API URL: {}", config.teable_api_url);
-    info!("  Members table:  {}", config.members_table_id);
-    info!("  Work hours tbl: {}", config.work_hours_table_id);
+    debug!(teable_api_url = %config.teable_api_url, "Teable configuration");
+    debug!(table_id = %config.members_table_id, "Members table");
+    debug!(table_id = %config.work_hours_table_id, "Work hours table");
 
     let http_client = Client::builder()
         .timeout(std::time::Duration::from_secs(10))
@@ -71,8 +98,8 @@ async fn main() -> anyhow::Result<()> {
     )
     .await
     {
-        Ok(count) => info!(" Members table accessible — {} records", count),
-        Err(e) => error!(" Members table error: {}", e),
+        Ok(count) => info!(records = count, "Members table accessible"),
+        Err(e) => error!(error = %e, "Members table inaccessible"),
     }
 
     // 2. Verify work_hours table is accessible
@@ -84,14 +111,14 @@ async fn main() -> anyhow::Result<()> {
     )
     .await
     {
-        Ok(count) => info!(" Work hours table accessible — {} records", count),
-        Err(e) => error!(" Work hours table error: {}", e),
+        Ok(count) => info!(records = count, "Work hours table accessible"),
+        Err(e) => error!(error = %e, "Work hours table inaccessible"),
     }
 
     // 3. Verify SQLite database
     match database.health_check().await {
-        Ok(_) => info!("✅ SQLite database connection OK"),
-        Err(e) => error!("❌ SQLite database error: {}", e),
+        Ok(_) => info!("SQLite database connection OK"),
+        Err(e) => error!(error = %e, "SQLite database connection error"),
     }
 
     info!("Startup diagnostics complete");
@@ -153,7 +180,7 @@ async fn main() -> anyhow::Result<()> {
         })
         .layer(middleware::from_fn(state::rewrite_429_to_json));
 
-    let public_routes = Router::new().merge(health_routes).merge(auth_routes);
+    let public_routes = Router::new().merge(auth_routes);
 
     // Configure user-based rate limiting: reasonable limits per authenticated user
     // This prevents API abuse while allowing normal frontend usage patterns
@@ -235,7 +262,54 @@ async fn main() -> anyhow::Result<()> {
             state::auth_middleware,
         ));
 
-    let api_routes = Router::new().merge(public_routes).merge(protected_routes);
+    // Attach a request ID to every API request and emit one structured access
+    // log per request. Health checks and static assets are intentionally not
+    // traced to keep the log volume down.
+    let request_id_header = HeaderName::from_static("x-request-id");
+    let request_tracing = ServiceBuilder::new()
+        .layer(SetRequestIdLayer::new(
+            request_id_header.clone(),
+            MakeRequestUuid,
+        ))
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &axum::http::Request<_>| {
+                    let request_id = request
+                        .headers()
+                        .get("x-request-id")
+                        .and_then(|value| value.to_str().ok())
+                        .unwrap_or("-");
+                    tracing::info_span!(
+                        "http_request",
+                        method = %request.method(),
+                        path = %request.uri().path(),
+                        request_id = %request_id,
+                    )
+                })
+                .on_response(
+                    |response: &axum::http::Response<_>,
+                     latency: std::time::Duration,
+                     _span: &tracing::Span| {
+                        let status = response.status();
+                        let latency_ms = latency.as_millis();
+                        if status.is_server_error() {
+                            error!(%status, latency_ms, "request failed");
+                        } else if status.is_client_error() {
+                            warn!(%status, latency_ms, "request rejected");
+                        } else {
+                            info!(%status, latency_ms, "request completed");
+                        }
+                    },
+                )
+                .on_failure(DefaultOnFailure::new().level(Level::ERROR)),
+        )
+        .layer(PropagateRequestIdLayer::new(request_id_header));
+
+    let traced_api_routes = Router::new()
+        .merge(public_routes)
+        .merge(protected_routes)
+        .layer(request_tracing);
+    let api_routes = Router::new().merge(health_routes).merge(traced_api_routes);
 
     let app = Router::new()
         .nest("/api", api_routes)
@@ -368,11 +442,11 @@ async fn get_user(
         StatusCode::INTERNAL_SERVER_ERROR
     })?
     .ok_or_else(|| {
-        error!("Get User: User not found with ID: {}", user_id);
+        warn!(user_id = %user_id, "Get User: user not found");
         StatusCode::NOT_FOUND
     })?;
 
-    info!("Get User: Found user: {} ({})", user.name(), user.email);
+    debug!(user_id = %user.id, "Get User: found user");
 
     // Return the response format expected by the frontend
     Ok(Json(serde_json::json!({

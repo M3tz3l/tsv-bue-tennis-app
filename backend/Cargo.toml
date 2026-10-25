@@ -11,7 +11,7 @@ path = "src/bin/generate_types.rs"
 axum = { version = "0.7", features = ["multipart"] }
 tokio = { version = "1.0", features = ["full"] }
 tower = { version = "0.4", features = ["util"] }
-tower-http = { version = "0.5", features = ["cors", "fs"] }
+tower-http = { version = "0.5", features = ["cors", "fs", "request-id", "trace"] }
 tower_governor = { version = "0.4", features = ["tracing"] }
 reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -23,7 +23,7 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 dotenvy = "0.15"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 urlencoding = "2.1"
 url = "2"
 lettre = { version = "0.11", features = ["tokio1-native-tls", "smtp-transport", "builder", "hostname"] }

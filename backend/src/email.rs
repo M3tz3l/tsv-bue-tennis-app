@@ -14,7 +14,7 @@ use lettre::{
     },
     AsyncSmtpTransport, AsyncTransport, Tokio1Executor,
 };
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// Escape HTML special characters to prevent XSS in email content
 pub fn escape_html(input: &str) -> String {
@@ -653,7 +653,7 @@ impl EmailService {
                 match handle.await {
                     Ok(Ok(_)) => total_sent += 1,
                     Ok(Err((addr, err))) => {
-                        warn!("Bulk mail failed for {}: {}", addr, err);
+                        warn!(error = %err, "Bulk mail failed");
                         total_failed += 1;
                         all_failed_recipients.push(addr);
                     }
@@ -685,7 +685,7 @@ impl EmailService {
         text_content: &str,
     ) -> Result<(), anyhow::Error> {
         if self.disable_send {
-            info!("EMAIL_DISABLE_SEND=true - skipping SMTP send to {}", to);
+            debug!("EMAIL_DISABLE_SEND=true - skipping SMTP send");
             return Ok(());
         }
 
@@ -713,7 +713,7 @@ impl EmailService {
         let transport = self.create_async_transport()?;
         match transport.send(email).await {
             Ok(response) => {
-                info!("Email sent successfully: {:?}", response);
+                debug!(?response, "Email sent successfully");
                 Ok(())
             }
             Err(e) => {
@@ -733,7 +733,7 @@ impl EmailService {
         attachments: &[EmailAttachment],
     ) -> Result<(), anyhow::Error> {
         if self.disable_send {
-            info!("EMAIL_DISABLE_SEND=true - skipping SMTP send to {}", to);
+            debug!("EMAIL_DISABLE_SEND=true - skipping SMTP send");
             return Ok(());
         }
 
@@ -752,15 +752,11 @@ impl EmailService {
         let transport = self.create_async_transport()?;
         match transport.send(email).await {
             Ok(response) => {
-                if attachments.is_empty() {
-                    info!("Email sent successfully: {:?}", response);
-                } else {
-                    info!(
-                        "Email with {} attachment(s) sent successfully: {:?}",
-                        attachments.len(),
-                        response
-                    );
-                }
+                debug!(
+                    attachments = attachments.len(),
+                    ?response,
+                    "Email sent successfully"
+                );
                 Ok(())
             }
             Err(e) => {

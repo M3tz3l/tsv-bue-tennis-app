@@ -251,29 +251,18 @@ pub async fn get_member_by_id_with_projection(
             .header("Authorization", format!("Bearer {}", config.token))
             .header("Accept", "application/json")
     };
-    info!(
-        "Fetching member by ID: {} with projection: {:?}",
-        id, projection
-    );
+    debug!(member_id = %id, "Fetching member by ID");
     let response = req.send().await?;
     let response_text = handle_teable_response(response, "member_by_id").await?;
     // Parse Teable response (single record, not array)
     let record: Value = serde_json::from_str(&response_text)?;
     let fields = &record["fields"];
     if fields.is_null() {
-        warn!("No member found with id: {}", id);
+        debug!(member_id = %id, "No member found");
         return Ok(None);
     }
     let member = member_from_record(&record);
-    info!(
-        "Found member: {} {} ({}) - ID: {}, Birth Date: {}, Join Date: {:?}",
-        member.first_name,
-        member.last_name,
-        member.email,
-        member.id,
-        member.birth_date,
-        member.join_date
-    );
+    debug!(member_id = %member.id, "Member found");
     Ok(Some(member))
 }
 
@@ -316,10 +305,7 @@ pub async fn get_member_by_email_with_projection(
             req = req.query(&[("projection[]", *field)]);
         }
     }
-    info!(
-        "Fetching member by email: {} (normalized: {}) with filter and projection: {:?}",
-        email, email_lowercase, projection
-    );
+    debug!("Fetching member by email");
     let response = req.send().await?;
     let response_text = handle_teable_response(response, "member_by_email").await?;
     // Parse Teable response
@@ -330,13 +316,10 @@ pub async fn get_member_by_email_with_projection(
 
     if let Some(record) = records.first() {
         let member = member_from_record(record);
-        info!(
-            "Found member: {} {} ({}) - Birth Date: {}, Join Date: {:?}",
-            member.first_name, member.last_name, member.email, member.birth_date, member.join_date
-        );
+        debug!(member_id = %member.id, "Member found by email");
         Ok(Some(member))
     } else {
-        warn!("No member found with email: {} (case insensitive)", email);
+        debug!("No member found for supplied email");
         Ok(None)
     }
 }
@@ -378,10 +361,7 @@ pub async fn get_family_members_with_projection(
             req = req.query(&[("projection[]", *field)]);
         }
     }
-    info!(
-        "Fetching family members for family: {} with filter and projection: {:?}",
-        family_id, projection
-    );
+    debug!(family_id = %family_id, "Fetching family members");
     let response = req.send().await?;
     let response_text = handle_teable_response(response, "family_members").await?;
     // Parse Teable response
@@ -394,11 +374,7 @@ pub async fn get_family_members_with_projection(
         let member = member_from_record(record);
         members.push(member);
     }
-    info!(
-        "Found {} family members for family: {}",
-        members.len(),
-        family_id
-    );
+    debug!(family_id = %family_id, count = members.len(), "Family members found");
     Ok(TeableResponse {
         count: Some(members.len()),
         results: members,
@@ -415,7 +391,7 @@ pub async fn get_work_hour_by_id(
         config.api_url, config.work_hours_table_id, work_hour_id
     );
 
-    info!("Fetching work hour by ID: {}", work_hour_id);
+    debug!(work_hour_id = %work_hour_id, "Fetching work hour by ID");
     let response = make_teable_request(client, &url, &config.token, "work_hour_by_id").await?;
     let response_text = handle_teable_response(response, "work_hour_by_id").await?;
 
@@ -424,7 +400,7 @@ pub async fn get_work_hour_by_id(
     let fields = &record["fields"];
 
     if fields.is_null() {
-        warn!("No work hour found with id: {}", work_hour_id);
+        debug!(work_hour_id = %work_hour_id, "No work hour found");
         return Ok(None);
     }
 
@@ -439,9 +415,10 @@ pub async fn get_work_hour_by_id(
         duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
     };
 
-    info!(
-        "Found work hour: {} for member {:?}",
-        work_hour.id, work_hour.member_id
+    debug!(
+        work_hour_id = %work_hour.id,
+        member_id = ?work_hour.member_id,
+        "Work hour found"
     );
     Ok(Some(work_hour))
 }
@@ -538,10 +515,7 @@ pub async fn get_work_hours_for_member_by_year(
         work_hours.push(work_hour);
     }
 
-    info!(
-        "Teable: Successfully fetched {} work hours",
-        work_hours.len()
-    );
+    debug!(count = work_hours.len(), "Fetched work hours");
 
     Ok(TeableResponse {
         count: Some(work_hours.len()),
@@ -602,7 +576,7 @@ pub async fn create_work_hour(
         .await?;
 
     let response_text = handle_teable_response(response, "create_work_hour").await?;
-    info!("Teable: Work hour created successfully: {}", response_text);
+    debug!("Teable: work hour created");
 
     // Parse the response to return the created work hour
     let teable_response: Value = serde_json::from_str(&response_text)?;
@@ -639,10 +613,7 @@ pub async fn update_work_hour(
         .await?
         .ok_or_else(|| anyhow::anyhow!("Member with ID {} not found", member_id))?;
 
-    info!(
-        "Teable: Updating work hour {} with proper member linkage",
-        work_hour_id
-    );
+    debug!(work_hour_id = %work_hour_id, "Teable: updating work hour");
     debug!("Datum: {}", date);
     debug!("Tätigkeit: {}", description);
     debug!("Stunden: {} hours", duration_hours);
@@ -678,7 +649,7 @@ pub async fn update_work_hour(
         .await?;
 
     let response_text = handle_teable_response(response, "update_work_hour").await?;
-    info!("Teable: Work hour updated successfully: {}", response_text);
+    debug!("Teable: work hour updated");
 
     // Parse the response - check if it's wrapped in record or direct
     let teable_response: Value = serde_json::from_str(&response_text)?;
@@ -725,7 +696,7 @@ pub async fn delete_work_hour(
         .await?;
 
     handle_teable_response(response, "delete_work_hour").await?;
-    info!("Teable: Work hour {} deleted successfully", work_hour_id);
+    info!(work_hour_id = %work_hour_id, "Teable: work hour deleted");
 
     Ok(())
 }
@@ -859,10 +830,10 @@ pub async fn get_all_active_members(
     }
 
     info!(
-        "Fetched {} active members out of {} raw records ({} pages)",
-        members.len(),
-        all_records.len(),
-        all_records.len().div_ceil(page_size)
+        active_members = members.len(),
+        raw_records = all_records.len(),
+        pages = all_records.len().div_ceil(page_size),
+        "Fetched active members"
     );
     Ok(members)
 }

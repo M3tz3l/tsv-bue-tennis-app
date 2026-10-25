@@ -4,7 +4,7 @@ use crate::auth;
 use crate::models::{Member, WorkHour, WorkHourEntry};
 use axum::http::{HeaderMap, StatusCode};
 use chrono::Datelike;
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 /// Converts a list of WorkHour to WorkHourEntry (no filtering)
 pub fn convert_work_hours_to_entries(
@@ -114,9 +114,9 @@ pub fn is_member_eligible_for_work_hours(member: &Member, current_year: i32) -> 
     );
     let birth_date_str = &member.birth_date;
     if birth_date_str.trim().is_empty() {
-        info!(
-            "Age Check: Empty birth date for {} {}, assuming eligible",
-            member.first_name, member.last_name
+        debug!(
+            member_id = %member.id,
+            "Age Check: empty birth date, assuming eligible"
         );
     }
 

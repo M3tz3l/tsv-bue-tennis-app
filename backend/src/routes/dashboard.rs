@@ -5,7 +5,7 @@ use axum::{
     Json,
 };
 use chrono::Datelike;
-use tracing::{debug, error, info};
+use tracing::{debug, error, warn};
 
 use crate::models::{
     DashboardResponse, FamilyData, FamilyMember, MemberContribution, PersonalData,
@@ -50,7 +50,7 @@ pub async fn dashboard(
         axum::http::StatusCode::INTERNAL_SERVER_ERROR
     })?
     .ok_or_else(|| {
-        error!("Dashboard: User not found with ID: {}", user_id);
+        warn!(user_id = %user_id, "Dashboard: user not found");
         axum::http::StatusCode::NOT_FOUND
     })?;
 
@@ -125,10 +125,9 @@ pub async fn dashboard(
 
             for member in &family_members {
                 debug!(
-                    "[FAMILY DEBUG] Member: {} | id: {} | family_id: {:?}",
-                    member.name(),
-                    member.id,
-                    member.family_id
+                    member_id = %member.id,
+                    family_id = ?member.family_id,
+                    "Dashboard: processing family member"
                 );
                 // Fetch work hours for this member and year
                 let member_work_hours_raw = match teable::get_work_hours_for_member_by_year(
@@ -214,14 +213,10 @@ pub async fn dashboard(
         year: year_int,
     };
 
-    info!(
-        "Dashboard: Sending response with {} personal hours and family data: {}",
+    debug!(
         total_hours,
-        if response.family.is_some() {
-            "included"
-        } else {
-            "none"
-        }
+        family_data = response.family.is_some(),
+        "Dashboard: sending response"
     );
 
     Ok(Json(response))

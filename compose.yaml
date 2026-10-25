@@ -5,6 +5,9 @@ services:
       - 5000:5000
     env_file:
       - .env
+    environment:
+      RUST_LOG: ${RUST_LOG:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
     volumes:
       - tsv_tennis_data:/app/data
     restart: unless-stopped

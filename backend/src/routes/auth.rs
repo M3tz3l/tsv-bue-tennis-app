@@ -6,7 +6,7 @@ use axum::{
     routing::post,
     Router,
 };
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::auth;
 use crate::member_selection::{LoginResponseVariant, MemberSelectionResponse, SelectMemberRequest};
@@ -32,10 +32,7 @@ pub async fn login(
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
     // Normalize email to lowercase for case-insensitive comparison
     let normalized_email = payload.email.to_lowercase();
-    info!(
-        "Login attempt for email: {} (normalized: {})",
-        payload.email, normalized_email
-    );
+    debug!("Login attempt");
 
     // Verify password using MySQL database
     let auth_user = state
@@ -49,14 +46,11 @@ pub async fn login(
 
     let _auth_user = match auth_user {
         Some(user) => {
-            info!("User found in database: {}", user.email);
+            debug!(database_user_id = user.id, "Local password verified");
             user
         }
         None => {
-            info!(
-                "User not found in database or password incorrect for: {}",
-                normalized_email
-            );
+            warn!("Login failed: invalid credentials");
             return Err(axum::http::StatusCode::UNAUTHORIZED);
         }
     };
@@ -71,7 +65,7 @@ pub async fn login(
             })?;
 
     if teable_members.is_empty() {
-        error!("No members found in Teable for email: {}", normalized_email);
+        warn!("Login failed: no member profile found");
         return Err(axum::http::StatusCode::UNAUTHORIZED);
     }
 
@@ -84,6 +78,7 @@ pub async fn login(
             teable_user.role.as_deref(),
         )
         .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        info!(user_id = %teable_user.id, "Login succeeded");
         return Ok(Json(LoginResponseVariant::SingleUser(LoginResponse {
             success: true,
             token,
@@ -157,7 +152,10 @@ pub async fn select_member(
             .ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
 
     if teable_member.email.to_lowercase() != email.to_lowercase() {
-        error!("Member ID does not belong to the email in selection_token");
+        warn!(
+            member_id = %teable_member.id,
+            "Member selection rejected: profile does not belong to token"
+        );
         return Err(axum::http::StatusCode::UNAUTHORIZED);
     }
 
@@ -168,6 +166,7 @@ pub async fn select_member(
     )
     .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    info!(user_id = %teable_member.id, "Login succeeded via member selection");
     Ok(Json(LoginResponse {
         success: true,
         token,
@@ -199,10 +198,7 @@ pub async fn forgot_password(
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
     // Normalize email to lowercase for case-insensitive comparison
     let normalized_email = payload.email.to_lowercase();
-    info!(
-        "Forgot password request for email: {} (normalized: {})",
-        payload.email, normalized_email
-    );
+    debug!("Password reset requested");
 
     // Get user from Teable - optimized to fetch only the specific user
     let user = match teable::get_member_by_email(
@@ -213,11 +209,11 @@ pub async fn forgot_password(
     .await
     {
         Ok(Some(user)) => {
-            info!("Found user in Teable: {} (ID: {})", user.email, user.id);
+            debug!(user_id = %user.id, "Password reset: member found");
             user
         }
         Ok(None) => {
-            warn!("User not found in Teable: {}", normalized_email);
+            warn!("Password reset requested for unknown email");
             return Ok(axum::Json(serde_json::json!({
                 "success": false,
                 "message": "Diese E-Mail-Adresse ist nicht in unserem System registriert. Bitte überprüfen Sie Ihre E-Mail-Adresse oder kontaktieren Sie den Support."
@@ -234,7 +230,7 @@ pub async fn forgot_password(
 
     // Create reset token
     let reset_token = state.token_store.create_reset_token(user.id.clone()).await;
-    info!("Created password reset token for user {}", user.id);
+    info!(user_id = %user.id, "Created password reset token");
 
     // Send password reset email
     match state
@@ -243,17 +239,14 @@ pub async fn forgot_password(
         .await
     {
         Ok(_) => {
-            info!("Password reset email sent successfully to: {}", user.email);
+            info!(user_id = %user.id, "Password reset email sent");
             Ok(axum::Json(serde_json::json!({
                 "success": true,
                 "message": "Ein Link zum Zurücksetzen Ihres Passworts wurde an Ihre E-Mail gesendet."
             })))
         }
         Err(e) => {
-            error!(
-                "Failed to send password reset email to {}: {}",
-                user.email, e
-            );
+            error!(user_id = %user.id, error = %e, "Failed to send password reset email");
             Ok(axum::Json(serde_json::json!({
                 "success": false,
                 "message": "Fehler beim Senden der Passwort-Reset-E-Mail. Bitte versuchen Sie es später erneut."
@@ -271,7 +264,7 @@ pub async fn reset_password(
 
     let reset_token_info = match reset_token_info {
         Some(info) => {
-            info!("Reset token consumed for user ID: {}", info.user_id);
+            info!(user_id = %info.user_id, "Reset token consumed");
             info
         }
         None => {
@@ -293,14 +286,14 @@ pub async fn reset_password(
     .await
     {
         Ok(Some(user)) => {
-            info!(
-                "Found user for password reset: {} ({})",
-                user.email, user.id
-            );
+            debug!(user_id = %user.id, "Password reset: member found");
             user
         }
         Ok(None) => {
-            error!("User with Teable ID {} not found", reset_token_info.user_id);
+            warn!(
+                user_id = %reset_token_info.user_id,
+                "Password reset: member no longer exists"
+            );
             return Ok(axum::Json(serde_json::json!({
                 "success": false,
                 "message": "Benutzer nicht gefunden"
@@ -318,9 +311,9 @@ pub async fn reset_password(
     // Update the password in our SQLite database
     match state.database.get_user_by_email(&teable_user.email).await {
         Ok(Some(db_user)) => {
-            info!(
-                "Found user in database, updating password for: {}",
-                db_user.email
+            debug!(
+                database_user_id = db_user.id,
+                "Password reset: local user found"
             );
             if let Err(e) = state
                 .database
@@ -333,12 +326,12 @@ pub async fn reset_password(
                     "message": "Passwort konnte nicht aktualisiert werden"
                 })));
             }
-            info!("Password successfully updated for user: {}", db_user.email);
+            info!(user_id = %teable_user.id, "Password updated");
         }
         Ok(None) => {
-            info!(
-                "User not found in database, creating new user for: {}",
-                teable_user.email
+            debug!(
+                user_id = %teable_user.id,
+                "Password reset: creating local user"
             );
             // User exists in Teable but not in SQLite - create them
             let create_request = crate::database::CreateUserRequest {
@@ -349,8 +342,9 @@ pub async fn reset_password(
             match state.database.create_user(create_request).await {
                 Ok(user_id) => {
                     info!(
-                        "Created new user in database with ID: {} for email: {}",
-                        user_id, teable_user.email
+                        database_user_id = user_id,
+                        user_id = %teable_user.id,
+                        "Created local user for password reset"
                     );
                 }
                 Err(e) => {

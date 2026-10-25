@@ -100,7 +100,7 @@ async fn verify_work_hour_ownership(
             })?;
 
     let wh = existing.ok_or_else(|| {
-        error!("{verb} Work Hour: work hour {} not found", work_hour_id);
+        warn!(work_hour_id = %work_hour_id, "{verb} Work Hour: not found");
         OwnershipError::Denied
     })?;
 
@@ -109,9 +109,10 @@ async fn verify_work_hour_ownership(
         .is_some_and(|member_id| member_id == user_id);
 
     if !owned {
-        error!(
-            "{verb} Work Hour: {} not owned by user {}",
-            work_hour_id, user_id
+        warn!(
+            work_hour_id = %work_hour_id,
+            user_id = %user_id,
+            "{verb} Work Hour: ownership check failed"
         );
         return Err(OwnershipError::Denied);
     }
@@ -144,16 +145,16 @@ pub async fn get_work_hour_by_id(
             axum::http::StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or_else(|| {
-            error!("Get Work Hour: User not found with ID: {}", user_id);
+            warn!(user_id = %user_id, "Get Work Hour: user not found");
             axum::http::StatusCode::NOT_FOUND
         })?;
 
     match (&wh.date, &wh.description, &wh.duration_hours) {
         (Some(date), Some(description), Some(hours)) => {
             debug!(
-                "Get Work Hour: Found work hour {} for user {}",
-                work_hour_id,
-                current_user.name()
+                work_hour_id = %work_hour_id,
+                user_id = %current_user.id,
+                "Get Work Hour: found work hour"
             );
             Ok(axum::Json(serde_json::json!({
                 "success": true,
@@ -168,7 +169,10 @@ pub async fn get_work_hour_by_id(
             })))
         }
         _ => {
-            error!("Get Work Hour: Work hour {} has missing data", work_hour_id);
+            warn!(
+                work_hour_id = %work_hour_id,
+                "Get Work Hour: work hour has incomplete data"
+            );
             Ok(axum::Json(serde_json::json!({
                 "success": false,
                 "message": "Work hour entry has incomplete data"
@@ -185,18 +189,18 @@ pub async fn create_work_hour(
     let user_id = match extract_user_id_from_headers(&state.jwt_secret, &headers) {
         Ok(id) => id,
         Err(e) => {
-            error!("Create Work Hour: Auth error: {:?}", e);
+            warn!("Create Work Hour: authentication failed");
             return Err(e);
         }
     };
 
     let payload = match payload {
         Ok(Json(data)) => {
-            debug!("Create Work Hour: Successfully parsed JSON: {:?}", data);
+            debug!("Create Work Hour: successfully parsed JSON");
             data
         }
         Err(rejection) => {
-            error!("Create Work Hour: JSON parsing error: {:?}", rejection);
+            debug!(?rejection, "Create Work Hour: invalid JSON payload");
             return Ok(axum::Json(serde_json::json!({
                 "success": false,
                 "error": "Invalid JSON format",
@@ -240,13 +244,16 @@ pub async fn create_work_hour(
         axum::http::StatusCode::INTERNAL_SERVER_ERROR
     })?
     .ok_or_else(|| {
-        error!("Create Work Hour: User not found with ID: {}", user_id);
+        warn!(user_id = %user_id, "Create Work Hour: user not found");
         axum::http::StatusCode::NOT_FOUND
     })?;
 
-    debug!("Create Work Hour: Found user: {}", current_user.name());
+    debug!(user_id = %current_user.id, "Create Work Hour: member found");
 
-    debug!("Create Work Hour: Using {} hours directly", payload.hours);
+    debug!(
+        hours = payload.hours,
+        "Create Work Hour: using submitted hours"
+    );
 
     // Check for duplicate entry for this member and date using teable.rs helper
     let work_hour_exists = match teable::work_hour_exists_for_member_at_date(
@@ -268,9 +275,10 @@ pub async fn create_work_hour(
     };
 
     if work_hour_exists {
-        error!(
-            "Create Work Hour: Duplicate entry for member {} on date {}",
-            current_user.id, payload.date
+        warn!(
+            user_id = %current_user.id,
+            date = %payload.date,
+            "Create Work Hour: duplicate entry"
         );
         return Ok(axum::Json(serde_json::json!({
             "success": false,
@@ -291,8 +299,9 @@ pub async fn create_work_hour(
     {
         Ok(work_hour) => {
             info!(
-                "Create Work Hour: Successfully created work hour with ID: {}",
-                work_hour.id
+                work_hour_id = %work_hour.id,
+                user_id = %current_user.id,
+                "Create Work Hour: created"
             );
             Ok(axum::Json(serde_json::json!({
                 "success": true,
@@ -327,18 +336,18 @@ pub async fn update_work_hour(
     let user_id = match extract_user_id_from_headers(&state.jwt_secret, &headers) {
         Ok(id) => id,
         Err(e) => {
-            error!("Update Work Hour: Auth error: {:?}", e);
+            warn!("Update Work Hour: authentication failed");
             return Err(e);
         }
     };
 
     let payload = match payload {
         Ok(Json(data)) => {
-            debug!("Update Work Hour: Successfully parsed JSON: {:?}", data);
+            debug!("Update Work Hour: successfully parsed JSON");
             data
         }
         Err(rejection) => {
-            error!("Update Work Hour: JSON parsing error: {:?}", rejection);
+            debug!(?rejection, "Update Work Hour: invalid JSON payload");
             return Ok(axum::Json(serde_json::json!({
                 "success": false,
                 "error": "Invalid JSON format",
@@ -348,10 +357,11 @@ pub async fn update_work_hour(
     };
 
     debug!(
-        "Update Work Hour: User ID: {}, Work Hour ID: {}",
-        user_id, work_hour_id
+        user_id = %user_id,
+        work_hour_id = %work_hour_id,
+        "Update Work Hour: processing request"
     );
-    debug!("Update Work Hour: Payload: {:?}", payload);
+    debug!(?payload, "Update Work Hour: payload");
 
     // Validate required fields
     if payload.date.is_empty() {
@@ -400,13 +410,16 @@ pub async fn update_work_hour(
         axum::http::StatusCode::INTERNAL_SERVER_ERROR
     })?
     .ok_or_else(|| {
-        error!("Update Work Hour: User not found with ID: {}", user_id);
+        warn!(user_id = %user_id, "Update Work Hour: user not found");
         axum::http::StatusCode::NOT_FOUND
     })?;
 
-    debug!("Update Work Hour: Found user: {}", current_user.name());
+    debug!(user_id = %current_user.id, "Update Work Hour: member found");
 
-    debug!("Update Work Hour: Using {} hours directly", payload.hours);
+    debug!(
+        hours = payload.hours,
+        "Update Work Hour: using submitted hours"
+    );
 
     // Try to update the work hour in Teable
     match teable::update_work_hour(
@@ -422,8 +435,9 @@ pub async fn update_work_hour(
     {
         Ok(updated_work_hour) => {
             info!(
-                "Update Work Hour: Successfully updated work hour with ID: {}",
-                updated_work_hour.id
+                work_hour_id = %updated_work_hour.id,
+                user_id = %current_user.id,
+                "Update Work Hour: updated"
             );
             Ok(axum::Json(serde_json::json!({
                 "success": true,
