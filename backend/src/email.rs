@@ -564,11 +564,11 @@ impl EmailService {
             // Fresh transport per batch
             let transport = match self.create_async_transport() {
                 Ok(t) => std::sync::Arc::new(t),
-                Err(e) => {
+                Err(_) => {
                     error!(
-                        "Failed to create SMTP transport for batch {}: {}",
-                        batch_idx + 1,
-                        e
+                        batch = batch_idx + 1,
+                        category = "smtp_transport_setup_failed",
+                        "Failed to create SMTP transport for batch"
                     );
                     total_failed += chunk.len();
                     for (email, _) in chunk {
@@ -619,9 +619,9 @@ impl EmailService {
 
                     let to_mailbox: Mailbox = match email_addr.parse() {
                         Ok(m) => m,
-                        Err(e) => {
+                        Err(_) => {
                             drop(permit);
-                            return Err((email_addr, format!("Invalid to address: {e}")));
+                            return Err((email_addr, "invalid_recipient"));
                         }
                     };
 
@@ -634,9 +634,9 @@ impl EmailService {
                         &attachments,
                     ) {
                         Ok(m) => m,
-                        Err(e) => {
+                        Err(_) => {
                             drop(permit);
-                            return Err((email_addr, format!("Build error: {e}")));
+                            return Err((email_addr, "message_build_failed"));
                         }
                     };
 
@@ -689,8 +689,12 @@ impl EmailService {
             return Ok(());
         }
 
-        let from_mailbox: Mailbox = format!("TSV BÜ Tennis App <{}>", self.from_email).parse()?;
-        let to_mailbox: Mailbox = to.parse()?;
+        let from_mailbox: Mailbox = format!("TSV BÜ Tennis App <{}>", self.from_email)
+            .parse()
+            .map_err(|_| anyhow::anyhow!("invalid_sender"))?;
+        let to_mailbox: Mailbox = to
+            .parse()
+            .map_err(|_| anyhow::anyhow!("invalid_recipient"))?;
 
         let email = Message::builder()
             .from(from_mailbox)
@@ -708,17 +712,21 @@ impl EmailService {
                             .header(ContentType::TEXT_HTML)
                             .body(html_content.to_string()),
                     ),
-            )?;
+            )
+            .map_err(|_| anyhow::anyhow!("message_build_failed"))?;
 
-        let transport = self.create_async_transport()?;
+        let transport = self
+            .create_async_transport()
+            .map_err(|_| anyhow::anyhow!("smtp_transport_setup_failed"))?;
         match transport.send(email).await {
             Ok(response) => {
                 debug!(?response, "Email sent successfully");
                 Ok(())
             }
             Err(e) => {
-                error!("Failed to send email: {}", e);
-                Err(e.into())
+                let category = smtp_error_category(&e);
+                error!(category, "Failed to send email");
+                Err(anyhow::anyhow!("{category}"))
             }
         }
     }
@@ -737,8 +745,12 @@ impl EmailService {
             return Ok(());
         }
 
-        let from_mailbox: Mailbox = format!("TSV BÜ Tennis App <{}>", self.from_email).parse()?;
-        let to_mailbox: Mailbox = to.parse()?;
+        let from_mailbox: Mailbox = format!("TSV BÜ Tennis App <{}>", self.from_email)
+            .parse()
+            .map_err(|_| anyhow::anyhow!("invalid_sender"))?;
+        let to_mailbox: Mailbox = to
+            .parse()
+            .map_err(|_| anyhow::anyhow!("invalid_recipient"))?;
 
         let email = build_message(
             from_mailbox,
@@ -747,9 +759,12 @@ impl EmailService {
             html_content,
             text_content,
             attachments,
-        )?;
+        )
+        .map_err(|_| anyhow::anyhow!("message_build_failed"))?;
 
-        let transport = self.create_async_transport()?;
+        let transport = self
+            .create_async_transport()
+            .map_err(|_| anyhow::anyhow!("smtp_transport_setup_failed"))?;
         match transport.send(email).await {
             Ok(response) => {
                 debug!(
@@ -760,8 +775,9 @@ impl EmailService {
                 Ok(())
             }
             Err(e) => {
-                error!("Failed to send email: {}", e);
-                Err(e.into())
+                let category = smtp_error_category(&e);
+                error!(category, "Failed to send email");
+                Err(anyhow::anyhow!("{category}"))
             }
         }
     }
@@ -826,24 +842,42 @@ async fn send_with_retry(
     message: Message,
     max_retries: usize,
     delay: std::time::Duration,
-) -> Result<(), String> {
+) -> Result<(), &'static str> {
     let mut attempt = 0usize;
     loop {
         match transport.send(message.clone()).await {
             Ok(_) => return Ok(()),
             Err(e) => {
+                let category = smtp_error_category(&e);
                 if attempt < max_retries && is_transient_smtp_error(&e) {
                     attempt += 1;
                     warn!(
-                        "Bulk mail send attempt {} retrying after SMTP error: {}",
-                        attempt, e
+                        attempt,
+                        category,
+                        retries_remaining = max_retries - attempt,
+                        "Bulk mail send retrying after SMTP error"
                     );
                     tokio::time::sleep(delay).await;
                     continue;
                 }
-                return Err(e.to_string());
+                return Err(category);
             }
         }
+    }
+}
+
+/// Maps a lettre SMTP error to a stable category without exposing the raw
+/// server reply. Lettre's `Display` output can include the recipient address
+/// from a recipient-specific rejection.
+fn smtp_error_category(err: &lettre::transport::smtp::Error) -> &'static str {
+    if err.is_permanent() {
+        "smtp_permanent_error"
+    } else if err.is_transient() {
+        "smtp_transient_error"
+    } else if err.is_timeout() {
+        "smtp_timeout"
+    } else {
+        "smtp_error"
     }
 }
 

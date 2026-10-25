@@ -17,8 +17,7 @@ use tower_governor::GovernorLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::services::ServeDir;
-use tower_http::trace::{DefaultOnFailure, TraceLayer};
-use tracing::{debug, error, info, warn, Level};
+use tracing::{debug, error, info, warn, Instrument};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use tsv_tennis_backend::config::Config;
 use tsv_tennis_backend::database::Database;
@@ -32,6 +31,48 @@ use tsv_tennis_backend::{routes, state, teable};
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 // Re-export for tests (which use `use super::*`)
+
+const REQUEST_ID_HEADER: &str = "x-request-id";
+
+/// Emits exactly one structured access event per API response.
+///
+/// The request context is written both to a span (for handler logs) and to the
+/// access event itself. The latter keeps `method`, `path` and `request_id`
+/// available even when `RUST_LOG=warn` filters the `info` span out.
+async fn access_log(
+    request: axum::extract::Request,
+    next: middleware::Next,
+) -> axum::response::Response {
+    let method = request.method().clone();
+    let path = request.uri().path().to_owned();
+    let request_id = request
+        .headers()
+        .get(REQUEST_ID_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("-")
+        .to_owned();
+    let start = std::time::Instant::now();
+
+    let span = tracing::info_span!(
+        "http_request",
+        method = %method.clone(),
+        path = %path.clone(),
+        request_id = %request_id.clone(),
+    );
+    let response = next.run(request).instrument(span).await;
+
+    let status = response.status();
+    let latency_ms = start.elapsed().as_millis();
+    if status.is_server_error() {
+        error!(%method, %path, %request_id, %status, latency_ms, "request failed");
+    } else if status.is_client_error() {
+        warn!(%method, %path, %request_id, %status, latency_ms, "request rejected");
+    } else {
+        info!(%method, %path, %request_id, %status, latency_ms, "request completed");
+    }
+
+    response
+}
 
 /// Installs the tracing subscriber.
 ///
@@ -265,49 +306,21 @@ async fn main() -> anyhow::Result<()> {
     // Attach a request ID to every API request and emit one structured access
     // log per request. Health checks and static assets are intentionally not
     // traced to keep the log volume down.
-    let request_id_header = HeaderName::from_static("x-request-id");
+    let request_id_header = HeaderName::from_static(REQUEST_ID_HEADER);
     let request_tracing = ServiceBuilder::new()
         .layer(SetRequestIdLayer::new(
             request_id_header.clone(),
             MakeRequestUuid,
         ))
-        .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(|request: &axum::http::Request<_>| {
-                    let request_id = request
-                        .headers()
-                        .get("x-request-id")
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or("-");
-                    tracing::info_span!(
-                        "http_request",
-                        method = %request.method(),
-                        path = %request.uri().path(),
-                        request_id = %request_id,
-                    )
-                })
-                .on_response(
-                    |response: &axum::http::Response<_>,
-                     latency: std::time::Duration,
-                     _span: &tracing::Span| {
-                        let status = response.status();
-                        let latency_ms = latency.as_millis();
-                        if status.is_server_error() {
-                            error!(%status, latency_ms, "request failed");
-                        } else if status.is_client_error() {
-                            warn!(%status, latency_ms, "request rejected");
-                        } else {
-                            info!(%status, latency_ms, "request completed");
-                        }
-                    },
-                )
-                .on_failure(DefaultOnFailure::new().level(Level::ERROR)),
-        )
+        .layer(middleware::from_fn(access_log))
         .layer(PropagateRequestIdLayer::new(request_id_header));
 
     let traced_api_routes = Router::new()
         .merge(public_routes)
         .merge(protected_routes)
+        // Explicit API fallback so unmatched `/api/...` requests are traced
+        // like registered routes instead of falling through to the SPA.
+        .fallback(api_not_found)
         .layer(request_tracing);
     let api_routes = Router::new().merge(health_routes).merge(traced_api_routes);
 
@@ -342,6 +355,10 @@ async fn health_check() -> impl IntoResponse {
         "service": "tsv-tennis-backend",
         "timestamp": chrono::Utc::now().to_rfc3339()
     }))
+}
+
+async fn api_not_found() -> impl IntoResponse {
+    (StatusCode::NOT_FOUND, "API endpoint not found")
 }
 
 /// Builds the CORS layer restricted to the frontend origin(s).
@@ -399,7 +416,9 @@ fn build_cors(frontend_url: &str) -> anyhow::Result<CorsLayer> {
             axum::http::header::CONTENT_TYPE,
             axum::http::header::AUTHORIZATION,
             axum::http::header::ACCEPT,
-        ]))
+            HeaderName::from_static(REQUEST_ID_HEADER),
+        ])
+        .expose_headers([HeaderName::from_static(REQUEST_ID_HEADER)]))
 }
 
 /// Returns the scheme-and-authority origin for an absolute http(s) URL.
@@ -791,6 +810,16 @@ mod tests {
                 "http://localhost:5173"
             ))
         );
+        let exposed = response
+            .headers()
+            .get("access-control-expose-headers")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        assert!(
+            exposed.contains("x-request-id"),
+            "browser must be able to read x-request-id, got: {exposed}"
+        );
     }
 
     #[serial_test::serial]
@@ -808,6 +837,32 @@ mod tests {
 
         assert_eq!(response.status_code(), 200);
         assert_eq!(response.headers().get("access-control-allow-origin"), None);
+    }
+
+    #[serial_test::serial]
+    #[tokio::test]
+    async fn test_cors_allows_request_id_header() {
+        let app = create_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        let response = server
+            .method(Method::OPTIONS, "/api/health")
+            .add_header("Origin", "http://localhost:5173")
+            .add_header("Access-Control-Request-Method", "GET")
+            .add_header("Access-Control-Request-Headers", "x-request-id")
+            .await;
+
+        assert_eq!(response.status_code(), 200);
+        let allowed = response
+            .headers()
+            .get("access-control-allow-headers")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        assert!(
+            allowed.contains("x-request-id"),
+            "preflight must allow x-request-id, got: {allowed}"
+        );
     }
 
     #[test]
