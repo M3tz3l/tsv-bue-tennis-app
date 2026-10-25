@@ -199,9 +199,35 @@ async fn main() -> anyhow::Result<()> {
         jwt_secret: config.jwt_secret.clone(),
     };
 
-    let cors = build_cors(&config.frontend_url)?;
+    let app = build_router(state, &config.frontend_url, "/app/static")?;
+
+    let port = config.port;
+    let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
+        .await
+        .expect("Failed to bind TCP listener");
+    info!("Server starting on port {}", port);
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await?;
+    Ok(())
+}
+
+/// Builds the complete application router.
+///
+/// Kept separate from `main` so integration tests exercise the same route
+/// ordering, tracing layers and static fallback mount as production.
+fn build_router(
+    state: state::AppState,
+    frontend_url: &str,
+    static_dir: impl AsRef<std::path::Path>,
+) -> anyhow::Result<Router> {
+    let cors = build_cors(frontend_url)?;
 
     // Configure rate limiting for authentication and security-sensitive endpoints (restrictive)
+    let jwt_secret = state.jwt_secret.clone();
+
     let auth_governor_conf = Arc::new(
         GovernorConfigBuilder::default()
             .per_second(1) // 1 request per second for all auth/security endpoints
@@ -229,7 +255,7 @@ async fn main() -> anyhow::Result<()> {
         GovernorConfigBuilder::default()
             .per_second(5) // 5 read requests per second per user (generous for normal usage)
             .burst_size(10) // Allow bursts up to 10 requests for page loads
-            .key_extractor(state::UserKeyExtractor::new(&config.jwt_secret)) // Use our custom user-based extractor
+            .key_extractor(state::UserKeyExtractor::new(&jwt_secret)) // Use our custom user-based extractor
             .finish()
             .expect("Failed to build read rate limiter config"),
     );
@@ -239,7 +265,7 @@ async fn main() -> anyhow::Result<()> {
         GovernorConfigBuilder::default()
             .per_second(1) // 1 write request per second per user
             .burst_size(3) // Allow small bursts for quick operations
-            .key_extractor(state::UserKeyExtractor::new(&config.jwt_secret))
+            .key_extractor(state::UserKeyExtractor::new(&jwt_secret))
             .finish()
             .expect("Failed to build write rate limiter config"),
     );
@@ -251,7 +277,7 @@ async fn main() -> anyhow::Result<()> {
         GovernorConfigBuilder::default()
             .per_second(20)
             .burst_size(50)
-            .key_extractor(state::UserKeyExtractor::new(&config.jwt_secret))
+            .key_extractor(state::UserKeyExtractor::new(&jwt_secret))
             .finish()
             .expect("Failed to build job poll rate limiter config"),
     );
@@ -329,25 +355,14 @@ async fn main() -> anyhow::Result<()> {
     // the traced API fallback first. Missing files fall through to spa_fallback,
     // which serves index.html for navigation routes but 404s missing asset
     // files (fonts, images, scripts).
-    let static_service = ServeDir::new("/app/static").fallback(state::spa_fallback.into_service());
+    let static_service = ServeDir::new(static_dir).fallback(state::spa_fallback.into_service());
 
     let app = Router::new()
         .nest("/api", api_routes)
         .fallback_service(static_service)
         .layer(cors)
         .with_state(state);
-
-    let port = config.port;
-    let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
-        .await
-        .expect("Failed to bind TCP listener");
-    info!("Server starting on port {}", port);
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
-    )
-    .await?;
-    Ok(())
+    Ok(app)
 }
 
 async fn health_check() -> impl IntoResponse {
@@ -514,7 +529,7 @@ mod tests {
         create_test_app_with_teable_url("https://test.teable.io").await
     }
 
-    async fn create_test_app_with_teable_url(teable_url: &str) -> Router {
+    async fn create_test_state(teable_url: &str) -> state::AppState {
         set_test_env(teable_url);
 
         // Create a test state with minimal setup
@@ -537,7 +552,7 @@ mod tests {
             work_hours_table_id: "test_work_hours_table".to_string(),
         };
 
-        let state = state::AppState {
+        state::AppState {
             http_client: Client::new(),
             teable_config,
             email_service,
@@ -549,7 +564,11 @@ mod tests {
             )),
             member_counts: state::MemberCountCache::default(),
             jwt_secret: TEST_JWT_SECRET.to_string(),
-        };
+        }
+    }
+
+    async fn create_test_app_with_teable_url(teable_url: &str) -> Router {
+        let state = create_test_state(teable_url).await;
 
         let cors = build_cors("http://localhost:5173").expect("valid test CORS origin");
 
@@ -1012,25 +1031,17 @@ mod tests {
     #[serial_test::serial]
     #[tokio::test]
     async fn test_unknown_api_route_is_traced() {
-        let request_id_header = HeaderName::from_static(REQUEST_ID_HEADER);
-        let traced = Router::new()
-            .route("/known", get(|| async { "ok" }))
-            .fallback(api_not_found)
-            .layer(
-                ServiceBuilder::new()
-                    .layer(SetRequestIdLayer::new(
-                        request_id_header.clone(),
-                        MakeRequestUuid,
-                    ))
-                    .layer(middleware::from_fn(access_log))
-                    .layer(PropagateRequestIdLayer::new(request_id_header.clone())),
-            );
-        let health = Router::new().route("/health", get(|| async { "ok" }));
-        let app = Router::new()
-            .nest("/api", Router::new().merge(health).merge(traced))
-            // Simulate the outer static service so this test also covers the
-            // case where a root fallback would otherwise swallow API 404s.
-            .fallback(|| async { "spa" });
+        // Build the real production router against a temporary static dir so
+        // this test fails if the static mount ever moves back in front of the
+        // API fallback.
+        let static_dir =
+            std::env::temp_dir().join(format!("tsv-router-test-{}", std::process::id()));
+        std::fs::create_dir_all(&static_dir).unwrap();
+        std::fs::write(static_dir.join("index.html"), "<html>tsv-spa</html>").unwrap();
+        std::env::set_var("STATIC_DIR", &static_dir);
+
+        let state = create_test_state("https://test.teable.io").await;
+        let app = build_router(state, "http://localhost:5173", &static_dir).unwrap();
         let server = TestServer::new(app).unwrap();
 
         let response = server.get("/api/nonexistent").await;
@@ -1046,6 +1057,16 @@ mod tests {
             response.headers().get(REQUEST_ID_HEADER).is_none(),
             "health route must stay outside request tracing"
         );
+
+        let response = server
+            .get("/dashboard")
+            .add_header("accept", "text/html")
+            .await;
+        assert_eq!(response.status_code(), 200);
+        assert_eq!(response.text(), "<html>tsv-spa</html>");
+
+        std::env::remove_var("STATIC_DIR");
+        std::fs::remove_dir_all(&static_dir).ok();
     }
 
     #[serial_test::serial]
