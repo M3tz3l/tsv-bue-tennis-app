@@ -7,7 +7,7 @@ use axum::{
     routing::get,
     Json,
 };
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::auth;
 use crate::email::{self, auto_link_html, escape_html};
@@ -206,7 +206,7 @@ pub async fn send_test_mail(
         )
         .await
         .map_err(|e| {
-            error!("Send test mail failed for {}: {}", user.email, e);
+            error!(user_id = %user.id, error = %e, "Send test mail failed");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -417,7 +417,7 @@ pub async fn get_mail_job_status(
     let jobs = state.mail_jobs.read().await;
     match jobs.get(&job_id) {
         Some(job) => {
-            info!("Job status lookup: id={}, status={:?}", job_id, job.status);
+            debug!(job_id = %job_id, status = ?job.status, "Mail job status lookup");
             Ok(Json(serde_json::json!({
                 "success": true,
                 "job": job,

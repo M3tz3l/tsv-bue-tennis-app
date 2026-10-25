@@ -1,20 +1,24 @@
 use axum::{
     extract::{Json, State},
     handler::HandlerWithoutStateExt,
-    http::{HeaderMap, Method, StatusCode},
+    http::{HeaderMap, HeaderName, Method, StatusCode},
     middleware,
     response::IntoResponse,
     routing::get,
     Router,
 };
 use reqwest::Client;
+use std::io::IsTerminal;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tower::ServiceBuilder;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::services::ServeDir;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn, Instrument};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use tsv_tennis_backend::config::Config;
 use tsv_tennis_backend::database::Database;
 use tsv_tennis_backend::email::EmailService;
@@ -28,12 +32,76 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 // Re-export for tests (which use `use super::*`)
 
+const REQUEST_ID_HEADER: &str = "x-request-id";
+
+/// Emits exactly one structured access event per API response.
+///
+/// The request context is written both to a span (for handler logs) and to the
+/// access event itself. The latter keeps `method`, `path` and `request_id`
+/// available even when `RUST_LOG=warn` filters the `info` span out.
+async fn access_log(
+    request: axum::extract::Request,
+    next: middleware::Next,
+) -> axum::response::Response {
+    let method = request.method().clone();
+    let path = request.uri().path().to_owned();
+    let request_id = request
+        .headers()
+        .get(REQUEST_ID_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("-")
+        .to_owned();
+    let start = std::time::Instant::now();
+
+    let span = tracing::info_span!(
+        "http_request",
+        method = %method.clone(),
+        path = %path.clone(),
+        request_id = %request_id.clone(),
+    );
+    let response = next.run(request).instrument(span).await;
+
+    let status = response.status();
+    let latency_ms = start.elapsed().as_millis();
+    if status.is_server_error() {
+        error!(%method, %path, %request_id, %status, latency_ms, "request failed");
+    } else if status.is_client_error() {
+        warn!(%method, %path, %request_id, %status, latency_ms, "request rejected");
+    } else {
+        info!(%method, %path, %request_id, %status, latency_ms, "request completed");
+    }
+
+    response
+}
+
+/// Installs the tracing subscriber.
+///
+/// `RUST_LOG` controls the filter. When unset we default to `info` for this
+/// crate and the HTTP tracing layer while keeping known-noisy dependencies at
+/// `warn`, instead of the `error`-only default of `EnvFilter::from_default_env`.
+/// `LOG_FORMAT=json` switches to line-delimited JSON for log collectors.
+fn init_tracing() {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new("tsv_tennis_backend=info,tower_http=info,hyper=warn,reqwest=warn,sqlx=warn")
+    });
+
+    let registry = tracing_subscriber::registry().with(filter);
+
+    if std::env::var("LOG_FORMAT").as_deref() == Ok("json") {
+        registry.with(fmt::layer().json()).init();
+    } else {
+        registry
+            .with(fmt::layer().with_ansi(std::io::stdout().is_terminal()))
+            .init();
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Load .env file
     dotenvy::dotenv().ok();
 
-    tracing_subscriber::fmt::init();
+    init_tracing();
 
     // Load configuration
     let config = Config::from_env()?;
@@ -47,9 +115,9 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Startup diagnostics ──────────────────────────────────────────────────
     info!("Running startup diagnostics...");
-    info!("  Teable API URL: {}", config.teable_api_url);
-    info!("  Members table:  {}", config.members_table_id);
-    info!("  Work hours tbl: {}", config.work_hours_table_id);
+    debug!(teable_api_url = %config.teable_api_url, "Teable configuration");
+    debug!(table_id = %config.members_table_id, "Members table");
+    debug!(table_id = %config.work_hours_table_id, "Work hours table");
 
     let http_client = Client::builder()
         .timeout(std::time::Duration::from_secs(10))
@@ -71,8 +139,8 @@ async fn main() -> anyhow::Result<()> {
     )
     .await
     {
-        Ok(count) => info!(" Members table accessible — {} records", count),
-        Err(e) => error!(" Members table error: {}", e),
+        Ok(count) => info!(records = count, "Members table accessible"),
+        Err(e) => error!(error = %e, "Members table inaccessible"),
     }
 
     // 2. Verify work_hours table is accessible
@@ -84,14 +152,14 @@ async fn main() -> anyhow::Result<()> {
     )
     .await
     {
-        Ok(count) => info!(" Work hours table accessible — {} records", count),
-        Err(e) => error!(" Work hours table error: {}", e),
+        Ok(count) => info!(records = count, "Work hours table accessible"),
+        Err(e) => error!(error = %e, "Work hours table inaccessible"),
     }
 
     // 3. Verify SQLite database
     match database.health_check().await {
-        Ok(_) => info!("✅ SQLite database connection OK"),
-        Err(e) => error!("❌ SQLite database error: {}", e),
+        Ok(_) => info!("SQLite database connection OK"),
+        Err(e) => error!(error = %e, "SQLite database connection error"),
     }
 
     info!("Startup diagnostics complete");
@@ -153,7 +221,7 @@ async fn main() -> anyhow::Result<()> {
         })
         .layer(middleware::from_fn(state::rewrite_429_to_json));
 
-    let public_routes = Router::new().merge(health_routes).merge(auth_routes);
+    let public_routes = Router::new().merge(auth_routes);
 
     // Configure user-based rate limiting: reasonable limits per authenticated user
     // This prevents API abuse while allowing normal frontend usage patterns
@@ -235,7 +303,26 @@ async fn main() -> anyhow::Result<()> {
             state::auth_middleware,
         ));
 
-    let api_routes = Router::new().merge(public_routes).merge(protected_routes);
+    // Attach a request ID to every API request and emit one structured access
+    // log per request. Health checks and static assets are intentionally not
+    // traced to keep the log volume down.
+    let request_id_header = HeaderName::from_static(REQUEST_ID_HEADER);
+    let request_tracing = ServiceBuilder::new()
+        .layer(SetRequestIdLayer::new(
+            request_id_header.clone(),
+            MakeRequestUuid,
+        ))
+        .layer(middleware::from_fn(access_log))
+        .layer(PropagateRequestIdLayer::new(request_id_header));
+
+    let traced_api_routes = Router::new()
+        .merge(public_routes)
+        .merge(protected_routes)
+        // Explicit API fallback so unmatched `/api/...` requests are traced
+        // like registered routes instead of falling through to the SPA.
+        .fallback(api_not_found)
+        .layer(request_tracing);
+    let api_routes = Router::new().merge(health_routes).merge(traced_api_routes);
 
     let app = Router::new()
         .nest("/api", api_routes)
@@ -268,6 +355,10 @@ async fn health_check() -> impl IntoResponse {
         "service": "tsv-tennis-backend",
         "timestamp": chrono::Utc::now().to_rfc3339()
     }))
+}
+
+async fn api_not_found() -> impl IntoResponse {
+    (StatusCode::NOT_FOUND, "API endpoint not found")
 }
 
 /// Builds the CORS layer restricted to the frontend origin(s).
@@ -325,7 +416,9 @@ fn build_cors(frontend_url: &str) -> anyhow::Result<CorsLayer> {
             axum::http::header::CONTENT_TYPE,
             axum::http::header::AUTHORIZATION,
             axum::http::header::ACCEPT,
-        ]))
+            HeaderName::from_static(REQUEST_ID_HEADER),
+        ])
+        .expose_headers([HeaderName::from_static(REQUEST_ID_HEADER)]))
 }
 
 /// Returns the scheme-and-authority origin for an absolute http(s) URL.
@@ -368,11 +461,11 @@ async fn get_user(
         StatusCode::INTERNAL_SERVER_ERROR
     })?
     .ok_or_else(|| {
-        error!("Get User: User not found with ID: {}", user_id);
+        warn!(user_id = %user_id, "Get User: user not found");
         StatusCode::NOT_FOUND
     })?;
 
-    info!("Get User: Found user: {} ({})", user.name(), user.email);
+    debug!(user_id = %user.id, "Get User: found user");
 
     // Return the response format expected by the frontend
     Ok(Json(serde_json::json!({
@@ -717,6 +810,16 @@ mod tests {
                 "http://localhost:5173"
             ))
         );
+        let exposed = response
+            .headers()
+            .get("access-control-expose-headers")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        assert!(
+            exposed.contains("x-request-id"),
+            "browser must be able to read x-request-id, got: {exposed}"
+        );
     }
 
     #[serial_test::serial]
@@ -734,6 +837,32 @@ mod tests {
 
         assert_eq!(response.status_code(), 200);
         assert_eq!(response.headers().get("access-control-allow-origin"), None);
+    }
+
+    #[serial_test::serial]
+    #[tokio::test]
+    async fn test_cors_allows_request_id_header() {
+        let app = create_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        let response = server
+            .method(Method::OPTIONS, "/api/health")
+            .add_header("Origin", "http://localhost:5173")
+            .add_header("Access-Control-Request-Method", "GET")
+            .add_header("Access-Control-Request-Headers", "x-request-id")
+            .await;
+
+        assert_eq!(response.status_code(), 200);
+        let allowed = response
+            .headers()
+            .get("access-control-allow-headers")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        assert!(
+            allowed.contains("x-request-id"),
+            "preflight must allow x-request-id, got: {allowed}"
+        );
     }
 
     #[test]
