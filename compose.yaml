@@ -6,10 +6,15 @@ services:
     env_file:
       - .env
     environment:
-      RUST_LOG: ${RUST_LOG:-info}
-      LOG_FORMAT: ${LOG_FORMAT:-text}
+      RUST_LOG: ${RUST_LOG:-warn,tsv_tennis_backend=info,tower_http=info}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
     volumes:
       - tsv_tennis_data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     restart: unless-stopped
     healthcheck:
       test:
