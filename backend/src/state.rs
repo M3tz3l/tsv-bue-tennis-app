@@ -168,6 +168,7 @@ fn forwarded_client_ip(headers: &HeaderMap) -> Option<IpAddr> {
         .filter_map(|value| value.to_str().ok())
         .flat_map(|value| value.split(','))
         .filter_map(|value| value.trim().parse::<IpAddr>().ok())
+        .map(|ip| ip.to_canonical())
         .collect();
 
     if candidates.is_empty() {
@@ -175,6 +176,7 @@ fn forwarded_client_ip(headers: &HeaderMap) -> Option<IpAddr> {
             .get("x-real-ip")
             .and_then(|value| value.to_str().ok())
             .and_then(|value| value.trim().parse::<IpAddr>().ok())
+            .map(|ip| ip.to_canonical())
         {
             candidates.push(ip);
         }
@@ -345,6 +347,29 @@ mod tests {
             None,
         );
         assert_eq!(extract(&request), IpAddr::V4(Ipv4Addr::new(203, 0, 113, 9)));
+    }
+
+    #[test]
+    fn canonicalizes_ipv4_mapped_forwarded_addresses() {
+        let request = request(
+            Some(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2))),
+            Some("::ffff:203.0.113.9, ::ffff:10.0.0.3"),
+            None,
+        );
+        assert_eq!(extract(&request), IpAddr::V4(Ipv4Addr::new(203, 0, 113, 9)));
+    }
+
+    #[test]
+    fn canonicalizes_ipv4_mapped_x_real_ip() {
+        let request = request(
+            Some(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2))),
+            None,
+            Some("::ffff:203.0.113.10"),
+        );
+        assert_eq!(
+            extract(&request),
+            IpAddr::V4(Ipv4Addr::new(203, 0, 113, 10))
+        );
     }
 
     #[test]

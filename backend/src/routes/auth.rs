@@ -210,21 +210,24 @@ pub async fn forgot_password(
     {
         Ok(Some(user)) => {
             debug!(user_id = %user.id, "Password reset: member found");
-            match state.token_store.create_reset_token(user.id.clone()).await {
-                Ok(reset_token) => {
-                    info!(user_id = %user.id, "Created password reset token");
-                    if let Err(error) = state
-                        .email_service
-                        .send_password_reset_email(&user.email, &reset_token)
-                        .await
-                    {
-                        error!(user_id = %user.id, %error, "Failed to send password reset email");
+            let token_store = state.token_store.clone();
+            let email_service = state.email_service.clone();
+            tokio::spawn(async move {
+                match token_store.create_reset_token(user.id.clone()).await {
+                    Ok(reset_token) => {
+                        info!(user_id = %user.id, "Created password reset token");
+                        if let Err(error) = email_service
+                            .send_password_reset_email(&user.email, &reset_token)
+                            .await
+                        {
+                            error!(user_id = %user.id, %error, "Failed to send password reset email");
+                        }
+                    }
+                    Err(error) => {
+                        error!(user_id = %user.id, %error, "Failed to persist password reset token");
                     }
                 }
-                Err(error) => {
-                    error!(user_id = %user.id, %error, "Failed to persist password reset token");
-                }
-            }
+            });
         }
         Ok(None) => {
             warn!("Password reset requested for unknown email");
