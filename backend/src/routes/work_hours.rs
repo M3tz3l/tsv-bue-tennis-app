@@ -7,7 +7,8 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-use chrono::Datelike;
+use chrono::{Datelike, Utc};
+use chrono_tz::Europe::Berlin;
 use tracing::{debug, error, info, warn};
 
 use crate::models::CreateWorkHourRequest;
@@ -15,10 +16,14 @@ use crate::state::AppState;
 use crate::teable;
 use crate::utils::extract_user_id_from_headers;
 
+const MIN_WORK_HOURS: f64 = 0.25;
+const MAX_WORK_HOURS: f64 = 24.0;
+const MAX_DESCRIPTION_CHARS: usize = 40;
+
 /// Validate work hour date with one-month grace period.
 /// Returns Ok(()) if valid, or a JSON error body to return to the caller.
 fn validate_work_hour_date(date: &str, prefix: &str) -> Result<(), axum::Json<serde_json::Value>> {
-    let date_result = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d");
+    let date_result = chrono::NaiveDate::parse_from_str(date.trim(), "%Y-%m-%d");
     let work_date = match date_result {
         Ok(d) => d,
         Err(_) => {
@@ -30,7 +35,15 @@ fn validate_work_hour_date(date: &str, prefix: &str) -> Result<(), axum::Json<se
         }
     };
 
-    let today = chrono::Utc::now().date_naive();
+    let today = Utc::now().with_timezone(&Berlin).date_naive();
+    if work_date > today {
+        warn!("{}: Date is in the future: {}", prefix, date);
+        return Err(axum::Json(serde_json::json!({
+            "success": false,
+            "message": "Das Datum darf nicht in der Zukunft liegen."
+        })));
+    }
+
     let current_year = today.year();
     let current_month = today.month();
     let work_year = work_date.year();
@@ -61,6 +74,58 @@ fn validate_work_hour_date(date: &str, prefix: &str) -> Result<(), axum::Json<se
             "message": format!("Arbeitsstunden können nur für das aktuelle Jahr {} eingetragen werden.", current_year)
         })))
     }
+}
+
+fn validate_work_hour_payload(
+    payload: &CreateWorkHourRequest,
+    prefix: &str,
+) -> Result<(), axum::Json<serde_json::Value>> {
+    let description = payload.description.trim();
+    if payload.date.trim().is_empty() {
+        warn!("{}: Missing date", prefix);
+        return Err(axum::Json(serde_json::json!({
+            "success": false,
+            "message": "Datum ist erforderlich."
+        })));
+    }
+    if description.is_empty() {
+        warn!("{}: Missing description", prefix);
+        return Err(axum::Json(serde_json::json!({
+            "success": false,
+            "message": "Tätigkeit ist erforderlich."
+        })));
+    }
+    if description.chars().count() > MAX_DESCRIPTION_CHARS {
+        warn!("{}: Description too long", prefix);
+        return Err(axum::Json(serde_json::json!({
+            "success": false,
+            "message": format!("Tätigkeit darf maximal {} Zeichen lang sein.", MAX_DESCRIPTION_CHARS)
+        })));
+    }
+    if !payload.hours.is_finite() {
+        warn!("{}: Non-finite hours", prefix);
+        return Err(axum::Json(serde_json::json!({
+            "success": false,
+            "message": "Stunden müssen eine gültige Zahl sein."
+        })));
+    }
+    if !(MIN_WORK_HOURS..=MAX_WORK_HOURS).contains(&payload.hours) {
+        warn!("{}: Hours out of range: {}", prefix, payload.hours);
+        return Err(axum::Json(serde_json::json!({
+            "success": false,
+            "message": format!("Stunden müssen zwischen {} und {} liegen.", MIN_WORK_HOURS, MAX_WORK_HOURS)
+        })));
+    }
+    let quarter_steps = payload.hours * 4.0;
+    if (quarter_steps - quarter_steps.round()).abs() > 1e-9 {
+        warn!("{}: Hours not in quarter steps: {}", prefix, payload.hours);
+        return Err(axum::Json(serde_json::json!({
+            "success": false,
+            "message": "Bitte Viertelstunden verwenden (0.25er Schritte)."
+        })));
+    }
+
+    validate_work_hour_date(&payload.date, prefix)
 }
 
 pub fn routes() -> Router<AppState> {
@@ -212,24 +277,11 @@ pub async fn create_work_hour(
     debug!("Create Work Hour: User ID: {}", user_id);
     debug!("Create Work Hour: Raw payload: {:?}", payload);
 
-    // Validate required fields
-    if payload.date.is_empty() {
-        warn!("Create Work Hour: Missing date");
-        return Err(axum::http::StatusCode::BAD_REQUEST);
-    }
-    if payload.description.is_empty() {
-        warn!("Create Work Hour: Missing description");
-        return Err(axum::http::StatusCode::BAD_REQUEST);
-    }
-    if payload.hours <= 0.0 {
-        warn!("Create Work Hour: Invalid hours: {}", payload.hours);
-        return Err(axum::http::StatusCode::BAD_REQUEST);
-    }
-
-    // Validate year with one-month grace period
-    if let Err(json_err) = validate_work_hour_date(&payload.date, "Create Work Hour") {
+    if let Err(json_err) = validate_work_hour_payload(&payload, "Create Work Hour") {
         return Ok(json_err);
     }
+    let description = payload.description.trim().to_string();
+    let date = payload.date.trim().to_string();
 
     // Use get_member_by_id for efficiency
     let current_user = teable::get_member_by_id_with_projection(
@@ -260,7 +312,7 @@ pub async fn create_work_hour(
         &state.teable_config,
         &state.http_client,
         &current_user.id,
-        &payload.date,
+        &date,
     )
     .await
     {
@@ -277,7 +329,7 @@ pub async fn create_work_hour(
     if work_hour_exists {
         warn!(
             user_id = %current_user.id,
-            date = %payload.date,
+            date = %date,
             "Create Work Hour: duplicate entry"
         );
         return Ok(axum::Json(serde_json::json!({
@@ -290,8 +342,8 @@ pub async fn create_work_hour(
     match teable::create_work_hour(
         &state.teable_config,
         &state.http_client,
-        &payload.date,
-        &payload.description,
+        &date,
+        &description,
         payload.hours,
         current_user.id.clone(),
     )
@@ -309,8 +361,8 @@ pub async fn create_work_hour(
                 "data": {
                     "id": work_hour.id,
                     "user": current_user.name(),
-                    "date": payload.date,
-                    "description": payload.description,
+                    "date": date,
+                    "description": description,
                     "hours": payload.hours,
                     "duration_hours": payload.hours
                 }
@@ -363,33 +415,11 @@ pub async fn update_work_hour(
     );
     debug!(?payload, "Update Work Hour: payload");
 
-    // Validate required fields
-    if payload.date.is_empty() {
-        warn!("Update Work Hour: Missing date");
-        return Ok(axum::Json(serde_json::json!({
-            "success": false,
-            "error": "Date is required"
-        })));
-    }
-    if payload.description.is_empty() {
-        warn!("Update Work Hour: Missing description");
-        return Ok(axum::Json(serde_json::json!({
-            "success": false,
-            "error": "Description is required"
-        })));
-    }
-    if payload.hours <= 0.0 {
-        warn!("Update Work Hour: Invalid hours: {}", payload.hours);
-        return Ok(axum::Json(serde_json::json!({
-            "success": false,
-            "error": "Hours must be greater than 0"
-        })));
-    }
-
-    // Validate year with one-month grace period
-    if let Err(json_err) = validate_work_hour_date(&payload.date, "Update Work Hour") {
+    if let Err(json_err) = validate_work_hour_payload(&payload, "Update Work Hour") {
         return Ok(json_err);
     }
+    let description = payload.description.trim().to_string();
+    let date = payload.date.trim().to_string();
 
     let _wh = match verify_work_hour_ownership(&state, &work_hour_id, &user_id, "edit").await {
         Ok(wh) => wh,
@@ -426,8 +456,8 @@ pub async fn update_work_hour(
         &state.teable_config,
         &state.http_client,
         &work_hour_id,
-        &payload.date,
-        &payload.description,
+        &date,
+        &description,
         payload.hours,
         current_user.id.clone(),
     )
@@ -445,8 +475,8 @@ pub async fn update_work_hour(
                 "data": {
                     "id": updated_work_hour.id,
                     "user": current_user.name(),
-                    "date": payload.date,
-                    "description": payload.description,
+                    "date": date,
+                    "description": description,
                     "hours": payload.hours,
                     "duration_hours": payload.hours
                 }
@@ -488,5 +518,72 @@ pub async fn delete_work_hour(
                 "message": format!("Failed to delete work hour: {}", e)
             })))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn payload(date: String, description: &str, hours: f64) -> CreateWorkHourRequest {
+        CreateWorkHourRequest {
+            date,
+            description: description.to_string(),
+            hours,
+        }
+    }
+
+    fn today() -> String {
+        Utc::now().with_timezone(&Berlin).date_naive().to_string()
+    }
+
+    #[test]
+    fn accepts_today_in_quarter_hours() {
+        let request = payload(today(), "Platzpflege", 2.25);
+        assert!(validate_work_hour_payload(&request, "test").is_ok());
+    }
+
+    #[test]
+    fn rejects_future_date() {
+        let tomorrow = (Utc::now().with_timezone(&Berlin).date_naive() + chrono::Duration::days(1))
+            .to_string();
+        let request = payload(tomorrow, "Platzpflege", 1.0);
+        assert!(validate_work_hour_payload(&request, "test").is_err());
+    }
+
+    #[test]
+    fn rejects_non_quarter_hours() {
+        let request = payload(today(), "Platzpflege", 1.1);
+        assert!(validate_work_hour_payload(&request, "test").is_err());
+    }
+
+    #[test]
+    fn rejects_too_many_hours() {
+        let request = payload(today(), "Platzpflege", 24.25);
+        assert!(validate_work_hour_payload(&request, "test").is_err());
+    }
+
+    #[test]
+    fn rejects_too_few_hours() {
+        let request = payload(today(), "Platzpflege", 0.0);
+        assert!(validate_work_hour_payload(&request, "test").is_err());
+    }
+
+    #[test]
+    fn rejects_non_finite_hours() {
+        let request = payload(today(), "Platzpflege", f64::NAN);
+        assert!(validate_work_hour_payload(&request, "test").is_err());
+    }
+
+    #[test]
+    fn rejects_long_description() {
+        let request = payload(today(), &"x".repeat(MAX_DESCRIPTION_CHARS + 1), 1.0);
+        assert!(validate_work_hour_payload(&request, "test").is_err());
+    }
+
+    #[test]
+    fn rejects_blank_description() {
+        let request = payload(today(), "   ", 1.0);
+        assert!(validate_work_hour_payload(&request, "test").is_err());
     }
 }

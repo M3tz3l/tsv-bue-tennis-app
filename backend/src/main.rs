@@ -111,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
     let event_repository = EventRepository::new(database.pool().clone()).await?;
 
     let email_service = Arc::new(EmailService::new().expect("Failed to initialize email service"));
-    let token_store = TokenStore::new();
+    let token_store = TokenStore::new(database.pool().clone());
 
     // ── Startup diagnostics ──────────────────────────────────────────────────
     info!("Running startup diagnostics...");
@@ -232,7 +232,7 @@ fn build_router(
         GovernorConfigBuilder::default()
             .per_second(1) // 1 request per second for all auth/security endpoints
             .burst_size(3) // Allow small bursts for retry scenarios
-            .key_extractor(state::PeerIpKeyExtractor) // Use TCP peer IP for auth rate limiting
+            .key_extractor(state::TrustedProxyIpKeyExtractor) // Use client IP only behind a trusted proxy
             .finish()
             .expect("Failed to build auth rate limiter config"),
     );
@@ -535,12 +535,12 @@ mod tests {
         // Create a test state with minimal setup
         let email_service =
             Arc::new(EmailService::new().expect("Failed to initialize test email service"));
-        let token_store = TokenStore::new();
 
         // For tests, we can use an in-memory database
         let database = Database::new(":memory:")
             .await
             .expect("Failed to create test database");
+        let token_store = TokenStore::new(database.pool().clone());
         let event_repository = EventRepository::new(database.pool().clone())
             .await
             .expect("Failed to create test event repository");
@@ -735,9 +735,13 @@ mod tests {
             .await;
 
         assert_eq!(response.status_code(), 200);
-        // Should return success false for non-existent user
+        // The response must not reveal whether the email is registered.
         let json: serde_json::Value = response.json();
-        assert_eq!(json["success"], false);
+        assert_eq!(json["success"], true);
+        assert_eq!(
+            json["message"],
+            "Ein Link zum Zurücksetzen Ihres Passworts wurde an Ihre E-Mail gesendet."
+        );
     }
 
     #[serial_test::serial]

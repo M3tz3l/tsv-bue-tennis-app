@@ -126,12 +126,11 @@ test.describe('Password Reset', () => {
       if (restoreMatch) {
         const restoreUrl = restoreMatch[0];
         const tokenMatch = restoreUrl.match(/token=([^&]+)/);
-        const idMatch = restoreUrl.match(/id=([^&\s]+)/);
-        if (tokenMatch && idMatch) {
+        if (tokenMatch) {
           await fetch(`${backendUrl}/api/resetPassword`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: tokenMatch[1], password: ORIGINAL_PASSWORD, userId: idMatch[1] }),
+            body: JSON.stringify({ token: tokenMatch[1], password: ORIGINAL_PASSWORD }),
           });
         }
       }

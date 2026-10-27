@@ -48,6 +48,23 @@ impl Database {
         .execute(&pool)
         .await?;
 
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS reset_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT UNIQUE NOT NULL,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_reset_tokens_user_id ON reset_tokens(user_id)")
+            .execute(&pool)
+            .await?;
+
         Self::initialize_event_tables(&pool).await?;
 
         Ok(Database { pool })

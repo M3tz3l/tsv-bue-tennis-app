@@ -14,7 +14,6 @@ import { buttonVariants, fieldControl } from "../styles/tokens";
 const ResetPassword = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const userId = searchParams.get("id");
     const token = searchParams.get("token");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -39,8 +38,13 @@ const ResetPassword = () => {
                     autoClose: 5000,
                     position: "top-right",
                 });
+            } else if (newpassword.length < 8) {
+                toast.error('Das Passwort muss mindestens 8 Zeichen lang sein.', {
+                    autoClose: 5000,
+                    position: "top-right",
+                });
             } else {
-                const res = await BackendService.resetPassword(String(token ?? ""), newpassword, String(userId ?? ""));
+                const res = await BackendService.resetPassword(String(token ?? ""), newpassword);
                 if (res.success === false) {
                     toast.error(res.message, {
                         autoClose: 5000,
@@ -74,6 +78,7 @@ const ResetPassword = () => {
                                     name="newpassword"
                                     type="password"
                                     required
+                                    minLength={8}
                                     autoFocus
                                     className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     placeholder="Ihr neues Passwort eingeben"
@@ -88,6 +93,7 @@ const ResetPassword = () => {
                                     name="confirmpassword"
                                     type="password"
                                     required
+                                    minLength={8}
                                     className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     placeholder="Ihr neues Passwort bestätigen"
                                 />
