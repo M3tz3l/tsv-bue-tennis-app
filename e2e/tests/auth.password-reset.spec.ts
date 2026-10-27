@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { getOrgaUser, getFixtures, loginViaBrowser } from '../helpers/auth-helper';
+import { getFixtures, getTestUser, loginViaApi } from '../helpers/auth-helper';
 import { waitForEmail, getMessageById, getAllMessages } from '../helpers/mailpit-checker';
 
 const ORIGINAL_PASSWORD = 'Test1234!';
@@ -32,8 +32,9 @@ test.describe('Password Reset', () => {
   });
 
   test('reset password link works and allows new login', async ({ page }) => {
-    const fixtures = getFixtures();
-    const user = fixtures.users.find(u => u.role === 'orga');
+    // Dedicated regular user, not used by other specs, so a failed restore
+    // cannot break unrelated tests that log in as the shared orga user.
+    const user = getTestUser(18);
     expect(user).toBeTruthy();
 
     // Get existing messages count before requesting reset
@@ -101,39 +102,48 @@ test.describe('Password Reset', () => {
     await page.waitForURL('**/dashboard**', { timeout: 15_000 });
     await expect(page).toHaveURL(/dashboard/);
 
-    // Restore original password via forgot-password → reset flow
+    // Restore original password via forgot-password → reset flow. Capture the
+    // existing message IDs first: the earlier reset email still exists in
+    // Mailpit, but its token has already been consumed.
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
-    await fetch(`${backendUrl}/api/forgotPassword`, {
+    const messagesBeforeRestore = await getAllMessages();
+    const existingIds = new Set(messagesBeforeRestore.map((m: any) => m.id));
+
+    const forgotRes = await fetch(`${backendUrl}/api/forgotPassword`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: user!.email }),
     });
-    // Wait for restore email
-    const restoreDeadline = Date.now() + 15_000;
+    expect(forgotRes.ok).toBeTruthy();
+
+    const restoreDeadline = Date.now() + 30_000;
     let restoreEmail: any = null;
     while (Date.now() < restoreDeadline) {
       const msgs = await getAllMessages();
-      restoreEmail = msgs
-        .filter((m: any) => /passwort|reset/i.test(m.subject))
-        .sort((a: any, b: any) => new Date(b.created).getTime() - new Date(a.created).getTime())[0];
+      restoreEmail = msgs.find(
+        (m: any) => !existingIds.has(m.id) && /passwort|reset/i.test(m.subject),
+      );
       if (restoreEmail) break;
       await new Promise(r => setTimeout(r, 1_000));
     }
-    if (restoreEmail) {
-      const fullRestore = await getMessageById(restoreEmail.id);
-      const restoreBody = fullRestore!.text || fullRestore!.html || '';
-      const restoreMatch = restoreBody.match(/https?:\/\/[^\s]+resetPassword[^\s]*/);
-      if (restoreMatch) {
-        const restoreUrl = restoreMatch[0];
-        const tokenMatch = restoreUrl.match(/token=([^&]+)/);
-        if (tokenMatch) {
-          await fetch(`${backendUrl}/api/resetPassword`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: tokenMatch[1], password: ORIGINAL_PASSWORD }),
-          });
-        }
-      }
-    }
+    expect(restoreEmail).toBeTruthy();
+
+    const fullRestore = await getMessageById(restoreEmail!.id);
+    expect(fullRestore).toBeTruthy();
+    const restoreBody = fullRestore!.text || fullRestore!.html || '';
+    const restoreMatch = restoreBody.match(/https?:\/\/[^\s]+resetPassword[^\s]*/);
+    expect(restoreMatch).toBeTruthy();
+    const tokenMatch = restoreMatch![0].match(/token=([^&]+)/);
+    expect(tokenMatch).toBeTruthy();
+
+    const resetRes = await fetch(`${backendUrl}/api/resetPassword`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: tokenMatch![1], password: ORIGINAL_PASSWORD }),
+    });
+    expect(resetRes.ok).toBeTruthy();
+
+    // Verify the fixture password is usable again for subsequent specs.
+    await loginViaApi(user!.email, ORIGINAL_PASSWORD);
   });
 });
