@@ -203,7 +203,7 @@ pub async fn forgot_password(
     // Always return the same response so the endpoint cannot be used to
     // enumerate registered email addresses.
     let generic_message =
-        "Ein Link zum Zurücksetzen Ihres Passworts wurde an Ihre E-Mail gesendet.";
+        "Falls Ihre E-Mail-Adresse registriert ist, wurde soeben eine E-Mail zum Zurücksetzen des Passworts verschickt.";
 
     match teable::get_member_by_email(&state.teable_config, &state.http_client, &normalized_email)
         .await

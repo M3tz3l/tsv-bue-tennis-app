@@ -37,7 +37,7 @@ const ForgotPassword = () => {
     return (
         <AuthPageLayout
             title="Passwort vergessen?"
-            description="Kein Problem! Geben Sie Ihre E-Mail-Adresse ein und wir senden Ihnen einen Link zum Zurücksetzen Ihres Passworts."
+            description="Kein Problem! Geben Sie die E-Mail-Adresse ein, mit der Sie im Verein registriert sind. Falls sie hinterlegt ist, senden wir Ihnen einen Link zum Zurücksetzen Ihres Passworts."
         >
                     <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
                         <div>

@@ -740,7 +740,7 @@ mod tests {
         assert_eq!(json["success"], true);
         assert_eq!(
             json["message"],
-            "Ein Link zum Zurücksetzen Ihres Passworts wurde an Ihre E-Mail gesendet."
+            "Falls Ihre E-Mail-Adresse registriert ist, wurde soeben eine E-Mail zum Zurücksetzen des Passworts verschickt."
         );
     }
 
