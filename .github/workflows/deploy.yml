@@ -70,7 +70,9 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         port: ${{ secrets.VPS_PORT || 22 }}
         script: |
+          set -e
           cd /opt/stacks/tsv-tennis-app
+          trap 'rm -f /opt/stacks/tsv-tennis-app/tsv-tennis-app.tar.gz' EXIT
           
           # Load new Docker image
           docker load < tsv-tennis-app.tar.gz
@@ -78,12 +80,14 @@ jobs:
           # Start services
           docker-compose -f compose.yaml up -d
           
-          # Clean up
-          rm -f tsv-tennis-app.tar.gz
-          
           # Verify deployment
           sleep 10
           docker-compose ps
+
+          # Drop the previous image, which is left dangling after the
+          # tsv-tennis-app:latest tag moves to the new release. Filter by
+          # label so images from other stacks are never removed.
+          docker image prune -f --filter "label=org.tsv-tennis.app=tsv-tennis-app"
 
           echo "Deployment completed successfully!"
 
@@ -105,6 +109,7 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         port: ${{ secrets.VPS_PORT || 22 }}
         script: |
+          set -e
           cd /opt/stacks/observability
 
           # Preserve an existing .env so passwords and retention survive deploys.
@@ -121,5 +126,12 @@ jobs:
             echo "Retrieve it with: sudo cat /opt/stacks/observability/.env"
           fi
 
-          docker-compose -f compose.yaml up -d
-          docker-compose -f compose.yaml ps
+          # Legacy docker-compose 1.29.2 crashes with KeyError: 'ContainerConfig'
+          # when recreating containers created by Compose v2.
+          if ! docker compose version >/dev/null 2>&1; then
+            echo "Docker Compose v2 is required. Install docker-compose-plugin." >&2
+            exit 1
+          fi
+
+          docker compose -f compose.yaml up -d --remove-orphans
+          docker compose -f compose.yaml ps
