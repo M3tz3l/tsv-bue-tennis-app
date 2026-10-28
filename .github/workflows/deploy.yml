@@ -43,10 +43,15 @@ jobs:
           # Create deployment directory
           mkdir -p /opt/stacks/tsv-tennis-app
           cd /opt/stacks/tsv-tennis-app
-          
+
+          if ! docker compose version >/dev/null 2>&1; then
+            echo "Docker Compose v2 is required. Install docker-compose-plugin." >&2
+            exit 1
+          fi
+
           # Stop existing containers
-          docker-compose down || true
-          
+          docker compose down --remove-orphans || true
+
           # Backup current version
           if [ -f "docker-compose.yml" ]; then
             cp docker-compose.yml docker-compose.yml.backup
@@ -76,13 +81,19 @@ jobs:
           
           # Load new Docker image
           docker load < tsv-tennis-app.tar.gz
-          
+
+          # Remove containers left behind by an interrupted Compose recreate.
+          docker ps -aq \
+            --filter label=com.docker.compose.project=tsv-tennis-app \
+            --filter 'name=^[0-9a-f]{12}_' \
+            | xargs -r docker rm -f
+
           # Start services
-          docker-compose -f compose.yaml up -d
-          
+          docker compose -f compose.yaml up -d --remove-orphans
+
           # Verify deployment
           sleep 10
-          docker-compose ps
+          docker compose -f compose.yaml ps
 
           # Drop the previous image, which is left dangling after the
           # tsv-tennis-app:latest tag moves to the new release. Filter by
@@ -132,6 +143,15 @@ jobs:
             echo "Docker Compose v2 is required. Install docker-compose-plugin." >&2
             exit 1
           fi
+
+          # Compose renames a container to "<id>_<name>" before recreating it.
+          # If a recreate is interrupted, that renamed container is left behind
+          # and the next up fails because the name is still in use. Remove only
+          # those stale containers; healthy containers and volumes are kept.
+          docker ps -aq \
+            --filter label=com.docker.compose.project=observability \
+            --filter 'name=^[0-9a-f]{12}_' \
+            | xargs -r docker rm -f
 
           docker compose -f compose.yaml up -d --remove-orphans
           docker compose -f compose.yaml ps
