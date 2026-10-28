@@ -23,11 +23,10 @@ export function seedSqlite(emails: string[]): string {
   db.exec(`
     CREATE TABLE IF NOT EXISTS reset_tokens (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      token TEXT NOT NULL,
-      user_id INTEGER NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      user_id TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      expires_at DATETIME NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES details(id)
+      expires_at DATETIME NOT NULL
     )
   `);
 

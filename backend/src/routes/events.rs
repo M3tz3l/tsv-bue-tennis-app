@@ -76,13 +76,47 @@ fn auth_error(status: StatusCode) -> EventRouteError {
     )
 }
 
-fn require_orga(secret: &str, headers: &HeaderMap) -> Result<String, EventRouteError> {
-    let claims = extract_auth_claims_from_headers(secret, headers).map_err(auth_error)?;
-    if !claims
+fn has_orga_claim(claims: &crate::auth::AuthClaims) -> bool {
+    claims
         .role
         .as_deref()
         .is_some_and(|role| role.trim().eq_ignore_ascii_case("orga"))
-    {
+}
+
+async fn member_has_live_orga_role(
+    state: &AppState,
+    member_id: &str,
+) -> Result<bool, EventRouteError> {
+    let member = teable::get_member_by_id_with_projection(
+        &state.teable_config,
+        &state.http_client,
+        member_id,
+        Some(&["Rolle"][..]),
+    )
+    .await
+    .map_err(|error| {
+        tracing::error!(member_id = %member_id, %error, "Failed to verify organizer role");
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({
+                "success": false,
+                "message": "unable to verify access",
+                "data": null
+            })),
+        )
+    })?;
+
+    Ok(member.is_some_and(|member| member.has_role("orga")))
+}
+
+async fn require_orga(state: &AppState, headers: &HeaderMap) -> Result<String, EventRouteError> {
+    let claims =
+        extract_auth_claims_from_headers(&state.jwt_secret, headers).map_err(auth_error)?;
+    if !has_orga_claim(&claims) {
+        return Err(auth_error(StatusCode::FORBIDDEN));
+    }
+    if !member_has_live_orga_role(state, &claims.sub).await? {
+        tracing::warn!(member_id = %claims.sub, "Event access denied: orga role was revoked");
         return Err(auth_error(StatusCode::FORBIDDEN));
     }
     Ok(claims.sub)
@@ -94,11 +128,8 @@ pub async fn list_events(
 ) -> Result<impl IntoResponse, EventRouteError> {
     let claims =
         extract_auth_claims_from_headers(&state.jwt_secret, &headers).map_err(auth_error)?;
-    let details = if claims
-        .role
-        .as_deref()
-        .is_some_and(|role| role.trim().eq_ignore_ascii_case("orga"))
-    {
+    let is_orga = has_orga_claim(&claims) && member_has_live_orga_role(&state, &claims.sub).await?;
+    let details = if is_orga {
         state
             .event_repository
             .list_all_events_with_signup(&claims.sub)
@@ -121,13 +152,10 @@ pub async fn get_event(
 ) -> Result<impl IntoResponse, EventRouteError> {
     let claims =
         extract_auth_claims_from_headers(&state.jwt_secret, &headers).map_err(auth_error)?;
+    let is_orga = has_orga_claim(&claims) && member_has_live_orga_role(&state, &claims.sub).await?;
     let member_id = claims.sub;
     let repository = &state.event_repository;
-    let event = if claims
-        .role
-        .as_deref()
-        .is_some_and(|role| role.trim().eq_ignore_ascii_case("orga"))
-    {
+    let event = if is_orga {
         repository.get_event(id, &member_id).await
     } else {
         repository.get_published_event(id, &member_id).await
@@ -140,7 +168,7 @@ pub async fn create_event(
     headers: HeaderMap,
     Json(payload): Json<CreateEventRequest>,
 ) -> Result<impl IntoResponse, EventRouteError> {
-    let actor_id = require_orga(&state.jwt_secret, &headers)?;
+    let actor_id = require_orga(&state, &headers).await?;
     Ok(Json(
         state
             .event_repository
@@ -156,7 +184,7 @@ pub async fn update_event(
     headers: HeaderMap,
     Json(payload): Json<UpdateEventRequest>,
 ) -> Result<impl IntoResponse, EventRouteError> {
-    require_orga(&state.jwt_secret, &headers)?;
+    require_orga(&state, &headers).await?;
     Ok(Json(
         state
             .event_repository
@@ -171,7 +199,7 @@ pub async fn delete_event(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, EventRouteError> {
-    require_orga(&state.jwt_secret, &headers)?;
+    require_orga(&state, &headers).await?;
     state
         .event_repository
         .delete_event(id)
@@ -234,7 +262,7 @@ pub async fn list_signups(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, EventRouteError> {
-    require_orga(&state.jwt_secret, &headers)?;
+    require_orga(&state, &headers).await?;
     let mut summary = state
         .event_repository
         .list_signups(id)

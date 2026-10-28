@@ -200,78 +200,88 @@ pub async fn forgot_password(
     let normalized_email = payload.email.to_lowercase();
     debug!("Password reset requested");
 
-    // Get user from Teable - optimized to fetch only the specific user
-    let user = match teable::get_member_by_email(
-        &state.teable_config,
-        &state.http_client,
-        &normalized_email,
-    )
-    .await
+    // Always return the same response so the endpoint cannot be used to
+    // enumerate registered email addresses.
+    let generic_message =
+        "Falls Ihre E-Mail-Adresse registriert ist, wurde soeben eine E-Mail zum Zurücksetzen des Passworts verschickt.";
+
+    match teable::get_member_by_email(&state.teable_config, &state.http_client, &normalized_email)
+        .await
     {
         Ok(Some(user)) => {
             debug!(user_id = %user.id, "Password reset: member found");
-            user
+            let token_store = state.token_store.clone();
+            let email_service = state.email_service.clone();
+            tokio::spawn(async move {
+                match token_store.create_reset_token(user.id.clone()).await {
+                    Ok(reset_token) => {
+                        info!(user_id = %user.id, "Created password reset token");
+                        if let Err(error) = email_service
+                            .send_password_reset_email(&user.email, &reset_token)
+                            .await
+                        {
+                            error!(user_id = %user.id, %error, "Failed to send password reset email");
+                        }
+                    }
+                    Err(error) => {
+                        error!(user_id = %user.id, %error, "Failed to persist password reset token");
+                    }
+                }
+            });
         }
         Ok(None) => {
             warn!("Password reset requested for unknown email");
-            return Ok(axum::Json(serde_json::json!({
-                "success": false,
-                "message": "Diese E-Mail-Adresse ist nicht in unserem System registriert. Bitte überprüfen Sie Ihre E-Mail-Adresse oder kontaktieren Sie den Support."
-            })));
         }
-        Err(e) => {
-            error!("Failed to fetch user from Teable: {}", e);
-            return Ok(axum::Json(serde_json::json!({
-                "success": false,
-                "message": "Zugriff auf die Benutzerdatenbank nicht möglich. Bitte versuchen Sie es später erneut."
-            })));
-        }
-    };
-
-    // Create reset token
-    let reset_token = state.token_store.create_reset_token(user.id.clone()).await;
-    info!(user_id = %user.id, "Created password reset token");
-
-    // Send password reset email
-    match state
-        .email_service
-        .send_password_reset_email(&user.email, &reset_token, user.id.clone())
-        .await
-    {
-        Ok(_) => {
-            info!(user_id = %user.id, "Password reset email sent");
-            Ok(axum::Json(serde_json::json!({
-                "success": true,
-                "message": "Ein Link zum Zurücksetzen Ihres Passworts wurde an Ihre E-Mail gesendet."
-            })))
-        }
-        Err(e) => {
-            error!(user_id = %user.id, error = %e, "Failed to send password reset email");
-            Ok(axum::Json(serde_json::json!({
-                "success": false,
-                "message": "Fehler beim Senden der Passwort-Reset-E-Mail. Bitte versuchen Sie es später erneut."
-            })))
+        Err(error) => {
+            error!(%error, "Failed to fetch user from Teable");
         }
     }
+
+    Ok(axum::Json(serde_json::json!({
+        "success": true,
+        "message": generic_message
+    })))
+}
+
+fn validate_password(password: &str) -> Result<(), &'static str> {
+    if password.len() < 8 {
+        return Err("Das Passwort muss mindestens 8 Zeichen lang sein.");
+    }
+    if password.len() > 72 {
+        return Err("Das Passwort ist zu lang.");
+    }
+    Ok(())
 }
 
 pub async fn reset_password(
     State(state): State<AppState>,
     Json(payload): Json<ResetPasswordRequest>,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    // Atomically consume and validate the reset token (single lock + expiry check)
-    let reset_token_info = state.token_store.consume_reset_token(&payload.token).await;
+    if let Err(message) = validate_password(&payload.password) {
+        return Ok(axum::Json(serde_json::json!({
+            "success": false,
+            "message": message
+        })));
+    }
 
-    let reset_token_info = match reset_token_info {
-        Some(info) => {
+    // Atomically consume and validate the reset token (single lock + expiry check)
+    let reset_token_info = match state.token_store.consume_reset_token(&payload.token).await {
+        Ok(Some(info)) => {
             info!(user_id = %info.user_id, "Reset token consumed");
             info
         }
-        None => {
+        Ok(None) => {
             warn!("Failed to consume password reset token");
             return Ok(axum::Json(serde_json::json!({
                 "success": false,
                 "message": "Invalid or expired reset token"
+            })));
+        }
+        Err(error) => {
+            error!(%error, "Failed to consume password reset token");
+            return Ok(axum::Json(serde_json::json!({
+                "success": false,
+                "message": "Interner Serverfehler"
             })));
         }
     };
@@ -369,4 +379,34 @@ pub async fn reset_password(
         "success": true,
         "message": "Passwort erfolgreich zurückgesetzt. Sie können sich jetzt mit Ihrem neuen Passwort anmelden."
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_password;
+
+    #[test]
+    fn accepts_password_with_minimum_length() {
+        assert!(validate_password("12345678").is_ok());
+    }
+
+    #[test]
+    fn rejects_short_password() {
+        assert!(validate_password("short").is_err());
+    }
+
+    #[test]
+    fn accepts_multibyte_password_with_eight_bytes() {
+        assert!(validate_password(&"😀".repeat(2)).is_ok());
+    }
+
+    #[test]
+    fn accepts_password_at_bcrypt_limit() {
+        assert!(validate_password(&"a".repeat(72)).is_ok());
+    }
+
+    #[test]
+    fn rejects_password_over_bcrypt_limit() {
+        assert!(validate_password(&"a".repeat(73)).is_err());
+    }
 }

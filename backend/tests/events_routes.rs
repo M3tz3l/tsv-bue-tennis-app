@@ -20,8 +20,21 @@ use tsv_tennis_backend::{
 
 const SECRET: &str = "events-route-test-secret-123456789";
 
-async fn app() -> (TestServer, EventRepository) {
-    app_with_teable_url("http://localhost").await
+async fn app() -> (TestServer, EventRepository, mockito::ServerGuard) {
+    let mut teable = Server::new_async().await;
+    teable
+        .mock("GET", mockito::Matcher::Any)
+        .match_query(mockito::Matcher::Any)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            r#"{"id":"orga-1","fields":{"Vorname":"Orga","Nachname":"User","Email":"orga@example.com","Rolle":"orga"}}"#,
+        )
+        .create_async()
+        .await;
+
+    let (server, repository) = app_with_teable_url(&teable.url()).await;
+    (server, repository, teable)
 }
 
 async fn app_with_teable_url(teable_url: &str) -> (TestServer, EventRepository) {
@@ -43,7 +56,7 @@ async fn app_with_teable_url(teable_url: &str) -> (TestServer, EventRepository) 
             work_hours_table_id: "hours".into(),
         },
         email_service: Arc::new(EmailService::new().unwrap()),
-        token_store: TokenStore::new(),
+        token_store: TokenStore::new(database.pool().clone()),
         database,
         event_repository: repository.clone(),
         mail_jobs: Arc::new(tokio::sync::RwLock::new(Default::default())),
@@ -85,7 +98,7 @@ fn event_request(status: EventStatus) -> CreateEventRequest {
 #[tokio::test]
 #[serial]
 async fn regular_members_only_see_published_events_and_own_signup() {
-    let (server, repository) = app().await;
+    let (server, repository, _teable) = app().await;
     let published = repository
         .create_event("orga-1", event_request(EventStatus::Published))
         .await
@@ -129,7 +142,7 @@ async fn regular_members_only_see_published_events_and_own_signup() {
 #[tokio::test]
 #[serial]
 async fn orga_list_includes_drafts_and_past_events() {
-    let (server, repository) = app().await;
+    let (server, repository, _teable) = app().await;
     let mut draft = event_request(EventStatus::Draft);
     draft.event_date = "2000-01-01".into();
     repository.create_event("orga-1", draft).await.unwrap();
@@ -147,7 +160,7 @@ async fn orga_list_includes_drafts_and_past_events() {
 #[tokio::test]
 #[serial]
 async fn orga_list_includes_own_signup() {
-    let (server, repository) = app().await;
+    let (server, repository, _teable) = app().await;
     let published = repository
         .create_event("orga-1", event_request(EventStatus::Published))
         .await
@@ -196,6 +209,14 @@ async fn signup_listing_preserves_rows_when_a_member_lookup_fails() {
         .with_status(500)
         .create_async()
         .await;
+    let _orga_role = teable
+        .mock("GET", "/table/members/record/orga-1")
+        .match_query(mockito::Matcher::Any)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"id":"orga-1","fields":{"Rolle":"orga"}}"#)
+        .create_async()
+        .await;
 
     let (server, repository) = app_with_teable_url(&teable.url()).await;
     let event = repository
@@ -233,7 +254,7 @@ async fn signup_listing_preserves_rows_when_a_member_lookup_fails() {
 #[tokio::test]
 #[serial]
 async fn regular_members_cannot_fetch_draft_details_but_orga_can() {
-    let (server, repository) = app().await;
+    let (server, repository, _teable) = app().await;
     let draft = repository
         .create_event("orga-1", event_request(EventStatus::Draft))
         .await
@@ -255,7 +276,7 @@ async fn regular_members_cannot_fetch_draft_details_but_orga_can() {
 #[tokio::test]
 #[serial]
 async fn normalized_orga_can_manage_events_but_members_cannot_view_signups() {
-    let (server, repository) = app().await;
+    let (server, repository, _teable) = app().await;
     let event = repository
         .create_event("orga-1", event_request(EventStatus::Published))
         .await
@@ -277,7 +298,7 @@ async fn normalized_orga_can_manage_events_but_members_cannot_view_signups() {
 #[tokio::test]
 #[serial]
 async fn management_and_signup_routes_require_their_proper_authentication() {
-    let (server, repository) = app().await;
+    let (server, repository, _teable) = app().await;
     let event = repository
         .create_event("orga-1", event_request(EventStatus::Published))
         .await
@@ -327,7 +348,7 @@ async fn management_and_signup_routes_require_their_proper_authentication() {
 #[tokio::test]
 #[serial]
 async fn signup_enforces_authenticated_ownership_deadline_and_capacity() {
-    let (server, repository) = app().await;
+    let (server, repository, _teable) = app().await;
     let mut limited = event_request(EventStatus::Published);
     limited.capacity = Some(1);
     let event = repository.create_event("orga-1", limited).await.unwrap();
@@ -373,8 +394,46 @@ async fn signup_enforces_authenticated_ownership_deadline_and_capacity() {
 
 #[tokio::test]
 #[serial]
+async fn concurrent_signups_cannot_exceed_capacity() {
+    let (server, repository, _teable) = app().await;
+    let mut limited = event_request(EventStatus::Published);
+    limited.capacity = Some(1);
+    let event = repository.create_event("orga-1", limited).await.unwrap();
+
+    let first = async {
+        server
+            .post(&format!("/events/{}/signup", event.id))
+            .authorization(format!("Bearer {}", token("member-1", None)))
+            .json(&json!({"people_count": 1, "salad_count": 0, "cake_count": 0}))
+            .await
+    };
+    let second = async {
+        server
+            .post(&format!("/events/{}/signup", event.id))
+            .authorization(format!("Bearer {}", token("member-2", None)))
+            .json(&json!({"people_count": 1, "salad_count": 0, "cake_count": 0}))
+            .await
+    };
+    let (first, second) = tokio::join!(first, second);
+
+    let mut statuses = [first.status_code(), second.status_code()];
+    statuses.sort();
+    assert_eq!(statuses, [StatusCode::OK, StatusCode::CONFLICT]);
+
+    let people: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=?",
+    )
+    .bind(event.id)
+    .fetch_one(repository.pool())
+    .await
+    .unwrap();
+    assert_eq!(people, 1);
+}
+
+#[tokio::test]
+#[serial]
 async fn signup_deletion_returns_deadline_message_and_preserves_signup() {
-    let (server, repository) = app().await;
+    let (server, repository, _teable) = app().await;
     let mut expired = event_request(EventStatus::Published);
     expired.signup_deadline = Some("2000-01-01".into());
     let event = repository.create_event("orga-1", expired).await.unwrap();
@@ -399,7 +458,7 @@ async fn signup_deletion_returns_deadline_message_and_preserves_signup() {
 #[tokio::test]
 #[serial]
 async fn signup_update_enforces_deadline_and_capacity() {
-    let (server, repository) = app().await;
+    let (server, repository, _teable) = app().await;
     let mut limited = event_request(EventStatus::Published);
     limited.capacity = Some(2);
     let event = repository.create_event("orga-1", limited).await.unwrap();
@@ -445,7 +504,7 @@ async fn signup_update_enforces_deadline_and_capacity() {
 #[tokio::test]
 #[serial]
 async fn malformed_deadlines_are_rejected_and_cannot_receive_signups() {
-    let (server, repository) = app().await;
+    let (server, repository, _teable) = app().await;
     let mut malformed = event_request(EventStatus::Published);
     malformed.signup_deadline = Some("not-a-deadline".into());
     let response = server
@@ -475,7 +534,7 @@ async fn malformed_deadlines_are_rejected_and_cannot_receive_signups() {
 #[tokio::test]
 #[serial]
 async fn signup_endpoints_reject_disabled_events_with_conflict() {
-    let (server, repository) = app().await;
+    let (server, repository, _teable) = app().await;
     let mut request = event_request(EventStatus::Published);
     request.allow_signups = false;
     let event = repository.create_event("orga-1", request).await.unwrap();
@@ -506,7 +565,7 @@ async fn signup_endpoints_reject_disabled_events_with_conflict() {
 #[tokio::test]
 #[serial]
 async fn events_default_to_signups_enabled_when_field_omitted() {
-    let (server, _repository) = app().await;
+    let (server, _repository, _role_mock) = app().await;
     let request = event_request(EventStatus::Published);
     let mut body = serde_json::to_value(&request).unwrap();
     body.as_object_mut().unwrap().remove("allow_signups");
@@ -518,4 +577,67 @@ async fn events_default_to_signups_enabled_when_field_omitted() {
     response.assert_status(StatusCode::OK);
     let event = response.json::<serde_json::Value>();
     assert_eq!(event["allow_signups"], true);
+}
+
+#[tokio::test]
+#[serial]
+async fn demoted_orga_token_cannot_manage_or_view_organizer_data() {
+    let mut teable = Server::new_async().await;
+    let _role = teable
+        .mock("GET", "/table/members/record/orga-1")
+        .match_query(mockito::Matcher::Any)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"id":"orga-1","fields":{"Rolle":"member"}}"#)
+        .create_async()
+        .await;
+
+    let (server, repository) = app_with_teable_url(&teable.url()).await;
+    let draft = repository
+        .create_event("orga-1", event_request(EventStatus::Draft))
+        .await
+        .unwrap();
+    let published = repository
+        .create_event("orga-1", event_request(EventStatus::Published))
+        .await
+        .unwrap();
+    let orga_token = format!("Bearer {}", token("orga-1", Some("orga")));
+
+    server
+        .post("/events")
+        .authorization(orga_token.clone())
+        .json(&event_request(EventStatus::Published))
+        .await
+        .assert_status_forbidden();
+    server
+        .put(&format!("/events/{}", published.id))
+        .authorization(orga_token.clone())
+        .json(&json!({"title":"changed"}))
+        .await
+        .assert_status_forbidden();
+    server
+        .delete(&format!("/events/{}", published.id))
+        .authorization(orga_token.clone())
+        .await
+        .assert_status_forbidden();
+    server
+        .get(&format!("/events/{}/signups", published.id))
+        .authorization(orga_token.clone())
+        .await
+        .assert_status_forbidden();
+
+    let listed = server
+        .get("/events")
+        .authorization(orga_token.clone())
+        .await;
+    listed.assert_status_ok();
+    let events = listed.json::<Vec<serde_json::Value>>();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["event"]["id"], published.id);
+
+    let hidden = server
+        .get(&format!("/events/{}", draft.id))
+        .authorization(orga_token)
+        .await;
+    hidden.assert_status_not_found();
 }

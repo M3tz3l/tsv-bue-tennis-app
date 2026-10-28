@@ -14,7 +14,6 @@ import { buttonVariants, fieldControl } from "../styles/tokens";
 const ResetPassword = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const userId = searchParams.get("id");
     const token = searchParams.get("token");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -34,13 +33,24 @@ const ResetPassword = () => {
             const confirmPasswordValue = data.get("confirmpassword");
             const newpassword = typeof newPasswordValue === 'string' ? newPasswordValue : '';
             const confirmpassword = typeof confirmPasswordValue === 'string' ? confirmPasswordValue : '';
+            const passwordByteLength = new TextEncoder().encode(newpassword).length;
             if (newpassword !== confirmpassword) {
                 toast.error(`Neues Passwort und Passwort bestätigen stimmen nicht überein!`, {
                     autoClose: 5000,
                     position: "top-right",
                 });
+            } else if (passwordByteLength < 8) {
+                toast.error('Das Passwort muss mindestens 8 Zeichen lang sein.', {
+                    autoClose: 5000,
+                    position: "top-right",
+                });
+            } else if (passwordByteLength > 72) {
+                toast.error('Das Passwort ist zu lang.', {
+                    autoClose: 5000,
+                    position: "top-right",
+                });
             } else {
-                const res = await BackendService.resetPassword(String(token ?? ""), newpassword, String(userId ?? ""));
+                const res = await BackendService.resetPassword(String(token ?? ""), newpassword);
                 if (res.success === false) {
                     toast.error(res.message, {
                         autoClose: 5000,

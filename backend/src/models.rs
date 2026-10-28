@@ -147,7 +147,6 @@ pub struct ForgotPasswordRequest {
 pub struct ResetPasswordRequest {
     pub token: String,
     pub password: String,
-    pub id: Option<String>, // Changed from u32 to String to match Teable record IDs
 }
 
 #[derive(Debug, Serialize, Type)]

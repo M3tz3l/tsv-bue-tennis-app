@@ -786,12 +786,11 @@ impl EmailService {
         &self,
         email: &str,
         reset_token: &str,
-        user_id: String, // Changed from u32 to String
     ) -> Result<(), anyhow::Error> {
         let config = Config::from_env()?;
         let reset_url = format!(
-            "{}/resetPassword?token={}&id={}",
-            config.frontend_url, reset_token, user_id
+            "{}/resetPassword?token={}",
+            config.frontend_url, reset_token
         );
 
         let html_content = format!(

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Password Reset Edge Cases', () => {
   test('mismatched passwords show an error and stay on the page', async ({ page }) => {
-    await page.goto('/resetPassword?id=1&token=dummy');
+    await page.goto('/resetPassword?token=dummy');
     const resetUrl = page.url();
     await expect(page.locator('text=Passwort zurücksetzen')).toBeVisible({ timeout: 10_000 });
 
@@ -14,12 +14,12 @@ test.describe('Password Reset Edge Cases', () => {
       page.locator('text=Neues Passwort und Passwort bestätigen stimmen nicht überein!'),
     ).toBeVisible({ timeout: 5_000 });
 
-    // Still on the reset page with id/token unchanged, not redirected
+    // Still on the reset page with the token unchanged, not redirected
     await expect(page).toHaveURL(resetUrl);
   });
 
   test('invalid reset token shows an error', async ({ page }) => {
-    await page.goto('/resetPassword?id=1&token=invalid-token');
+    await page.goto('/resetPassword?token=invalid-token');
     const resetUrl = page.url();
     await expect(page.locator('text=Passwort zurücksetzen')).toBeVisible({ timeout: 10_000 });
 

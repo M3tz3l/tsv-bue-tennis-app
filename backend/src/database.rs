@@ -48,6 +48,37 @@ impl Database {
         .execute(&pool)
         .await?;
 
+        let legacy_user_id_type: Option<String> = sqlx::query_scalar(
+            "SELECT type FROM pragma_table_info('reset_tokens') WHERE name = 'user_id'",
+        )
+        .fetch_optional(&pool)
+        .await?;
+        if legacy_user_id_type
+            .as_deref()
+            .is_some_and(|column_type| column_type.eq_ignore_ascii_case("INTEGER"))
+        {
+            sqlx::query("DROP TABLE reset_tokens")
+                .execute(&pool)
+                .await?;
+        }
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS reset_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT UNIQUE NOT NULL,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_reset_tokens_user_id ON reset_tokens(user_id)")
+            .execute(&pool)
+            .await?;
+
         Self::initialize_event_tables(&pool).await?;
 
         Ok(Database { pool })
@@ -200,5 +231,60 @@ impl Database {
             .await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Database;
+    use sqlx::sqlite::SqlitePool;
+
+    #[tokio::test]
+    async fn drops_legacy_reset_tokens_table() {
+        let path = std::env::temp_dir().join(format!(
+            "tsv-tennis-reset-tokens-{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        let url = format!("sqlite://{}?mode=rwc", path.display());
+        let pool = SqlitePool::connect(&url).await.unwrap();
+        sqlx::query(
+            "CREATE TABLE details (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "CREATE TABLE reset_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                expires_at DATETIME NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES details(id)
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        pool.close().await;
+
+        let database = Database::new(&url).await.unwrap();
+        sqlx::query(
+            "INSERT INTO reset_tokens (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+        )
+        .bind("token")
+        .bind("teable-user-id")
+        .bind("2026-01-01T00:00:00Z")
+        .bind("2026-01-02T00:00:00Z")
+        .execute(database.pool())
+        .await
+        .unwrap();
+
+        database.pool().close().await;
+        let _ = std::fs::remove_file(path);
     }
 }

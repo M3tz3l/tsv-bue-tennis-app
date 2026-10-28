@@ -221,12 +221,11 @@ class BackendService {
     }
   }
 
-  async resetPassword(token: string, password: string, userId: string): Promise<ApiResult | ApiError> {
+  async resetPassword(token: string, password: string): Promise<ApiResult | ApiError> {
     try {
       const response = await this.api.post<ApiResult>('/resetPassword', {
         token,
-        password,
-        userId
+        password
       });
       return response.data;
     } catch (error: unknown) {

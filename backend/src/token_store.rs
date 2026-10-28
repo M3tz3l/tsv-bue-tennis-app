@@ -1,78 +1,175 @@
-//! In-memory password reset token storage with expiry management.
+//! Persistent password reset token storage with expiry management.
 
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use sha2::{Digest, Sha256};
+use sqlx::{sqlite::SqlitePool, Row};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResetToken {
     pub token: String,
-    pub user_id: String, // Changed from u32 to String to match Teable record IDs
+    pub user_id: String,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
 }
 
 #[derive(Clone)]
 pub struct TokenStore {
-    tokens: Arc<RwLock<HashMap<String, ResetToken>>>,
-    user_tokens: Arc<RwLock<HashMap<String, String>>>, // user_id -> token_id mapping (changed to String keys)
-}
-
-impl Default for TokenStore {
-    fn default() -> Self {
-        Self::new()
-    }
+    pool: SqlitePool,
 }
 
 impl TokenStore {
-    pub fn new() -> Self {
-        Self {
-            tokens: Arc::new(RwLock::new(HashMap::new())),
-            user_tokens: Arc::new(RwLock::new(HashMap::new())),
-        }
+    pub fn new(pool: SqlitePool) -> Self {
+        Self { pool }
     }
 
-    pub async fn create_reset_token(&self, user_id: String) -> String {
+    /// Creates a new single-use reset token, replacing any previous token for
+    /// the same user. Tokens are persisted so links survive process restarts.
+    pub async fn create_reset_token(&self, user_id: String) -> Result<String, sqlx::Error> {
         let token_id = Uuid::new_v4().to_string();
         let now = Utc::now();
         let expires_at = now + Duration::hours(24);
+        let mut tx = self.pool.begin().await?;
 
-        let reset_token = ResetToken {
-            token: token_id.clone(),
-            user_id: user_id.clone(), // Clone before moving
-            created_at: now,
-            expires_at,
-        };
+        sqlx::query("DELETE FROM reset_tokens WHERE user_id = ? OR expires_at <= ?")
+            .bind(&user_id)
+            .bind(now.to_rfc3339())
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query(
+            "INSERT INTO reset_tokens (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+        )
+        .bind(hash_token(&token_id))
+        .bind(&user_id)
+        .bind(now.to_rfc3339())
+        .bind(expires_at.to_rfc3339())
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
 
-        {
-            let mut tokens = self.tokens.write().await;
-            let mut user_tokens = self.user_tokens.write().await;
-
-            // Remove any existing token for this user
-            if let Some(old_token) = user_tokens.get(&user_id) {
-                tokens.remove(old_token);
-            }
-
-            tokens.insert(token_id.clone(), reset_token);
-            user_tokens.insert(user_id, token_id.clone());
-        }
-
-        token_id
+        Ok(token_id)
     }
 
-    pub async fn consume_reset_token(&self, token: &str) -> Option<ResetToken> {
-        let mut tokens = self.tokens.write().await;
-        let mut user_tokens = self.user_tokens.write().await;
+    /// Atomically consumes a token. Expired tokens are deleted and treated as
+    /// invalid.
+    pub async fn consume_reset_token(
+        &self,
+        token: &str,
+    ) -> Result<Option<ResetToken>, sqlx::Error> {
+        let now = Utc::now();
+        let row = sqlx::query(
+            "DELETE FROM reset_tokens WHERE token = ? AND expires_at > ? \
+             RETURNING user_id, created_at, expires_at",
+        )
+        .bind(hash_token(token))
+        .bind(now.to_rfc3339())
+        .fetch_optional(&self.pool)
+        .await?;
 
-        let reset_token = tokens.remove(token)?;
-        user_tokens.remove(&reset_token.user_id);
-        if reset_token.expires_at > Utc::now() {
-            Some(reset_token)
-        } else {
-            None
-        }
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        let created_at = parse_timestamp(row.get::<String, _>("created_at"), now);
+        let expires_at = parse_timestamp(row.get::<String, _>("expires_at"), now);
+        Ok(Some(ResetToken {
+            token: token.to_string(),
+            user_id: row.get("user_id"),
+            created_at,
+            expires_at,
+        }))
+    }
+}
+
+fn hash_token(token: &str) -> String {
+    hex::encode(Sha256::digest(token.as_bytes()))
+}
+
+fn parse_timestamp(value: String, fallback: DateTime<Utc>) -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339(&value)
+        .map(|value| value.with_timezone(&Utc))
+        .unwrap_or(fallback)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{hash_token, TokenStore};
+    use crate::database::Database;
+
+    async fn store() -> TokenStore {
+        let database = Database::new("sqlite::memory:").await.unwrap();
+        TokenStore::new(database.pool().clone())
+    }
+
+    #[tokio::test]
+    async fn reset_token_is_single_use() {
+        let store = store().await;
+        let token = store.create_reset_token("user-1".into()).await.unwrap();
+
+        let consumed = store.consume_reset_token(&token).await.unwrap().unwrap();
+        assert_eq!(consumed.user_id, "user-1");
+        assert!(store.consume_reset_token(&token).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn concurrent_consumption_only_succeeds_once() {
+        let store = store().await;
+        let token = store.create_reset_token("user-1".into()).await.unwrap();
+
+        let first = store.consume_reset_token(&token);
+        let second = store.consume_reset_token(&token);
+        let (first, second) = tokio::join!(first, second);
+
+        let successes = [first.unwrap().is_some(), second.unwrap().is_some()]
+            .into_iter()
+            .filter(|success| *success)
+            .count();
+        assert_eq!(successes, 1);
+    }
+
+    #[tokio::test]
+    async fn new_token_replaces_previous_token() {
+        let store = store().await;
+        let first = store.create_reset_token("user-1".into()).await.unwrap();
+        let second = store.create_reset_token("user-1".into()).await.unwrap();
+
+        assert!(store.consume_reset_token(&first).await.unwrap().is_none());
+        assert!(store.consume_reset_token(&second).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn stores_only_a_hash_of_the_token() {
+        let store = store().await;
+        let token = store.create_reset_token("user-1".into()).await.unwrap();
+
+        let stored: String = sqlx::query_scalar("SELECT token FROM reset_tokens")
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+
+        assert_ne!(stored, token);
+        assert_eq!(stored, hash_token(&token));
+    }
+
+    #[tokio::test]
+    async fn expired_token_is_rejected() {
+        let store = store().await;
+        sqlx::query(
+            "INSERT INTO reset_tokens (token,user_id,created_at,expires_at) VALUES (?,?,?,?)",
+        )
+        .bind(hash_token("expired"))
+        .bind("user-1")
+        .bind("2000-01-01T00:00:00Z")
+        .bind("2000-01-02T00:00:00Z")
+        .execute(&store.pool)
+        .await
+        .unwrap();
+
+        assert!(store
+            .consume_reset_token("expired")
+            .await
+            .unwrap()
+            .is_none());
     }
 }

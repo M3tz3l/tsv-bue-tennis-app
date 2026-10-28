@@ -92,9 +92,8 @@ impl EventRepository {
         payload: SignupRequest,
     ) -> EventResult<EventSignup> {
         validate_signup(&payload)?;
-        let mut tx = self.pool.begin().await?;
         let event = sqlx::query("SELECT status, allow_salad, allow_cake, allow_signups, signup_deadline, capacity, (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) AS signup_people_count FROM events WHERE id = ?")
-            .bind(event_id).fetch_optional(&mut *tx).await?
+            .bind(event_id).fetch_optional(&self.pool).await?
             .ok_or(EventError::NotFound)?;
         if event.get::<String, _>("status") != "published" {
             return Err(EventError::Validation(
@@ -112,17 +111,6 @@ impl EventRepository {
         {
             return Err(EventError::Conflict("signup deadline has passed".into()));
         }
-        if event
-            .get::<Option<i32>, _>("capacity")
-            .is_some_and(|capacity| {
-                event
-                    .get::<i64, _>("signup_people_count")
-                    .checked_add(i64::from(payload.people_count))
-                    .is_none_or(|total| total > i64::from(capacity))
-            })
-        {
-            return Err(EventError::Conflict("event capacity exceeded".into()));
-        }
         if (!event.get::<bool, _>("allow_salad") && payload.salad_count > 0)
             || (!event.get::<bool, _>("allow_cake") && payload.cake_count > 0)
         {
@@ -130,17 +118,37 @@ impl EventRepository {
                 "disabled contributions must be zero".into(),
             ));
         }
-        let result = sqlx::query("INSERT INTO event_signups (event_id,member_id,people_count,salad_count,cake_count,comment) VALUES (?,?,?,?,?,?)")
-            .bind(event_id).bind(member_id).bind(payload.people_count).bind(payload.salad_count).bind(payload.cake_count).bind(clean(payload.comment))
-            .execute(&mut *tx).await;
+
+        // The capacity check is part of the INSERT statement so concurrent
+        // signups cannot both pass a stale read and overbook the event.
+        let result = sqlx::query(
+            "INSERT INTO event_signups (event_id,member_id,people_count,salad_count,cake_count,comment) \
+             SELECT id, ?, ?, ?, ?, ? FROM events \
+             WHERE id = ? AND status = 'published' AND allow_signups = 1 \
+               AND (capacity IS NULL OR (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id = events.id) + ? <= capacity)",
+        )
+        .bind(member_id)
+        .bind(payload.people_count)
+        .bind(payload.salad_count)
+        .bind(payload.cake_count)
+        .bind(clean(payload.comment))
+        .bind(event_id)
+        .bind(payload.people_count)
+        .execute(&self.pool)
+        .await;
+
         let signup_id = match result {
-            Ok(result) => result.last_insert_rowid(),
+            Ok(result) if result.rows_affected() == 1 => result.last_insert_rowid(),
+            Ok(_) => {
+                return Err(self
+                    .classify_failed_signup(event_id, payload.people_count)
+                    .await)
+            }
             Err(sqlx::Error::Database(error)) if error.is_unique_violation() => {
                 return Err(EventError::Conflict("member already signed up".into()));
             }
             Err(error) => return Err(error.into()),
         };
-        tx.commit().await?;
         self.get_signup(signup_id).await
     }
 
@@ -355,6 +363,21 @@ impl EventRepository {
         Ok(())
     }
 
+    async fn classify_failed_signup(&self, event_id: i64, people_count: i32) -> EventError {
+        match self.get_summary(event_id).await {
+            Ok(summary)
+                if summary.capacity.is_some_and(|capacity| {
+                    i64::from(summary.signup_people_count) + i64::from(people_count)
+                        > i64::from(capacity)
+                }) =>
+            {
+                EventError::Conflict("event capacity exceeded".into())
+            }
+            Ok(_) => EventError::Conflict("signups are no longer available for this event".into()),
+            Err(error) => error,
+        }
+    }
+
     pub async fn update_signup(
         &self,
         event_id: i64,
@@ -362,10 +385,9 @@ impl EventRepository {
         payload: SignupRequest,
     ) -> EventResult<EventSignup> {
         validate_signup(&payload)?;
-        let mut tx = self.pool.begin().await?;
         let event = sqlx::query("SELECT status, allow_salad, allow_cake, allow_signups, signup_deadline, capacity, (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) AS signup_people_count FROM events WHERE id=?")
             .bind(event_id)
-            .fetch_optional(&mut *tx)
+            .fetch_optional(&self.pool)
             .await?
             .ok_or(EventError::NotFound)?;
         if event.get::<String, _>("status") != "published" {
@@ -384,26 +406,6 @@ impl EventRepository {
         {
             return Err(EventError::Conflict("signup deadline has passed".into()));
         }
-        let existing_people: i32 = sqlx::query_scalar(
-            "SELECT people_count FROM event_signups WHERE event_id=? AND member_id=?",
-        )
-        .bind(event_id)
-        .bind(member_id)
-        .fetch_optional(&mut *tx)
-        .await?
-        .ok_or(EventError::NotFound)?;
-        if event
-            .get::<Option<i32>, _>("capacity")
-            .is_some_and(|capacity| {
-                event
-                    .get::<i64, _>("signup_people_count")
-                    .checked_sub(i64::from(existing_people))
-                    .and_then(|total| total.checked_add(i64::from(payload.people_count)))
-                    .is_none_or(|total| total > i64::from(capacity))
-            })
-        {
-            return Err(EventError::Conflict("event capacity exceeded".into()));
-        }
         if (!event.get::<bool, _>("allow_salad") && payload.salad_count > 0)
             || (!event.get::<bool, _>("allow_cake") && payload.cake_count > 0)
         {
@@ -411,20 +413,53 @@ impl EventRepository {
                 "disabled contributions must be zero".into(),
             ));
         }
-        let result = sqlx::query("UPDATE event_signups SET people_count=?,salad_count=?,cake_count=?,comment=?,updated_at=CURRENT_TIMESTAMP WHERE event_id=? AND member_id=?")
-            .bind(payload.people_count).bind(payload.salad_count).bind(payload.cake_count).bind(clean(payload.comment)).bind(event_id).bind(member_id)
-            .execute(&mut *tx)
-            .await?;
+        let existing_people: i32 = sqlx::query_scalar(
+            "SELECT people_count FROM event_signups WHERE event_id=? AND member_id=?",
+        )
+        .bind(event_id)
+        .bind(member_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(EventError::NotFound)?;
+
+        // Capacity is checked inside the UPDATE so concurrent updates cannot
+        // both read the same total and exceed the limit.
+        let result = sqlx::query(
+            "UPDATE event_signups SET people_count=?,salad_count=?,cake_count=?,comment=?,updated_at=CURRENT_TIMESTAMP \
+             WHERE event_id=? AND member_id=? \
+               AND ((SELECT capacity FROM events WHERE id=?) IS NULL \
+                    OR (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=?) - people_count + ? <= (SELECT capacity FROM events WHERE id=?))",
+        )
+        .bind(payload.people_count)
+        .bind(payload.salad_count)
+        .bind(payload.cake_count)
+        .bind(clean(payload.comment))
+        .bind(event_id)
+        .bind(member_id)
+        .bind(event_id)
+        .bind(event_id)
+        .bind(payload.people_count)
+        .bind(event_id)
+        .execute(&self.pool)
+        .await?;
+
         if result.rows_affected() == 0 {
-            return Err(EventError::NotFound);
+            let summary = self.get_summary(event_id).await?;
+            if summary.capacity.is_some_and(|capacity| {
+                i64::from(summary.signup_people_count) - i64::from(existing_people)
+                    + i64::from(payload.people_count)
+                    > i64::from(capacity)
+            }) {
+                return Err(EventError::Conflict("event capacity exceeded".into()));
+            }
+            return Err(EventError::Conflict("signup is no longer available".into()));
         }
         let id: i64 =
             sqlx::query_scalar("SELECT id FROM event_signups WHERE event_id=? AND member_id=?")
                 .bind(event_id)
                 .bind(member_id)
-                .fetch_one(&mut *tx)
+                .fetch_one(&self.pool)
                 .await?;
-        tx.commit().await?;
         self.get_signup(id).await
     }
 

@@ -133,7 +133,8 @@ import sqlite3
 db = sqlite3.connect('$DB_PATH')
 try:
     db.execute('DELETE FROM details')
-    db.execute('DELETE FROM reset_tokens')
+    # Drop instead of deleting so schema changes to reset_tokens take effect.
+    db.execute('DROP TABLE IF EXISTS reset_tokens')
     db.commit()
 except sqlite3.OperationalError:
     pass
