@@ -6,8 +6,11 @@ Self-hosted log history for the TSV Tennis app:
 - **Loki** stores logs on a persistent volume with configurable retention.
 - **Grafana** provides search and a provisioned "TSV Tennis logs" dashboard.
 
-The stack runs as its own Compose project, so app deployments do not restart
-the logging services.
+The stack runs as its own Compose project. Deployments use Compose v2 when it is
+available. On hosts that only have legacy `docker-compose` 1.29, the workflow
+falls back to removing and recreating the containers if the client hits its
+known `KeyError: 'ContainerConfig'` crash, which briefly restarts the logging
+services.
 
 ## Prerequisites
 

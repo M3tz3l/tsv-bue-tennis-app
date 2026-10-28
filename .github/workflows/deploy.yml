@@ -70,7 +70,9 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         port: ${{ secrets.VPS_PORT || 22 }}
         script: |
+          set -e
           cd /opt/stacks/tsv-tennis-app
+          trap 'rm -f /opt/stacks/tsv-tennis-app/tsv-tennis-app.tar.gz' EXIT
           
           # Load new Docker image
           docker load < tsv-tennis-app.tar.gz
@@ -78,12 +80,13 @@ jobs:
           # Start services
           docker-compose -f compose.yaml up -d
           
-          # Clean up
-          rm -f tsv-tennis-app.tar.gz
-          
           # Verify deployment
           sleep 10
           docker-compose ps
+
+          # Drop the previous image, which is left dangling after the
+          # tsv-tennis-app:latest tag moves to the new release.
+          docker image prune -f
 
           echo "Deployment completed successfully!"
 
@@ -105,6 +108,7 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         port: ${{ secrets.VPS_PORT || 22 }}
         script: |
+          set -e
           cd /opt/stacks/observability
 
           # Preserve an existing .env so passwords and retention survive deploys.
@@ -121,5 +125,20 @@ jobs:
             echo "Retrieve it with: sudo cat /opt/stacks/observability/.env"
           fi
 
-          docker-compose -f compose.yaml up -d
-          docker-compose -f compose.yaml ps
+          # Prefer Compose v2. The VPS may only have legacy docker-compose
+          # 1.29.2, which crashes with KeyError: 'ContainerConfig' when it
+          # tries to recreate containers created by Compose v2. If that
+          # happens, remove the old containers and create them fresh.
+          if docker compose version >/dev/null 2>&1; then
+            docker compose -f compose.yaml up -d --remove-orphans
+            docker compose -f compose.yaml ps
+          else
+            if ! docker-compose -f compose.yaml up -d --remove-orphans; then
+              echo "Legacy docker-compose failed; recreating observability containers..."
+              docker-compose -f compose.yaml down --remove-orphans || true
+              docker ps -aq --filter label=com.docker.compose.project=observability \
+                | xargs -r docker rm -f
+              docker-compose -f compose.yaml up -d --remove-orphans
+            fi
+            docker-compose -f compose.yaml ps
+          fi
