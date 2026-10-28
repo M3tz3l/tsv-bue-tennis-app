@@ -85,8 +85,9 @@ jobs:
           docker-compose ps
 
           # Drop the previous image, which is left dangling after the
-          # tsv-tennis-app:latest tag moves to the new release.
-          docker image prune -f
+          # tsv-tennis-app:latest tag moves to the new release. Filter by
+          # label so images from other stacks are never removed.
+          docker image prune -f --filter "label=org.tsv-tennis.app=tsv-tennis-app"
 
           echo "Deployment completed successfully!"
 
@@ -125,20 +126,12 @@ jobs:
             echo "Retrieve it with: sudo cat /opt/stacks/observability/.env"
           fi
 
-          # Prefer Compose v2. The VPS may only have legacy docker-compose
-          # 1.29.2, which crashes with KeyError: 'ContainerConfig' when it
-          # tries to recreate containers created by Compose v2. If that
-          # happens, remove the old containers and create them fresh.
-          if docker compose version >/dev/null 2>&1; then
-            docker compose -f compose.yaml up -d --remove-orphans
-            docker compose -f compose.yaml ps
-          else
-            if ! docker-compose -f compose.yaml up -d --remove-orphans; then
-              echo "Legacy docker-compose failed; recreating observability containers..."
-              docker-compose -f compose.yaml down --remove-orphans || true
-              docker ps -aq --filter label=com.docker.compose.project=observability \
-                | xargs -r docker rm -f
-              docker-compose -f compose.yaml up -d --remove-orphans
-            fi
-            docker-compose -f compose.yaml ps
+          # Legacy docker-compose 1.29.2 crashes with KeyError: 'ContainerConfig'
+          # when recreating containers created by Compose v2.
+          if ! docker compose version >/dev/null 2>&1; then
+            echo "Docker Compose v2 is required. Install docker-compose-plugin." >&2
+            exit 1
           fi
+
+          docker compose -f compose.yaml up -d --remove-orphans
+          docker compose -f compose.yaml ps

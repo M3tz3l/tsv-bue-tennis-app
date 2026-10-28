@@ -6,18 +6,18 @@ Self-hosted log history for the TSV Tennis app:
 - **Loki** stores logs on a persistent volume with configurable retention.
 - **Grafana** provides search and a provisioned "TSV Tennis logs" dashboard.
 
-The stack runs as its own Compose project. Deployments use Compose v2 when it is
-available. On hosts that only have legacy `docker-compose` 1.29, the workflow
-falls back to removing and recreating the containers if the client hits its
-known `KeyError: 'ContainerConfig'` crash, which briefly restarts the logging
-services.
+The stack runs as its own Compose project. Deployments require Docker Compose
+v2 (`docker compose`); the legacy `docker-compose` 1.29 client is not supported
+because it crashes with `KeyError: 'ContainerConfig'` when recreating containers
+created by Compose v2.
 
 ## Prerequisites
 
 1. Create a DNS `A` (or `AAAA`) record for `grafana.tsv-bue-tennis.de` pointing
    at the VPS. Traefik obtains the TLS certificate automatically.
 2. The external `traefik_proxy` Docker network must already exist.
-3. `/var/run/docker.sock` must be readable by the Docker daemon's client (the
+3. Docker Compose v2 must be installed (`docker-compose-plugin`).
+4. `/var/run/docker.sock` must be readable by the Docker daemon's client (the
    stack mounts it read-only into the `docker-socket-proxy` sidecar, not Alloy).
 
 ## Deploy
@@ -40,7 +40,7 @@ To change the hostname or retention, edit
 
 ```bash
 cd /opt/stacks/observability
-docker-compose -f compose.yaml up -d
+docker compose -f compose.yaml up -d
 ```
 
 ### Rotating the Grafana admin password
@@ -51,7 +51,7 @@ Grafana CLI instead:
 
 ```bash
 cd /opt/stacks/observability
-docker-compose -f compose.yaml exec grafana \
+docker compose -f compose.yaml exec grafana \
   grafana cli admin reset-admin-password 'new-strong-password'
 ```
 
@@ -64,7 +64,7 @@ cd observability
 cp .env.example .env
 chmod 600 .env
 # edit .env and set GRAFANA_ADMIN_PASSWORD
-docker-compose -f compose.yaml up -d
+docker compose -f compose.yaml up -d
 ```
 
 ## Data and retention

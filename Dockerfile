@@ -39,6 +39,8 @@ RUN npm run build
 # Final runtime stage
 FROM debian:bookworm-slim
 
+LABEL org.tsv-tennis.app="tsv-tennis-app"
+
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
