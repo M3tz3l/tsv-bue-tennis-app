@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sqlx::{sqlite::SqlitePool, Row};
 use uuid::Uuid;
 
@@ -39,7 +40,7 @@ impl TokenStore {
         sqlx::query(
             "INSERT INTO reset_tokens (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
         )
-        .bind(&token_id)
+        .bind(hash_token(&token_id))
         .bind(&user_id)
         .bind(now.to_rfc3339())
         .bind(expires_at.to_rfc3339())
@@ -59,9 +60,9 @@ impl TokenStore {
         let now = Utc::now();
         let row = sqlx::query(
             "DELETE FROM reset_tokens WHERE token = ? AND expires_at > ? \
-             RETURNING token, user_id, created_at, expires_at",
+             RETURNING user_id, created_at, expires_at",
         )
-        .bind(token)
+        .bind(hash_token(token))
         .bind(now.to_rfc3339())
         .fetch_optional(&self.pool)
         .await?;
@@ -73,12 +74,16 @@ impl TokenStore {
         let created_at = parse_timestamp(row.get::<String, _>("created_at"), now);
         let expires_at = parse_timestamp(row.get::<String, _>("expires_at"), now);
         Ok(Some(ResetToken {
-            token: row.get("token"),
+            token: token.to_string(),
             user_id: row.get("user_id"),
             created_at,
             expires_at,
         }))
     }
+}
+
+fn hash_token(token: &str) -> String {
+    hex::encode(Sha256::digest(token.as_bytes()))
 }
 
 fn parse_timestamp(value: String, fallback: DateTime<Utc>) -> DateTime<Utc> {
@@ -89,7 +94,7 @@ fn parse_timestamp(value: String, fallback: DateTime<Utc>) -> DateTime<Utc> {
 
 #[cfg(test)]
 mod tests {
-    use super::TokenStore;
+    use super::{hash_token, TokenStore};
     use crate::database::Database;
 
     async fn store() -> TokenStore {
@@ -134,12 +139,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stores_only_a_hash_of_the_token() {
+        let store = store().await;
+        let token = store.create_reset_token("user-1".into()).await.unwrap();
+
+        let stored: String = sqlx::query_scalar("SELECT token FROM reset_tokens")
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+
+        assert_ne!(stored, token);
+        assert_eq!(stored, hash_token(&token));
+    }
+
+    #[tokio::test]
     async fn expired_token_is_rejected() {
         let store = store().await;
         sqlx::query(
             "INSERT INTO reset_tokens (token,user_id,created_at,expires_at) VALUES (?,?,?,?)",
         )
-        .bind("expired")
+        .bind(hash_token("expired"))
         .bind("user-1")
         .bind("2000-01-01T00:00:00Z")
         .bind("2000-01-02T00:00:00Z")

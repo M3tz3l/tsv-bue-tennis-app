@@ -244,7 +244,7 @@ pub async fn forgot_password(
 }
 
 fn validate_password(password: &str) -> Result<(), &'static str> {
-    if password.chars().count() < 8 {
+    if password.len() < 8 {
         return Err("Das Passwort muss mindestens 8 Zeichen lang sein.");
     }
     if password.len() > 72 {
@@ -393,6 +393,16 @@ mod tests {
     #[test]
     fn rejects_short_password() {
         assert!(validate_password("short").is_err());
+    }
+
+    #[test]
+    fn accepts_multibyte_password_with_eight_bytes() {
+        assert!(validate_password(&"😀".repeat(2)).is_ok());
+    }
+
+    #[test]
+    fn accepts_password_at_bcrypt_limit() {
+        assert!(validate_password(&"a".repeat(72)).is_ok());
     }
 
     #[test]

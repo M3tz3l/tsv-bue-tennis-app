@@ -117,7 +117,7 @@ fn validate_work_hour_payload(
         })));
     }
     let quarter_steps = payload.hours * 4.0;
-    if (quarter_steps - quarter_steps.round()).abs() > 1e-9 {
+    if quarter_steps.fract() != 0.0 {
         warn!("{}: Hours not in quarter steps: {}", prefix, payload.hours);
         return Err(axum::Json(serde_json::json!({
             "success": false,
@@ -554,6 +554,12 @@ mod tests {
     #[test]
     fn rejects_non_quarter_hours() {
         let request = payload(today(), "Platzpflege", 1.1);
+        assert!(validate_work_hour_payload(&request, "test").is_err());
+    }
+
+    #[test]
+    fn rejects_quarter_hour_values_with_rounding_tolerance() {
+        let request = payload(today(), "Platzpflege", 1.0000000001);
         assert!(validate_work_hour_payload(&request, "test").is_err());
     }
 

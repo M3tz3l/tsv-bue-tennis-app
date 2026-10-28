@@ -33,13 +33,19 @@ const ResetPassword = () => {
             const confirmPasswordValue = data.get("confirmpassword");
             const newpassword = typeof newPasswordValue === 'string' ? newPasswordValue : '';
             const confirmpassword = typeof confirmPasswordValue === 'string' ? confirmPasswordValue : '';
+            const passwordByteLength = new TextEncoder().encode(newpassword).length;
             if (newpassword !== confirmpassword) {
                 toast.error(`Neues Passwort und Passwort bestätigen stimmen nicht überein!`, {
                     autoClose: 5000,
                     position: "top-right",
                 });
-            } else if (newpassword.length < 8) {
+            } else if (passwordByteLength < 8) {
                 toast.error('Das Passwort muss mindestens 8 Zeichen lang sein.', {
+                    autoClose: 5000,
+                    position: "top-right",
+                });
+            } else if (passwordByteLength > 72) {
+                toast.error('Das Passwort ist zu lang.', {
                     autoClose: 5000,
                     position: "top-right",
                 });
@@ -78,7 +84,6 @@ const ResetPassword = () => {
                                     name="newpassword"
                                     type="password"
                                     required
-                                    minLength={8}
                                     autoFocus
                                     className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     placeholder="Ihr neues Passwort eingeben"
@@ -93,7 +98,6 @@ const ResetPassword = () => {
                                     name="confirmpassword"
                                     type="password"
                                     required
-                                    minLength={8}
                                     className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     placeholder="Ihr neues Passwort bestätigen"
                                 />
