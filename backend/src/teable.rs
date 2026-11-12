@@ -240,6 +240,10 @@ async fn make_teable_request(
 /// Only GET requests go through here; writes must not be retried blindly.
 async fn send_with_retry(request: RequestBuilder, operation: &str) -> Result<reqwest::Response> {
     const MAX_RETRIES: u32 = 3;
+    // Longest `Retry-After` we are willing to wait for inside a request handler.
+    // If the upstream asks for longer, return the response instead of retrying
+    // sooner than requested (which only adds load while rate limited).
+    const MAX_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(10);
     let mut attempt: u32 = 0;
 
     loop {
@@ -260,9 +264,23 @@ async fn send_with_retry(request: RequestBuilder, operation: &str) -> Result<req
 
         if retryable && attempt < MAX_RETRIES {
             attempt += 1;
-            let backoff = retry_after_secs(&response)
-                .map(|secs| std::time::Duration::from_secs(secs.min(5)))
-                .unwrap_or_else(|| std::time::Duration::from_millis(250 * 2u64.pow(attempt)));
+            let backoff = match retry_after_secs(&response) {
+                Some(secs) => {
+                    let delay = std::time::Duration::from_secs(secs);
+                    if delay > MAX_RETRY_DELAY {
+                        warn!(
+                            "Teable {} returned {} with Retry-After {}s, exceeding the {}s retry budget; not retrying",
+                            operation,
+                            status,
+                            secs,
+                            MAX_RETRY_DELAY.as_secs()
+                        );
+                        return Ok(response);
+                    }
+                    delay
+                }
+                None => std::time::Duration::from_millis(250 * 2u64.pow(attempt)),
+            };
             warn!(
                 "Teable {} returned {}, retrying in {:?} (attempt {}/{})",
                 operation, status, backoff, attempt, MAX_RETRIES
@@ -318,7 +336,9 @@ async fn fetch_all_records(
     projection: Option<&[&str]>,
     operation: &str,
 ) -> Result<Vec<Value>> {
-    const PAGE_SIZE: usize = 1000;
+    // Teable recommends 100 and caps some cloud API keys there, so a larger
+    // value can fail or be silently truncated.
+    const PAGE_SIZE: usize = 100;
 
     let filter = filter.to_string();
     let mut all_records: Vec<Value> = Vec::new();
@@ -349,7 +369,11 @@ async fn fetch_all_records(
         let fetched = records.len();
         all_records.extend(records);
 
-        if fetched < PAGE_SIZE {
+        // Prefer the server-reported total: if a key caps `take` below
+        // PAGE_SIZE, a short page does not necessarily mean the last page.
+        let total = value.get("total").and_then(|total| total.as_u64());
+        let reached_total = total.is_some_and(|total| all_records.len() as u64 >= total);
+        if fetched < PAGE_SIZE || reached_total {
             break;
         }
     }
@@ -855,7 +879,8 @@ pub async fn get_all_active_members(
         config.api_url, config.members_table_id
     );
 
-    let page_size = 1000;
+    // Teable recommends 100 and caps some cloud API keys there.
+    let page_size = 100;
     let mut all_records: Vec<Value> = Vec::new();
 
     loop {
@@ -914,8 +939,13 @@ pub async fn get_all_active_members(
             all_records.len()
         );
 
-        // Stop when this page returned fewer records than requested (last page)
-        if fetched < page_size {
+        // Stop when the page is short or the server total is reached. The total
+        // guard keeps results complete when a key caps `take` below page_size.
+        let total = teable_response
+            .get("total")
+            .and_then(|total| total.as_u64());
+        let reached_total = total.is_some_and(|total| all_records.len() as u64 >= total);
+        if fetched < page_size || reached_total {
             break;
         }
     }
