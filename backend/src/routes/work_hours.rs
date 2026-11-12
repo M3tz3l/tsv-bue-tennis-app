@@ -345,7 +345,7 @@ pub async fn create_work_hour(
         &date,
         &description,
         payload.hours,
-        current_user.id.clone(),
+        &current_user,
     )
     .await
     {
@@ -459,7 +459,7 @@ pub async fn update_work_hour(
         &date,
         &description,
         payload.hours,
-        current_user.id.clone(),
+        &current_user,
     )
     .await
     {

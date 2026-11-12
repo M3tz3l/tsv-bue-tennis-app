@@ -108,13 +108,27 @@ fn parse_member_id(value: Value) -> Option<crate::models::LinkedRecord> {
     }
 }
 
+/// Reads a required member field, warning when Teable omits it (for example
+/// after a field rename or when a projection is missing it) instead of
+/// silently returning an empty value.
+fn required_member_field<'a>(fields: &'a Value, record_id: &str, name: &str) -> &'a str {
+    match fields.get(name).and_then(Value::as_str) {
+        Some(value) => value,
+        None => {
+            warn!(record_id = %record_id, field = %name, "Teable member record missing required field");
+            ""
+        }
+    }
+}
+
 fn member_from_record(record: &Value) -> Member {
     let fields = &record["fields"];
+    let id = record["id"].as_str().unwrap_or("");
     Member {
-        id: record["id"].as_str().unwrap_or("").to_string(),
-        first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
-        last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
-        email: fields["Email"].as_str().unwrap_or("").to_string(),
+        id: id.to_string(),
+        first_name: required_member_field(fields, id, "Vorname").to_string(),
+        last_name: required_member_field(fields, id, "Nachname").to_string(),
+        email: required_member_field(fields, id, "Email").to_string(),
         family_id: fields["Familie"]
             .as_str()
             .map(|s| s.to_string())
@@ -294,6 +308,55 @@ async fn handle_teable_response(response: reqwest::Response, operation: &str) ->
     Ok(response_text)
 }
 
+/// Fetches every record matching `filter`, paginating with take/skip so large
+/// result sets are not silently truncated by the server's default page size.
+async fn fetch_all_records(
+    client: &Client,
+    url: &str,
+    token: &str,
+    filter: &Value,
+    projection: Option<&[&str]>,
+    operation: &str,
+) -> Result<Vec<Value>> {
+    const PAGE_SIZE: usize = 1000;
+
+    let filter = filter.to_string();
+    let mut all_records: Vec<Value> = Vec::new();
+
+    loop {
+        let skip = all_records.len().to_string();
+        let take = PAGE_SIZE.to_string();
+        let mut request = client
+            .get(url)
+            .header("Authorization", format!("Bearer {token}"))
+            .header("Accept", "application/json")
+            .query(&[("filter", &filter), ("take", &take), ("skip", &skip)]);
+
+        if let Some(fields) = projection {
+            for field in fields {
+                request = request.query(&[("projection[]", *field)]);
+            }
+        }
+
+        let response = send_with_retry(request, operation).await?;
+        let response_text = handle_teable_response(response, operation).await?;
+        let value: Value = serde_json::from_str(&response_text)?;
+        let records = value["records"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?
+            .clone();
+
+        let fetched = records.len();
+        all_records.extend(records);
+
+        if fetched < PAGE_SIZE {
+            break;
+        }
+    }
+
+    Ok(all_records)
+}
+
 pub async fn get_member_by_id(
     config: &TeableConfig,
     client: &Client,
@@ -431,28 +494,19 @@ pub async fn get_family_members_with_projection(
         "{}/table/{}/record",
         config.api_url, config.members_table_id
     );
-    let mut req = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", config.token))
-        .header("Accept", "application/json")
-        .query(&[("filter", &filter.to_string())]);
-    if let Some(proj) = projection {
-        for field in proj {
-            req = req.query(&[("projection[]", *field)]);
-        }
-    }
     debug!(family_id = %family_id, "Fetching family members");
-    let response = send_with_retry(req, "family_members").await?;
-    let response_text = handle_teable_response(response, "family_members").await?;
-    // Parse Teable response
-    let teable_response: Value = serde_json::from_str(&response_text)?;
-    let records = teable_response["records"]
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
+    let records = fetch_all_records(
+        client,
+        &url,
+        &config.token,
+        &filter,
+        projection,
+        "family_members",
+    )
+    .await?;
     let mut members = Vec::with_capacity(records.len());
-    for record in records {
-        let member = member_from_record(record);
-        members.push(member);
+    for record in &records {
+        members.push(member_from_record(record));
     }
     debug!(family_id = %family_id, count = members.len(), "Family members found");
     Ok(TeableResponse {
@@ -553,28 +607,11 @@ pub async fn get_work_hours_for_member_by_year(
     });
     debug!("Filtering work hours with filter: {}", filter);
 
-    let request = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", config.token))
-        .header("Accept", "application/json")
-        .query(&[("filter", &filter.to_string())]);
-    let response = send_with_retry(request, "work_hours").await?;
-    let response_text = handle_teable_response(response, "work_hours").await?;
+    let records =
+        fetch_all_records(client, &url, &config.token, &filter, None, "work_hours").await?;
 
-    // Log a preview of the response for debugging
-    debug!(
-        "Teable work hours raw response preview: {}",
-        &response_text[..std::cmp::min(response_text.len(), 500)]
-    );
-
-    // Parse Teable response and convert to compatible format
-    let teable_response: Value = serde_json::from_str(&response_text)?;
-    let records = teable_response["records"]
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
-
-    let mut work_hours = Vec::new();
-    for record in records {
+    let mut work_hours = Vec::with_capacity(records.len());
+    for record in &records {
         let fields = &record["fields"];
 
         // Extract member info from the linked Mitglied_id field
@@ -612,42 +649,28 @@ pub async fn create_work_hour(
     date: &str,
     description: &str,
     duration_hours: f64,
-    member_id: String,
+    member: &Member,
 ) -> Result<WorkHour> {
     let url = format!(
         "{}/table/{}/record",
         config.api_url, config.work_hours_table_id
     );
 
-    // Get the member's information for the payload using get_member_by_id
-    let member = get_member_by_id(config, client, &member_id)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("Member with ID {} not found", member_id))?;
-    debug!("Datum: {}", date);
-    debug!("Tätigkeit: {}", description);
-    debug!("Stunden: {} hours", duration_hours);
-    debug!("Mitglied_id: {} (linked record)", member_id);
-    debug!("Nachname: {}", member.last_name);
-    debug!("Vorname: {}", member.first_name);
+    debug!(member_id = %member.id, "Teable: creating work hour");
 
     // Create the payload for Teable with proper member linkage
     let payload = serde_json::json!({
         "records": [{
             "fields": {
-                "Mitglied_id": {"id": member_id}, // CRITICAL: Link to member record (object format)
-                "Nachname": member.last_name,
-                "Vorname": member.first_name,
+                "Mitglied_id": {"id": &member.id}, // CRITICAL: Link to member record (object format)
+                "Nachname": &member.last_name,
+                "Vorname": &member.first_name,
                 "Stunden": duration_hours, // Hours as-is for Teable
                 "Datum": date,
                 "Tätigkeit": description
             }
         }]
     });
-
-    debug!(
-        "Teable: Sending payload: {}",
-        serde_json::to_string(&payload)?
-    );
 
     let response = client
         .post(&url)
@@ -663,15 +686,24 @@ pub async fn create_work_hour(
 
     // Parse the response to return the created work hour
     let teable_response: Value = serde_json::from_str(&response_text)?;
-    let record = &teable_response["records"][0];
+    let record = teable_response
+        .get("records")
+        .and_then(|value| value.as_array())
+        .and_then(|records| records.first())
+        .ok_or_else(|| anyhow::anyhow!("Teable create_work_hour response missing record"))?;
     let fields = &record["fields"];
+    let id = record["id"]
+        .as_str()
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("Teable create_work_hour response missing record id"))?
+        .to_string();
 
     Ok(WorkHour {
-        id: record["id"].as_str().unwrap_or("").to_string(),
+        id,
         member_id: parse_member_id(fields["Mitglied_id"].clone()),
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
-        created_on: None,
+        created_on: fields["Created on"].as_str().map(|s| s.to_string()),
         date: fields["Datum"].as_str().map(parse_date_berlin),
         description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
         duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
@@ -685,41 +717,28 @@ pub async fn update_work_hour(
     date: &str,
     description: &str,
     duration_hours: f64,
-    member_id: String,
+    member: &Member,
 ) -> Result<WorkHour> {
     let url = format!(
         "{}/table/{}/record/{}",
         config.api_url, config.work_hours_table_id, work_hour_id
     );
 
-    let member = get_member_by_id(config, client, &member_id)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("Member with ID {} not found", member_id))?;
-
-    debug!(work_hour_id = %work_hour_id, "Teable: updating work hour");
-    debug!("Datum: {}", date);
-    debug!("Tätigkeit: {}", description);
-    debug!("Stunden: {} hours", duration_hours);
-    debug!("Mitglied_id: {} (linked record)", member_id);
+    debug!(work_hour_id = %work_hour_id, member_id = %member.id, "Teable: updating work hour");
 
     // Create the payload for Teable update - use the format from frontend service
     let payload = serde_json::json!({
         "record": {
             "fields": {
-                "Mitglied_id": {"id": member_id}, // CRITICAL: Maintain member record link (object format)
-                "Nachname": member.last_name,
-                "Vorname": member.first_name,
+                "Mitglied_id": {"id": &member.id}, // CRITICAL: Maintain member record link (object format)
+                "Nachname": &member.last_name,
+                "Vorname": &member.first_name,
                 "Stunden": duration_hours, // Hours as-is for Teable
                 "Datum": date,
                 "Tätigkeit": description
             }
         }
     });
-
-    debug!(
-        "Teable: Sending update payload: {}",
-        serde_json::to_string(&payload)?
-    );
 
     // Use PATCH method with record ID in URL path (correct Teable API format)
     let response = client
@@ -750,12 +769,16 @@ pub async fn update_work_hour(
         )
     };
 
+    if record_id.is_empty() {
+        anyhow::bail!("Teable update_work_hour response missing record id");
+    }
+
     Ok(WorkHour {
         id: record_id,
         member_id: parse_member_id(fields["Mitglied_id"].clone()),
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
-        created_on: None,
+        created_on: fields["Created on"].as_str().map(|s| s.to_string()),
         date: fields["Datum"].as_str().map(parse_date_berlin),
         description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
         duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
@@ -804,24 +827,18 @@ pub async fn get_members_by_email(
         "{}/table/{}/record",
         config.api_url, config.members_table_id
     );
-    let mut req = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", config.token))
-        .header("Accept", "application/json")
-        .query(&[("filter", &filter.to_string())]);
-    for field in MEMBER_PROJECTION.iter() {
-        req = req.query(&[("projection[]", *field)]);
-    }
-    let response = send_with_retry(req, "members_by_email").await?;
-    let response_text = handle_teable_response(response, "members_by_email").await?;
-    let teable_response: Value = serde_json::from_str(&response_text)?;
-    let records = teable_response["records"]
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
+    let records = fetch_all_records(
+        client,
+        &url,
+        &config.token,
+        &filter,
+        Some(MEMBER_PROJECTION),
+        "members_by_email",
+    )
+    .await?;
     let mut members = Vec::with_capacity(records.len());
-    for record in records {
-        let member = member_from_record(record);
-        members.push(member);
+    for record in &records {
+        members.push(member_from_record(record));
     }
     Ok(members)
 }

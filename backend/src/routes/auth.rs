@@ -205,31 +205,43 @@ pub async fn forgot_password(
     let generic_message =
         "Falls Ihre E-Mail-Adresse registriert ist, wurde soeben eine E-Mail zum Zurücksetzen des Passworts verschickt.";
 
-    match teable::get_member_by_email(&state.teable_config, &state.http_client, &normalized_email)
+    match teable::get_members_by_email(&state.teable_config, &state.http_client, &normalized_email)
         .await
     {
-        Ok(Some(user)) => {
+        Ok(members) if !members.is_empty() => {
+            if members.len() > 1 {
+                // Shared email (e.g. a family address). Passwords are keyed by
+                // email, so any of the profiles resets the same credential, but
+                // make the ambiguity visible rather than silently taking one.
+                warn!(
+                    member_count = members.len(),
+                    "Password reset requested for an email shared by multiple members"
+                );
+            }
+            let user = &members[0];
             debug!(user_id = %user.id, "Password reset: member found");
+            let user_id = user.id.clone();
+            let user_email = user.email.clone();
             let token_store = state.token_store.clone();
             let email_service = state.email_service.clone();
             tokio::spawn(async move {
-                match token_store.create_reset_token(user.id.clone()).await {
+                match token_store.create_reset_token(user_id.clone()).await {
                     Ok(reset_token) => {
-                        info!(user_id = %user.id, "Created password reset token");
+                        info!(user_id = %user_id, "Created password reset token");
                         if let Err(error) = email_service
-                            .send_password_reset_email(&user.email, &reset_token)
+                            .send_password_reset_email(&user_email, &reset_token)
                             .await
                         {
-                            error!(user_id = %user.id, %error, "Failed to send password reset email");
+                            error!(user_id = %user_id, %error, "Failed to send password reset email");
                         }
                     }
                     Err(error) => {
-                        error!(user_id = %user.id, %error, "Failed to persist password reset token");
+                        error!(user_id = %user_id, %error, "Failed to persist password reset token");
                     }
                 }
             });
         }
-        Ok(None) => {
+        Ok(_) => {
             warn!("Password reset requested for unknown email");
         }
         Err(error) => {
