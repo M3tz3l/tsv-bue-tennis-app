@@ -371,9 +371,12 @@ async fn fetch_all_records(
 
         // Prefer the server-reported total: if a key caps `take` below
         // PAGE_SIZE, a short page does not necessarily mean the last page.
+        // Only treat a short page as final when no total is available, and stop
+        // on an empty page so a bogus total cannot loop forever.
         let total = value.get("total").and_then(|total| total.as_u64());
         let reached_total = total.is_some_and(|total| all_records.len() as u64 >= total);
-        if fetched < PAGE_SIZE || reached_total {
+        let short_page_is_final = total.is_none() && fetched < PAGE_SIZE;
+        if fetched == 0 || reached_total || short_page_is_final {
             break;
         }
     }
@@ -939,13 +942,15 @@ pub async fn get_all_active_members(
             all_records.len()
         );
 
-        // Stop when the page is short or the server total is reached. The total
-        // guard keeps results complete when a key caps `take` below page_size.
+        // Stop when the server total is reached, or on a short/empty page when
+        // no total is reported. The empty-page stop prevents endless paging if
+        // the server reports a total it never fulfills.
         let total = teable_response
             .get("total")
             .and_then(|total| total.as_u64());
         let reached_total = total.is_some_and(|total| all_records.len() as u64 >= total);
-        if fetched < page_size || reached_total {
+        let short_page_is_final = total.is_none() && fetched < page_size;
+        if fetched == 0 || reached_total || short_page_is_final {
             break;
         }
     }
