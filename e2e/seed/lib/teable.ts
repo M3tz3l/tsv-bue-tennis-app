@@ -221,17 +221,17 @@ export async function deleteTeableRecordsByEmailDomain(domain: string): Promise<
     });
 
     if (testRecords.length > 0) {
+      const recordIds = testRecords
+        .map((record) => `recordIds[]=${encodeURIComponent(record.id)}`)
+        .join('&');
       const deleteRes = await fetch(
-        `${config.teableApiUrl}/table/${config.membersTableId}/record`,
+        `${config.teableApiUrl}/table/${config.membersTableId}/record?${recordIds}`,
         {
           method: 'DELETE',
           headers: {
             Authorization: `Bearer ${config.teableToken}`,
-            'Content-Type': 'application/json',
+            Accept: 'application/json',
           },
-          body: JSON.stringify({
-            records: testRecords.map(r => r.id),
-          }),
         },
       );
 
@@ -240,7 +240,10 @@ export async function deleteTeableRecordsByEmailDomain(domain: string): Promise<
         // Adjust offset: deleted records shift remaining left
         skip += take - testRecords.length;
       } else {
-        skip += take;
+        const body = await deleteRes.text().catch(() => '');
+        throw new Error(
+          `Failed to delete Teable records: ${deleteRes.status} ${body}`,
+        );
       }
     } else {
       skip += take;
