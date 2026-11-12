@@ -109,7 +109,7 @@ async fn require_orga_role(
     .await
     .map_err(|e| {
         error!("Mail: failed to load current member: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
+        teable::status_for_error(&e)
     })?
     .ok_or(StatusCode::NOT_FOUND)?;
 
@@ -257,7 +257,7 @@ pub async fn send_bulk_mail(
                 .await
                 .map_err(|e| {
                     error!("Send bulk mail: failed to fetch orga members: {}", e);
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR
+                    teable::status_for_error(&e)
                 })?
         }
         RecipientFilter::All | RecipientFilter::Active => {
@@ -265,7 +265,7 @@ pub async fn send_bulk_mail(
                 .await
                 .map_err(|e| {
                     error!("Send bulk mail: failed to fetch all members: {}", e);
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR
+                    teable::status_for_error(&e)
                 })?
         }
     };
@@ -461,7 +461,7 @@ pub async fn get_member_counts(
             .await
             .map_err(|e| {
                 error!("Failed to fetch all member counts: {}", e);
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+                teable::status_for_error(&e)
             })?;
 
     // Fetch orga members count using Teable role filtering
@@ -470,7 +470,7 @@ pub async fn get_member_counts(
             .await
             .map_err(|e| {
                 error!("Failed to fetch orga member counts: {}", e);
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+                teable::status_for_error(&e)
             })?;
 
     let all = dedupe_recipients_by_email(all_members).len();

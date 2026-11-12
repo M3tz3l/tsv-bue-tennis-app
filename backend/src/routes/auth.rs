@@ -61,7 +61,7 @@ pub async fn login(
             .await
             .map_err(|e| {
                 error!("Teable error: {}", e);
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+                teable::status_for_error(&e)
             })?;
 
     if teable_members.is_empty() {
@@ -147,7 +147,7 @@ pub async fn select_member(
             .await
             .map_err(|e| {
                 error!("Teable error: {}", e);
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+                teable::status_for_error(&e)
             })?
             .ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
 
