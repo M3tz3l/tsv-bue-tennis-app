@@ -33,18 +33,18 @@ export function useWorkHourSave({ userId, email, year, dashboardData, editingRow
         return { Nachname: '', Vorname: '' };
     })();
 
-    const handleSave = async (formData: SaveInput) => {
+    const handleSave = async (formData: SaveInput): Promise<boolean> => {
         try {
             const myEntries = getMemberEntries(dashboardData, userId);
 
             if (editing) {
                 if (editing.Datum !== formData.Datum && hasDuplicateEntry(myEntries, formData, editing.id)) {
                     toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
-                    return;
+                    return false;
                 }
             } else if (hasDuplicateEntry(myEntries, formData)) {
                 toast.error('Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt.');
-                return;
+                return false;
             }
 
             const payload: CreateWorkHourRequest = {
@@ -61,9 +61,10 @@ export function useWorkHourSave({ userId, email, year, dashboardData, editingRow
                 toast.success(editing ? 'Eintrag erfolgreich aktualisiert' : 'Eintrag erfolgreich erstellt');
                 void queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY(userId, year) });
                 onSuccess?.();
-            } else {
-                toast.error(response.message || (editing ? 'Fehler beim Aktualisieren' : 'Fehler beim Erstellen'));
+                return true;
             }
+            toast.error(response.message || (editing ? 'Fehler beim Aktualisieren' : 'Fehler beim Erstellen'));
+            return false;
         } catch (error: unknown) {
             const msg = getApiErrorMessage(error, 'Ein Fehler ist aufgetreten');
             if (typeof msg === 'string' && /duplicate|bereits (vorhanden|ein Eintrag)/i.test(msg)) {
@@ -71,6 +72,7 @@ export function useWorkHourSave({ userId, email, year, dashboardData, editingRow
             } else {
                 toast.error(msg);
             }
+            return false;
         }
     };
 

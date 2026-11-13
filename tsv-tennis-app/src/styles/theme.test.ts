@@ -28,7 +28,7 @@ describe('modernist foundation', () => {
     const styles = css();
     expect(styles).toContain('--canvas: #f3f2f2');
     expect(styles).toContain('--ink: #201e1d');
-    expect(styles).toContain('--primary: #ec3013');
+    expect(styles).toContain('--primary: #d42a0f');
     expect(styles).toContain('--primary-active: #c5260f');
     expect(styles).toContain('--hairline: #e4e2e2');
   });

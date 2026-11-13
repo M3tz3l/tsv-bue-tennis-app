@@ -18,7 +18,7 @@ const EventSignupsModal = ({ eventId, isOpen, onClose }: Props) => {
   const event = eventDetail?.event;
   const showSalad = event?.allow_salad ?? false;
   const showCake = event?.allow_cake ?? false;
-  const columnCount = 2 + Number(showSalad) + Number(showCake); // Name, Personen + optional contributions
+  const columnCount = 3 + Number(showSalad) + Number(showCake); // Name, Personen, Kommentar + optional contributions
 
   return (
     <ModalShell

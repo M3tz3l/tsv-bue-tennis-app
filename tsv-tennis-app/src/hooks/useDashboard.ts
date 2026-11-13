@@ -10,8 +10,9 @@ export default function useDashboard(userId?: string, year?: number, enabled = t
             const y = year ?? new Date().getFullYear();
             const res = await BackendService.getDashboard(y);
             if (!res || !res.success) {
-                // Avoid accessing properties that may not exist on the error shape
-                throw new Error('Failed to load dashboard');
+                throw new Error(
+                    'message' in res ? res.message : 'Dashboard-Daten konnten nicht geladen werden',
+                );
             }
             return res;
         },

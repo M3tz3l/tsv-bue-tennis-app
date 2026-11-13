@@ -43,6 +43,7 @@ describe('EventSignupsModal', () => {
     render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
 
     expect(screen.getByText('Noch keine Anmeldungen')).toBeInTheDocument();
+    expect(screen.getByText('Noch keine Anmeldungen')).toHaveAttribute('colspan', '5');
   });
 
   it('hides the Salate and Kuchen columns when they are not enabled for the event', () => {

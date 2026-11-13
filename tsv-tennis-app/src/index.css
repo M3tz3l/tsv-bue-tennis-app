@@ -27,15 +27,16 @@
   --canvas-soft: #f8f4f4;
   --ink: #201e1d;
   --body: #4a4845;
-  --muted: #7d7979;
-  --muted-soft: #9b9797;
+  --muted: #6b6767;
+  --muted-soft: #726e6e;
   --hairline: #e4e2e2;
   --hairline-soft: #eae7e7;
   --hairline-strong: #d7d3d3;
-  --primary: #ec3013;
+  /* darkened from #ec3013 so white text on primary meets WCAG AA */
+  --primary: #d42a0f;
   --primary-active: #c5260f;
   --on-primary: #ffffff;
-  --success: #009100;
+  --success: #007a00;
   --error: #d32f2f;
 }
 

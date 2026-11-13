@@ -23,7 +23,7 @@ type Props = {
     isOpen: boolean;
     onClose: () => void;
     // onSave should accept either create or update shape; modal will pass CreateWorkHourRequest-like payload
-    onSave: (formData: CreateWorkHourRequest | (CreateWorkHourRequest & { id?: string })) => Promise<void>;
+    onSave: (formData: CreateWorkHourRequest | (CreateWorkHourRequest & { id?: string })) => Promise<boolean>;
     initialData?: WorkHourEntry | null;
     userProfile?: { Nachname?: string; Vorname?: string } | null;
     selectedYear?: number;
@@ -104,9 +104,7 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
         };
 
         try {
-            await onSave(payload);
-            // close only if onSave succeeds
-            onClose();
+            if (await onSave(payload)) onClose();
         } catch (err: any) {
             const msg = err?.response?.data?.message || err?.message || 'Fehler beim Speichern';
             toast.error(msg);
@@ -158,30 +156,31 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                     <form id="work-hours-form" onSubmit={handleSubmit(onSubmit)} className="px-6 py-5">
                         <div className={stackMdClass}>
                             <div>
-                                <label className="block text-sm font-medium text-[var(--body)] mb-1">Nachname</label>
+                                <label htmlFor="work-hours-nachname" className="block text-sm font-medium text-[var(--body)] mb-1">Nachname</label>
                                 <input
+                                    id="work-hours-nachname"
                                     type="text"
-                                    {...register('Nachname', { required: 'Nachname ist erforderlich' })}
+                                    {...register('Nachname')}
                                     readOnly
                                     className={`${fieldControl} bg-[var(--canvas-soft)] text-[var(--muted)] cursor-not-allowed`}
                                 />
-                                {errors.Nachname && <p className="text-xs text-[var(--error)] mt-1">{errors.Nachname.message}</p>}
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-[var(--body)] mb-1">Vorname</label>
+                                <label htmlFor="work-hours-vorname" className="block text-sm font-medium text-[var(--body)] mb-1">Vorname</label>
                                 <input
+                                    id="work-hours-vorname"
                                     type="text"
-                                    {...register('Vorname', { required: 'Vorname ist erforderlich' })}
+                                    {...register('Vorname')}
                                     readOnly
                                     className={`${fieldControl} bg-[var(--canvas-soft)] text-[var(--muted)] cursor-not-allowed`}
                                 />
-                                {errors.Vorname && <p className="text-xs text-[var(--error)] mt-1">{errors.Vorname.message}</p>}
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-[var(--body)] mb-1">Datum</label>
+                                <label htmlFor="work-hours-datum" className="block text-sm font-medium text-[var(--body)] mb-1">Datum</label>
                                 <input
+                                    id="work-hours-datum"
                                     type="date"
                                     {...register('Datum', { required: 'Datum ist erforderlich' })}
                                     min={minDate}
@@ -190,13 +189,14 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                     lang="de"
                                     aria-invalid={!!errors.Datum}
                                 />
-                                {errors.Datum && <p className="text-xs text-[var(--error)] mt-1">{errors.Datum.message}</p>}
+                                {errors.Datum && <p role="alert" className="text-xs text-[var(--error)] mt-1">{errors.Datum.message}</p>}
                                 <p className="text-xs text-[var(--muted)] mt-1">Datum darf nicht in der Zukunft liegen. {currentMonth === 0 ? `Nur ${currentYear} oder ${currentYear - 1} (Nachfrist bis Ende Januar) erlaubt.` : `Nur ${currentYear} erlaubt.`}</p>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-[var(--body)] mb-1">Stunden</label>
+                                <label htmlFor="work-hours-stunden" className="block text-sm font-medium text-[var(--body)] mb-1">Stunden</label>
                                 <input
+                                    id="work-hours-stunden"
                                     type="number"
                                     step="0.25"
                                     min={0.25}
@@ -216,20 +216,21 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                     className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     placeholder="z.B. 2.75"
                                 />
-                                {errors.Stunden && <p className="text-xs text-[var(--error)] mt-1">{errors.Stunden.message}</p>}
+                                {errors.Stunden && <p role="alert" className="text-xs text-[var(--error)] mt-1">{errors.Stunden.message}</p>}
                                 <p className="text-xs text-[var(--muted)] mt-1">Zwischen 0.25 und 24 Stunden (in 0.25er Schritten)</p>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-[var(--body)] mb-1">Tätigkeit</label>
+                                <label htmlFor="work-hours-taetigkeit" className="block text-sm font-medium text-[var(--body)] mb-1">Tätigkeit</label>
                                 <input
+                                    id="work-hours-taetigkeit"
                                     type="text"
                                     {...register('Tätigkeit', { required: 'Tätigkeit ist erforderlich', maxLength: { value: 40, message: 'Maximal 40 Zeichen' } })}
                                     className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     placeholder="z.B. Platzpflege, Dienst..."
                                 />
                                 <div className="text-xs text-[var(--muted)] mt-1">{/* length shown by API consumer if needed */}</div>
-                                {errors.Tätigkeit && <p className="text-xs text-[var(--error)] mt-1">{errors.Tätigkeit.message}</p>}
+                                {errors.Tätigkeit && <p role="alert" className="text-xs text-[var(--error)] mt-1">{errors.Tätigkeit.message}</p>}
                             </div>
                         </div>
 
