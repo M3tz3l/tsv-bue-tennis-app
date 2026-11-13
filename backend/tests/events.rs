@@ -988,3 +988,69 @@ async fn past_listing_window_is_configurable() {
     assert_eq!(last_year[0].event.title, "Recent");
     assert_eq!(last_year[1].event.title, "Old");
 }
+
+#[tokio::test]
+async fn initialization_drops_the_legacy_created_by_column() {
+    let options = "sqlite::memory:"
+        .parse::<SqliteConnectOptions>()
+        .unwrap()
+        .foreign_keys(true);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await
+        .unwrap();
+
+    // Schema from before created_by was removed.
+    sqlx::query(
+        r#"
+        CREATE TABLE events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            event_date TEXT NOT NULL,
+            start_time TEXT,
+            end_time TEXT,
+            location TEXT,
+            signup_deadline TEXT,
+            capacity INTEGER,
+            allow_salad INTEGER NOT NULL,
+            allow_cake INTEGER NOT NULL,
+            allow_signups INTEGER NOT NULL DEFAULT 1,
+            status TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO events (type,title,event_date,allow_salad,allow_cake,status,created_by) \
+         VALUES ('event','Legacy','2026-01-01',0,0,'draft','orga-1')",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    Database::initialize_event_tables(&pool).await.unwrap();
+    // A second startup must be a no-op.
+    Database::initialize_event_tables(&pool).await.unwrap();
+
+    let has_created_by: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('events') WHERE name = 'created_by'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(has_created_by, 0);
+
+    let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(rows, 1);
+}
