@@ -186,6 +186,19 @@ pub async fn work_hour_exists_for_member_at_date(
     member_id: &str,
     date: &str,
 ) -> Result<bool> {
+    work_hour_exists_for_member_at_date_excluding(config, http_client, member_id, date, None).await
+}
+
+/// Like [`work_hour_exists_for_member_at_date`], but ignores
+/// `exclude_work_hour_id` so an update that keeps the same date does not count
+/// itself as a duplicate.
+pub async fn work_hour_exists_for_member_at_date_excluding(
+    config: &TeableConfig,
+    http_client: &Client,
+    member_id: &str,
+    date: &str,
+    exclude_work_hour_id: Option<&str>,
+) -> Result<bool> {
     let filter = serde_json::json!({
         "conjunction": "and",
         "filterSet": [
@@ -197,12 +210,17 @@ pub async fn work_hour_exists_for_member_at_date(
         "{}/table/{}/record",
         config.api_url, config.work_hours_table_id
     );
+    let take = if exclude_work_hour_id.is_some() {
+        "2"
+    } else {
+        "1"
+    };
     let request = http_client
         .get(&url)
         .header("Authorization", format!("Bearer {}", config.token))
         .header("Accept", "application/json")
         .query(&[("filter", &filter.to_string())])
-        .query(&[("take", "1")]);
+        .query(&[("take", take)]);
     let response = send_with_retry(request, "work_hours_for_date").await?;
     let response_text = handle_teable_response(response, "work_hours_for_date").await?;
     let teable_response: serde_json::Value = serde_json::from_str(&response_text)?;
@@ -210,7 +228,9 @@ pub async fn work_hour_exists_for_member_at_date(
         .as_array()
         .cloned()
         .unwrap_or_default();
-    Ok(!records.is_empty())
+    Ok(records
+        .iter()
+        .any(|record| record["id"].as_str() != exclude_work_hour_id))
 }
 
 /// Makes an authenticated GET request to the Teable API, with retry.
