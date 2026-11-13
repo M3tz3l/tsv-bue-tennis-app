@@ -57,14 +57,14 @@ describe('EventSignupsModal', () => {
     expect(within(table).getByText('Kommt spaeter')).toBeInTheDocument();
   });
 
-  it('labels signups whose member no longer exists', () => {
+  it('labels signups whose name is unavailable', () => {
     mocks.useEventSignups.mockReturnValue({ data: {
       signups: [{ id: 1, event_id: 4, member_id: 'recMissing', member_name: null, people_count: 1, salad_count: 0, cake_count: 0, comment: null }],
       total_people: 1, total_salad: 0, total_cake: 0,
     }, isLoading: false, error: null });
     render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
 
-    expect(screen.getByText('Mitglied nicht mehr gefunden')).toBeInTheDocument();
+    expect(screen.getByText('Name nicht verfügbar')).toBeInTheDocument();
   });
 
   it('does not render signup details for regular members', () => {

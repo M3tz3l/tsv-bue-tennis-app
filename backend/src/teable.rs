@@ -832,34 +832,31 @@ pub async fn get_members_by_email(
     Ok(members)
 }
 
-/// Resolves display names for a set of member record ids in paginated batch
-/// requests instead of one request per member.
+/// Resolves display names for a set of member record ids in batch requests
+/// instead of one request per member. IDs are sent in chunks of 100, which is
+/// also Teable's recommended page size.
 pub async fn get_member_names_by_ids(
     config: &TeableConfig,
     client: &Client,
     member_ids: &[String],
 ) -> Result<std::collections::HashMap<String, String>> {
-    if member_ids.is_empty() {
-        return Ok(std::collections::HashMap::new());
-    }
+    const CHUNK_SIZE: usize = 100;
 
-    const PAGE_SIZE: usize = 100;
     let url = format!(
         "{}/table/{}/record",
         config.api_url, config.members_table_id
     );
     let mut names = std::collections::HashMap::new();
-    let mut skip = 0usize;
 
-    loop {
+    for chunk in member_ids.chunks(CHUNK_SIZE) {
         let mut request = client
             .get(&url)
             .header("Authorization", format!("Bearer {}", config.token))
             .header("Accept", "application/json")
-            .query(&[("take", "100"), ("skip", &skip.to_string())])
+            .query(&[("take", "100")])
             .query(&[("projection[]", "Vorname")])
             .query(&[("projection[]", "Nachname")]);
-        for id in member_ids {
+        for id in chunk {
             request = request.query(&[("selectedRecordIds[]", id)]);
         }
 
@@ -882,14 +879,6 @@ pub async fn get_member_names_by_ids(
                 names.insert(id.to_string(), name);
             }
         }
-
-        let fetched = records.len();
-        let total = value["total"].as_u64();
-        let reached_total = total.is_some_and(|total| (skip + fetched) as u64 >= total);
-        if fetched < PAGE_SIZE || reached_total {
-            break;
-        }
-        skip += fetched;
     }
 
     Ok(names)
@@ -1063,6 +1052,68 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::TOO_MANY_REQUESTS);
+        mock.assert_async().await;
+    }
+
+    fn batch_config(url: &str) -> TeableConfig {
+        TeableConfig {
+            api_url: url.to_string(),
+            token: "token".into(),
+            members_table_id: "tbl".into(),
+            work_hours_table_id: "hours".into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn member_name_lookup_sends_one_request_for_100_ids() {
+        let mut server = mockito::Server::new_async().await;
+        let records: Vec<_> = (0..100)
+            .map(|i| {
+                serde_json::json!({
+                    "id": format!("rec{i}"),
+                    "fields": { "Vorname": "A", "Nachname": "B" },
+                })
+            })
+            .collect();
+        let body = serde_json::json!({ "records": records }).to_string();
+        let mock = server
+            .mock("GET", "/table/tbl/record")
+            .match_query(Matcher::Any)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(body)
+            .expect(1)
+            .create_async()
+            .await;
+
+        let ids: Vec<String> = (0..100).map(|i| format!("rec{i}")).collect();
+        let names = get_member_names_by_ids(&batch_config(&server.url()), &Client::new(), &ids)
+            .await
+            .unwrap();
+
+        assert_eq!(names.len(), 100);
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn member_name_lookup_chunks_more_than_100_ids() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/table/tbl/record")
+            .match_query(Matcher::Any)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"records":[]}"#)
+            .expect(2)
+            .create_async()
+            .await;
+
+        let ids: Vec<String> = (0..101).map(|i| format!("rec{i}")).collect();
+        let names = get_member_names_by_ids(&batch_config(&server.url()), &Client::new(), &ids)
+            .await
+            .unwrap();
+
+        assert!(names.is_empty());
         mock.assert_async().await;
     }
 }
