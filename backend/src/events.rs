@@ -75,6 +75,7 @@ impl EventRepository {
             payload.start_time.as_deref(),
             payload.end_time.as_deref(),
             payload.capacity,
+            true,
         )?;
         validate_deadline(payload.signup_deadline.as_deref(), &payload.event_date)?;
         let result = sqlx::query("INSERT INTO events (type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
@@ -295,7 +296,22 @@ impl EventRepository {
         let allow_salad = payload.allow_salad.unwrap_or(current.allow_salad);
         let allow_cake = payload.allow_cake.unwrap_or(current.allow_cake);
         let allow_signups = payload.allow_signups.unwrap_or(current.allow_signups);
-        validate_event(&title, &date, start.as_deref(), end.as_deref(), capacity)?;
+        // Only enforce the end-requires-start rule when the time pair is being
+        // changed: legacy rows with an end but no start must stay editable.
+        let touches_times = payload.start_time.is_some()
+            || payload.end_time.is_some()
+            || payload
+                .clear_fields
+                .iter()
+                .any(|field| field == "start_time" || field == "end_time");
+        validate_event(
+            &title,
+            &date,
+            start.as_deref(),
+            end.as_deref(),
+            capacity,
+            touches_times,
+        )?;
         let deadline = update_optional(
             &payload.clear_fields,
             "signup_deadline",
@@ -565,6 +581,7 @@ fn validate_event(
     start: Option<&str>,
     end: Option<&str>,
     capacity: Option<i32>,
+    enforce_end_requires_start: bool,
 ) -> EventResult<()> {
     if title.trim().is_empty() {
         return Err(EventError::Validation("title is required".into()));
@@ -578,6 +595,11 @@ fn validate_event(
     let parsed_end = end.and_then(parse_time);
     if start.is_some() && parsed_start.is_none() || end.is_some() && parsed_end.is_none() {
         return Err(EventError::Validation("times must be HH:MM".into()));
+    }
+    if enforce_end_requires_start && end.is_some() && start.is_none() {
+        return Err(EventError::Validation(
+            "end time requires a start time".into(),
+        ));
     }
     if let (Some(start), Some(end)) = (parsed_start, parsed_end) {
         if end < start {

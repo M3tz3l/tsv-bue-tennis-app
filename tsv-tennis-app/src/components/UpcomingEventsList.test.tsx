@@ -133,6 +133,7 @@ describe('UpcomingEventsList', () => {
 
     rerender(<MemoryRouter><UpcomingEventsList events={undefined} error={new Error('failed')} /></MemoryRouter>);
     expect(screen.queryByText('failed')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(/Veranstaltungen konnten nicht geladen werden/i);
     expect(screen.queryByRole('article')).not.toBeInTheDocument();
   });
 });

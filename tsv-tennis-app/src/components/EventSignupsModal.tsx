@@ -1,21 +1,23 @@
 import { useAuth } from '../context/AuthContext';
-import { useEventSignups } from '../hooks/useEvents';
+import { useEvent, useEventSignups } from '../hooks/useEvents';
 import { isOrgaRole } from '../utils/roles';
 import ModalShell from './ModalShell';
 
-type Props = { eventId: number; allowSalad: boolean; allowCake: boolean; isOpen: boolean; onClose: () => void };
+type Props = { eventId: number; isOpen: boolean; onClose: () => void };
 
 const th = 'py-2 px-3 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]';
 const td = 'py-2.5 px-3 text-[var(--body)]';
 
-const EventSignupsModal = ({ eventId, allowSalad, allowCake, isOpen, onClose }: Props) => {
+const EventSignupsModal = ({ eventId, isOpen, onClose }: Props) => {
   const { user } = useAuth();
   const isOrga = isOrgaRole(user?.role);
+  const { data: eventDetail, isLoading: eventLoading, error: eventError } = useEvent(user?.id, eventId, isOrga);
   const { data, isLoading, error } = useEventSignups(user?.id, eventId, isOrga);
   if (!isOrga) return null;
 
-  const showSalad = allowSalad;
-  const showCake = allowCake;
+  const event = eventDetail?.event;
+  const showSalad = event?.allow_salad ?? false;
+  const showCake = event?.allow_cake ?? false;
   const columnCount = 2 + Number(showSalad) + Number(showCake); // Name, Personen + optional contributions
 
   return (
@@ -28,9 +30,9 @@ const EventSignupsModal = ({ eventId, allowSalad, allowCake, isOpen, onClose }: 
       backdropTestId="modal-backdrop"
       footer={null}
     >
-      {isLoading && <p className="px-6 py-5 text-[var(--muted)]">Wird geladen...</p>}
-      {error && <p className="px-6 py-5 text-[var(--error)]">Anmeldungen konnten nicht geladen werden</p>}
-      {data && (
+      {(isLoading || eventLoading) && <p className="px-6 py-5 text-[var(--muted)]">Wird geladen...</p>}
+      {(error || eventError) && <p className="px-6 py-5 text-[var(--error)]">Anmeldungen konnten nicht geladen werden</p>}
+      {data && event && (
         <div className="px-6 py-5">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

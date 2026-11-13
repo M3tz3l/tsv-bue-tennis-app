@@ -1,9 +1,9 @@
 import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ useAuth: vi.fn(), useEventSignups: vi.fn() }));
+const mocks = vi.hoisted(() => ({ useAuth: vi.fn(), useEvent: vi.fn(), useEventSignups: vi.fn() }));
 vi.mock('../context/AuthContext', () => ({ useAuth: mocks.useAuth }));
-vi.mock('../hooks/useEvents', () => ({ useEventSignups: mocks.useEventSignups }));
+vi.mock('../hooks/useEvents', () => ({ useEvent: mocks.useEvent, useEventSignups: mocks.useEventSignups }));
 
 import EventSignupsModal from './EventSignupsModal';
 
@@ -11,6 +11,7 @@ describe('EventSignupsModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
+    mocks.useEvent.mockReturnValue({ data: { event: { allow_salad: true, allow_cake: true } }, isLoading: false, error: null });
     mocks.useEventSignups.mockReturnValue({ data: {
       signups: [
         { id: 1, event_id: 4, member_id: 'member-a', member_name: 'Anna A', people_count: 2, salad_count: 1, cake_count: 0, comment: 'Kommt spaeter' },
@@ -20,7 +21,7 @@ describe('EventSignupsModal', () => {
   });
 
   it('shows signup details and aggregate totals to Orga', () => {
-    render(<EventSignupsModal eventId={4} allowSalad allowCake isOpen onClose={vi.fn()} />);
+    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
 
     const table = screen.getByRole('table');
     expect(within(table).getByText('Anna A')).toBeInTheDocument();
@@ -39,13 +40,14 @@ describe('EventSignupsModal', () => {
     mocks.useEventSignups.mockReturnValue({ data: {
       signups: [], total_people: 0, total_salad: 0, total_cake: 0,
     }, isLoading: false, error: null });
-    render(<EventSignupsModal eventId={4} allowSalad allowCake isOpen onClose={vi.fn()} />);
+    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
 
     expect(screen.getByText('Noch keine Anmeldungen')).toBeInTheDocument();
   });
 
   it('hides the Salate and Kuchen columns when they are not enabled for the event', () => {
-    render(<EventSignupsModal eventId={4} allowSalad={false} allowCake={false} isOpen onClose={vi.fn()} />);
+    mocks.useEvent.mockReturnValue({ data: { event: { allow_salad: false, allow_cake: false } }, isLoading: false, error: null });
+    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
 
     const table = screen.getByRole('table');
     expect(within(table).queryByText('Salate')).not.toBeInTheDocument();
@@ -56,20 +58,20 @@ describe('EventSignupsModal', () => {
 
   it('does not render signup details for regular members', () => {
     mocks.useAuth.mockReturnValue({ user: { id: 'member-1', role: 'member' } });
-    render(<EventSignupsModal eventId={4} allowSalad allowCake isOpen onClose={vi.fn()} />);
+    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(mocks.useEventSignups).toHaveBeenCalledWith('member-1', 4, false);
   });
 
   it('keeps the signups table scrollable on narrow screens', () => {
-    render(<EventSignupsModal eventId={4} allowSalad allowCake isOpen onClose={vi.fn()} />);
+    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
 
     const table = screen.getByRole('table');
     expect(table.parentElement).toHaveClass('overflow-x-auto');
   });
 
   it('uses shared minimum touch and action control classes and accessibility styles', () => {
-    render(<EventSignupsModal eventId={4} allowSalad allowCake isOpen onClose={vi.fn()} />);
+    render(<EventSignupsModal eventId={4} isOpen onClose={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Schließen' })).toHaveClass('touch-control');
 

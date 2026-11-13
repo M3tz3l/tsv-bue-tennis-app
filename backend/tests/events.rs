@@ -857,3 +857,59 @@ async fn event_type_can_be_updated() {
         .unwrap();
     assert_eq!(updated.event_type, EventType::WorkDuty);
 }
+
+#[tokio::test]
+async fn end_time_requires_a_start_time() {
+    let repository = repository().await;
+    let mut request = event_request();
+    request.start_time = None;
+    request.end_time = Some("21:00".into());
+
+    assert!(matches!(
+        repository.create_event("orga-1", request).await,
+        Err(EventError::Validation(message)) if message.contains("start time")
+    ));
+}
+
+#[tokio::test]
+async fn legacy_end_without_start_does_not_block_unrelated_updates() {
+    let repository = repository().await;
+    let event = repository
+        .create_event("orga-1", event_request())
+        .await
+        .unwrap();
+    // Simulate a row created before the end-requires-start rule existed.
+    sqlx::query("UPDATE events SET start_time=NULL, end_time='21:00' WHERE id=?")
+        .bind(event.id)
+        .execute(repository.pool())
+        .await
+        .unwrap();
+
+    let updated = repository
+        .update_event(
+            event.id,
+            UpdateEventRequest {
+                title: Some("Neu".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated.title, "Neu");
+    assert_eq!(updated.start_time, None);
+    assert_eq!(updated.end_time.as_deref(), Some("21:00"));
+
+    // Touching the time pair still enforces the rule.
+    assert!(matches!(
+        repository
+            .update_event(
+                event.id,
+                UpdateEventRequest {
+                    end_time: Some("22:00".into()),
+                    ..Default::default()
+                },
+            )
+            .await,
+        Err(EventError::Validation(_))
+    ));
+}

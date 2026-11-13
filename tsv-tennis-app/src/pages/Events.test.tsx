@@ -102,7 +102,7 @@ describe('Events', () => {
     renderEvents([detail({ allow_signups: false }, { people_count: 2 })]);
 
     expect(screen.getByText(/Ihre Anmeldung: 2 Personen/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Stornieren/i }));
+    await user.click(screen.getByRole('button', { name: /Anmeldung stornieren/i }));
     expect(screen.getByRole('dialog')).toHaveTextContent('Signup modal for 1');
   });
 
@@ -110,7 +110,7 @@ describe('Events', () => {
     renderEvents([detail({ allow_signups: false }, null)]);
 
     expect(screen.queryByText(/Ihre Anmeldung/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Stornieren/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Anmeldung stornieren/i })).not.toBeInTheDocument();
   });
 
   it('shows only the current member signup status and opens the modal', async () => {
@@ -163,6 +163,16 @@ describe('Events', () => {
 
     expect(screen.getAllByText(/Anmeldung bis/)).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: /Anmelden/i })).toHaveLength(2);
+  });
+
+  it('shows a read-only note for an own signup after the signup deadline', () => {
+    mocks.useEvents.mockReturnValue({ data: [detail({ signup_deadline: '2000-01-01' }, { people_count: 2 })], isLoading: false, error: null });
+    renderEvents();
+
+    expect(screen.getByText(/Ihre Anmeldung: 2 Personen/)).toBeInTheDocument();
+    expect(screen.getByText(/Anmeldeschluss erreicht/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Anmeldung bearbeiten/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Anmeldung stornieren/i })).not.toBeInTheDocument();
   });
 
   it('keeps edit and cancel available for an own signup on a full event', async () => {
