@@ -184,7 +184,7 @@ describe('EventSignupModal', () => {
     
     const submitBtn = screen.getByRole('button', { name: /Anmelden/i });
     expect(submitBtn).toHaveClass('action-control');
-    expect(submitBtn).toHaveClass('bg-[var(--primary)]');
+    expect(submitBtn).toHaveClass('bg-[var(--primary-text)]');
     expect(submitBtn).toHaveClass('hover:bg-[var(--primary-active)]');
 
     const cancelBtn = screen.getByRole('button', { name: /Abbrechen/i });

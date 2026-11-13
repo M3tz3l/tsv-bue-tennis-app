@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { toast } from 'react-toastify';
+import { useState } from 'react';
 import { CalendarIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { useEvents } from '../hooks/useEvents';
@@ -9,6 +8,8 @@ import EventSignupModal from '../components/EventSignupModal';
 import EventFormModal from '../components/EventFormModal';
 import EventSignupsModal from '../components/EventSignupsModal';
 import DashboardShell from '../components/DashboardShell';
+import Spinner from '../components/Spinner';
+import { getApiErrorMessage } from '../services/backendService';
 import { isOrgaRole } from '../utils/roles';
 import { buttonVariants, cardShellClass } from '../styles/tokens';
 import { isPast } from '../utils/dates';
@@ -61,7 +62,7 @@ const EventCard = ({ detail, isOrga, onSelect, onEdit, onSignups }: { detail: Ev
 
 const Events = () => {
   const { user } = useAuth();
-  const { data: events, isLoading, error } = useEvents(user?.id);
+  const { data: events, isLoading, error, refetch } = useEvents(user?.id);
   const signupModal = useModalRoute('eventId');
   const isOrga = isOrgaRole(user?.role);
   const [editingEvent, setEditingEvent] = useState<EventSummary | null | undefined>(undefined);
@@ -69,13 +70,9 @@ const Events = () => {
   const [showMailComposer, setShowMailComposer] = useState(false);
   const visibleEvents = (events ?? []).filter((detail) => isOrga || (detail.event.status === 'published' && !isPast(detail.event.event_date)));
 
-  useEffect(() => {
-    if (error) toast.error(error instanceof Error ? error.message : 'Veranstaltungen konnten nicht geladen werden');
-  }, [error]);
-
-  if (isLoading) return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><div className="text-center text-[var(--muted)]">Veranstaltungen werden geladen...</div></DashboardShell>;
+  if (isLoading) return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><Spinner label="Veranstaltungen werden geladen..." /></DashboardShell>;
   if (error) {
-    return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><div className="rounded-lg bg-white p-8 text-center text-[var(--muted)]">Veranstaltungen konnten nicht geladen werden.</div></DashboardShell>;
+    return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><div className={`${cardShellClass} p-8 text-center`}><p role="alert" className="text-[var(--body)]">{getApiErrorMessage(error, 'Veranstaltungen konnten nicht geladen werden.')}</p><button type="button" onClick={() => void refetch()} className={`${buttonVariants.primary} mt-4`}>Erneut versuchen</button></div></DashboardShell>;
   }
 
   return (

@@ -24,6 +24,8 @@ interface MailComposerProps {
   onClose: () => void;
 }
 
+const MAX_POLL_FAILURES = 20;
+
 const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const { user } = useAuth();
   const senderFirstName = user?.name?.split(' ')[0] || 'Ihr Name';
@@ -37,8 +39,13 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [memberCounts, setMemberCounts] = useState({ all: 0, orga: 0 });
   const [countsLoaded, setCountsLoaded] = useState(false);
+  const [countsError, setCountsError] = useState(false);
   const [activeJob, setActiveJob] = useState<MailJob | null>(null);
+  const [pendingJobId, setPendingJobId] = useState<string | null>(null);
+  const [statusRetryError, setStatusRetryError] = useState(false);
+  const [isRetryingStatus, setIsRetryingStatus] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollFailuresRef = useRef(0);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // New state for redesigned UI
@@ -54,11 +61,14 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
         const response = await BackendService.getMemberCounts();
         if (response.success && response.data) {
           setMemberCounts(response.data);
+          setCountsLoaded(true);
+          setCountsError(false);
+        } else {
+          setCountsError(true);
         }
       } catch (error) {
         console.error('Failed to fetch member counts:', error);
-      } finally {
-        setCountsLoaded(true);
+        setCountsError(true);
       }
     };
 
@@ -81,6 +91,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const pollJobStatus = useCallback(async (jobId: string) => {
     const response = await BackendService.getMailJobStatus(jobId);
     if (response.success && response.job) {
+      pollFailuresRef.current = 0;
       setActiveJob(response.job);
       if (response.job.status === 'completed' || response.job.status === 'failed') {
         if (pollingRef.current) {
@@ -88,6 +99,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           pollingRef.current = null;
         }
         setIsLoading(false);
+        setPendingJobId(null);
+        setStatusRetryError(false);
         const job = response.job;
         if (job.status === 'failed') {
           toast.error(job.error || `Mail-Versand fehlgeschlagen (${job.failed}/${job.total_recipients} fehlgeschlagen)`);
@@ -105,6 +118,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           setRecipientFilter('all');
           setAttachments([]);
           setActiveJob(null);
+          setPendingJobId(null);
+          setStatusRetryError(false);
           setConfirmSend(false);
           onClose();
         }, 2000);
@@ -113,21 +128,44 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
         pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
       }
     } else if (response.status === 429 || (response.status ?? 0) >= 500) {
-      // Transient backend/rate-limit failure: keep the progress view alive
-      // and retry instead of tearing down the send flow.
-      pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
+      // Transient backend/rate-limit failure: keep the progress view alive and
+      // retry, but give up after a bounded number of attempts so the modal
+      // cannot stay locked open forever.
+      pollFailuresRef.current += 1;
+      if (pollFailuresRef.current > MAX_POLL_FAILURES) {
+        if (pollingRef.current) {
+          clearTimeout(pollingRef.current);
+          pollingRef.current = null;
+        }
+        // Keep the accepted job id and progress view: the send may still be
+        // running server-side, so a new submission must stay blocked.
+        setIsLoading(false);
+        setStatusRetryError(true);
+        toast.error('Versandstatus nicht erreichbar. Der Versand läuft möglicherweise weiter.');
+      } else {
+        pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
+      }
     } else {
       if (pollingRef.current) {
         clearTimeout(pollingRef.current);
         pollingRef.current = null;
       }
       setIsLoading(false);
-      setActiveJob(null);
-      toast.error(response.message || 'Job-Status konnte nicht abgerufen werden');
+      // Keep the pending job recoverable; the status view offers a retry and
+      // bulk sending stays blocked until it resolves.
+      setStatusRetryError(true);
+      toast.error(
+        response.message ||
+          'Versandstatus nicht erreichbar. Der Versand läuft möglicherweise weiter.',
+      );
     }
   }, [onClose]);
 
-  const isBusy = isLoading || isSendingTest || (activeJob !== null && activeJob.status !== 'completed' && activeJob.status !== 'failed');
+  // While the accepted job is unresolved, block new submissions. After a status
+  // failure the user may close the modal, but the job id stays in state so the
+  // status view (and the send block) returns on reopen.
+  const sendBlocked = pendingJobId !== null;
+  const isBusy = isLoading || isSendingTest || (sendBlocked && !statusRetryError);
 
   const handleClose = () => {
     if (isBusy) return;
@@ -139,10 +177,22 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       clearTimeout(resetTimeoutRef.current);
       resetTimeoutRef.current = null;
     }
-    setActiveJob(null);
+    if (!statusRetryError) {
+      setActiveJob(null);
+      setPendingJobId(null);
+      setConfirmSend(false);
+    }
     setIsLoading(false);
-    setConfirmSend(false);
     onClose();
+  };
+
+  const handleRetryStatus = async () => {
+    if (!pendingJobId) return;
+    setIsRetryingStatus(true);
+    pollFailuresRef.current = 0;
+    setStatusRetryError(false);
+    await pollJobStatus(pendingJobId);
+    setIsRetryingStatus(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -217,6 +267,10 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       toast.error('Betreff und Nachricht sind erforderlich');
       return;
     }
+    if (pendingJobId) {
+      toast.error('Ein Versand wird noch verarbeitet. Bitte prüfen Sie dessen Status.');
+      return;
+    }
 
     setIsLoading(true);
     setActiveJob(null);
@@ -243,6 +297,9 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           return;
         }
         toast.info(`Mail-Versand gestartet für ${total} Empfänger...`);
+        pollFailuresRef.current = 0;
+        setPendingJobId(jobId);
+        setStatusRetryError(false);
         void pollJobStatus(jobId);
       } else {
         toast.error(response.message || 'Fehler beim Versenden der Mail');
@@ -262,17 +319,64 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
   const isFormValid = subject.trim().length > 0 && message.trim().length > 0;
 
+  // A job id exists but no status snapshot was ever received (e.g. the first
+  // poll failed). Keep the send blocked and let the user retry the status.
+  if (!activeJob && pendingJobId) {
+    return (
+      <ModalShell
+        isOpen={isOpen}
+        onClose={handleClose}
+        title="Mail versenden"
+        disableClose={isBusy}
+        widthClassName="max-w-lg"
+        footer={(
+          <button onClick={handleClose} disabled={isBusy} className={buttonVariants.secondary}>
+            {statusRetryError ? 'Schließen' : 'Abbrechen'}
+          </button>
+        )}
+      >
+        <div className="px-6 py-8 text-center">
+          {statusRetryError ? (
+            <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-[var(--error)]" />
+          ) : (
+            <div className="mx-auto h-12 w-12 flex items-center justify-center">
+              <div className="animate-spin h-10 w-10 border-4 border-[var(--primary)] border-t-transparent rounded-full" />
+            </div>
+          )}
+          <h3 className="mt-4 text-lg font-medium text-[var(--ink)]">
+            {statusRetryError ? 'Versandstatus nicht erreichbar' : 'Versandstatus wird geprüft...'}
+          </h3>
+          {statusRetryError && (
+            <div className="mt-4 rounded-md bg-[var(--canvas-soft)] p-3 text-left">
+              <p className="text-sm text-[var(--body)]">
+                Der Versand läuft möglicherweise weiter. Starten Sie keine neue Rundmail, bevor der Status geklärt ist.
+              </p>
+              <button
+                type="button"
+                onClick={() => void handleRetryStatus()}
+                disabled={isRetryingStatus}
+                className={`${buttonVariants.secondary} mt-3`}
+              >
+                {isRetryingStatus ? 'Status wird geprüft...' : 'Status erneut prüfen'}
+              </button>
+            </div>
+          )}
+        </div>
+      </ModalShell>
+    );
+  }
+
   // During active job: show progress view
   if (activeJob) {
     return (
       <ModalShell isOpen={isOpen} onClose={handleClose} title="Mail versenden" disableClose={isBusy} widthClassName="max-w-lg" headerContent={(
             <div className="flex items-center gap-3">
-              <div className="bg-[var(--primary)]/10 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-[var(--primary)]" /></div>
+              <div className="bg-[var(--primary)]/10 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-[var(--primary-text)]" /></div>
               <DialogTitle className="text-lg font-extrabold text-[var(--ink)]">Mail versenden</DialogTitle>
             </div>
           )} footer={(
             <button onClick={handleClose} disabled={isBusy} className={buttonVariants.secondary}>
-              {activeJob.status === 'completed' || activeJob.status === 'failed' ? 'Schließen' : 'Abbrechen'}
+              {activeJob.status === 'completed' || activeJob.status === 'failed' || statusRetryError ? 'Schließen' : 'Abbrechen'}
             </button>
           )}>
             {/* Progress content */}
@@ -297,8 +401,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                 </h3>
 
                 {/* Progress bar */}
-                <div className="mt-6">
-                  <div className="flex justify-between text-sm text-[var(--muted)] mb-2">
+                <div className="mt-6" role="progressbar" aria-valuemin={0} aria-valuemax={activeJob.total_recipients} aria-valuenow={Math.min(activeJob.total_recipients, activeJob.sent + activeJob.failed)} aria-label="Versandfortschritt">
+                  <div className="flex justify-between text-sm text-[var(--muted)] mb-2" aria-live="polite">
                     <span>{activeJob.sent} gesendet</span>
                     <span>{activeJob.total_recipients} Empfänger</span>
                   </div>
@@ -333,6 +437,23 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                 {activeJob.status === 'completed' && (
                   <p className="mt-3 text-sm text-[var(--muted)]">Fenster schließt automatisch...</p>
                 )}
+
+                {statusRetryError && (
+                  <div className="mt-4 rounded-md bg-[var(--canvas-soft)] p-3 text-left">
+                    <p className="text-sm text-[var(--body)]">
+                      Der Versandstatus ist derzeit nicht erreichbar. Der Versand läuft möglicherweise weiter.
+                      Starten Sie keine neue Rundmail, bevor der Status geklärt ist.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleRetryStatus()}
+                      disabled={isRetryingStatus}
+                      className={`${buttonVariants.secondary} mt-3`}
+                    >
+                      {isRetryingStatus ? 'Status wird geprüft...' : 'Status erneut prüfen'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -352,7 +473,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       panelProps={{ onDragOver: handleDragOver, onDragLeave: handleDragLeave, onDrop: handleDrop }}
       headerContent={(
         <div className="flex items-center gap-3">
-          <div className="bg-[var(--primary)]/10 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-[var(--primary)]" /></div>
+          <div className="bg-[var(--primary)]/10 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-[var(--primary-text)]" /></div>
           <DialogTitle className="text-lg font-extrabold text-[var(--ink)]">Rundmail versenden</DialogTitle>
         </div>
       )}
@@ -366,10 +487,10 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           </div>
           <div className="flex items-center gap-3">
             {confirmSend ? <>
-              <span className="text-sm text-[var(--muted)]">An {currentRecipientCount} {recipientFilter === 'all' ? 'Mitglieder' : 'Ausschuss-Mitglieder'} senden?</span>
+              <span className="text-sm text-[var(--muted)]">{currentRecipientCount === null ? 'An die ausgewählten Mitglieder senden?' : `An ${currentRecipientCount} ${recipientFilter === 'all' ? 'Mitglieder' : 'Ausschuss-Mitglieder'} senden?`}</span>
               <button onClick={() => setConfirmSend(false)} disabled={isBusy} className={buttonVariants.secondary}>Zurück</button>
-              <button onClick={handleSendBulk} disabled={isBusy} className={`${buttonVariants.primary} inline-flex items-center justify-center`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />Jetzt senden</button>
-            </> : <button onClick={() => isFormValid && setConfirmSend(true)} disabled={isBusy || !isFormValid} className={`${buttonVariants.primary} inline-flex items-center justify-center`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />{isLoading ? 'Wird gestartet...' : 'Versenden'}{currentRecipientCount !== null && <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold rounded-full bg-[var(--on-primary)]/25 text-[var(--on-primary)]">{currentRecipientCount}</span>}</button>}
+              <button onClick={handleSendBulk} disabled={isBusy || sendBlocked} className={`${buttonVariants.primary} inline-flex items-center justify-center`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />Jetzt senden</button>
+            </> : <button onClick={() => isFormValid && setConfirmSend(true)} disabled={isBusy || sendBlocked || !isFormValid} className={`${buttonVariants.primary} inline-flex items-center justify-center`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />{isLoading ? 'Wird gestartet...' : 'Versenden'}{currentRecipientCount !== null && <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold rounded-full bg-[var(--on-primary)]/25 text-[var(--on-primary)]">{currentRecipientCount}</span>}</button>}
           </div>
         </>
       )}
@@ -378,8 +499,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           {isDragOver && (
             <div className="absolute inset-0 z-20 bg-[var(--primary)]/5 border-2 border-dashed border-[var(--primary)] rounded-xl flex items-center justify-center pointer-events-none">
               <div className="text-center">
-                <PaperClipIcon className="mx-auto h-12 w-12 text-[var(--primary)]" />
-                <p className="mt-2 text-lg font-medium text-[var(--primary)]">
+                <PaperClipIcon className="mx-auto h-12 w-12 text-[var(--primary-text)]" />
+                <p className="mt-2 text-lg font-medium text-[var(--primary-text)]">
                   Dateien hier ablegen
                 </p>
               </div>
@@ -396,6 +517,9 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                   <label className="block text-sm font-medium text-[var(--body)] mb-2">
                     Empfängergruppe
                   </label>
+                  <p role="status" aria-live="polite" className="mb-2 text-xs text-[var(--error)]">
+                    {countsError ? 'Empfängerzahl konnte nicht geladen werden.' : ''}
+                  </p>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
@@ -403,7 +527,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                       disabled={isBusy}
                       className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
                         recipientFilter === 'all'
-                          ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary)]'
+                          ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary-text)]'
                           : 'border-[var(--hairline)] hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 text-[var(--body)]'
                       } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
@@ -413,7 +537,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                         <span
                           className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
                             recipientFilter === 'all'
-                              ? 'bg-[var(--primary)]/15 text-[var(--primary)]'
+                              ? 'bg-[var(--primary)]/15 text-[var(--primary-text)]'
                               : 'bg-[var(--canvas-soft)] text-[var(--muted)]'
                           }`}
                         >
@@ -427,7 +551,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                       disabled={isBusy}
                       className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
                         recipientFilter === 'orga'
-                          ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary)]'
+                          ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary-text)]'
                           : 'border-[var(--hairline)] hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 text-[var(--body)]'
                       } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
@@ -437,7 +561,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                         <span
                           className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
                             recipientFilter === 'orga'
-                              ? 'bg-[var(--primary)]/15 text-[var(--primary)]'
+                              ? 'bg-[var(--primary)]/15 text-[var(--primary-text)]'
                               : 'bg-[var(--canvas-soft)] text-[var(--muted)]'
                           }`}
                         >
@@ -521,7 +645,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isBusy}
-                    className="inline-flex items-center gap-2 px-3 py-2 border border-dashed border-[var(--hairline-strong)] rounded-lg text-sm text-[var(--muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 px-3 py-2 border border-dashed border-[var(--hairline-strong)] rounded-lg text-sm text-[var(--muted)] hover:border-[var(--primary)] hover:text-[var(--primary-text)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <PaperClipIcon className="h-4 w-4" />
                     Dateien anhängen
@@ -634,7 +758,7 @@ const PreviewContent: React.FC<{
       </p>
       <a
         href="mailto:tennisabteilung@tsv-bad-ueberkingen.de"
-        className="text-[var(--primary)] hover:underline"
+        className="text-[var(--primary-text)] hover:underline"
       >
         tennisabteilung@tsv-bad-ueberkingen.de
       </a>

@@ -66,7 +66,7 @@ export const MemberSelection = ({ users, selectionToken, onComplete, onCancel }:
                                             </div>
                                         )}
                                     </div>
-                                    <div className="ml-3 text-[var(--primary)]">
+                                    <div className="ml-3 text-[var(--primary-text)]">
                                         {loading ? (
                                             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[var(--primary)]"></div>
                                         ) : (

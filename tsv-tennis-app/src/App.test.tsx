@@ -69,21 +69,12 @@ describe('dashboard routes', () => {
     expect(from?.pathname).toBe('/dashboard/veranstaltungen');
   });
 
-  it('redirects an unknown path to the dashboard for authenticated users', async () => {
+  it('renders a not-found page for an unknown path', async () => {
     window.history.pushState({}, '', '/does-not-exist');
 
     render(<App />);
 
-    expect(await screen.findByText('Dashboard overview page')).toBeInTheDocument();
-  });
-
-  it('redirects an unknown path to login for unauthenticated users', async () => {
-    mocks.useAuth.mockReturnValue({ user: null, loading: false });
-    window.history.pushState({}, '', '/does-not-exist');
-
-    render(<App />);
-
-    expect(await screen.findByText('Login page')).toBeInTheDocument();
-    await waitFor(() => expect(window.location.pathname).toBe('/login'));
+    expect(await screen.findByText('Seite nicht gefunden')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/does-not-exist');
   });
 });

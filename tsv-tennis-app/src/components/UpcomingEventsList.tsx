@@ -71,7 +71,7 @@ const UpcomingEventsList = ({ events, limit = 3, isLoading = false, error }: Upc
         <section aria-label="Nächste Veranstaltungen" className={`${cardShellClass} min-h-56`}>
             <div className="flex items-center justify-between gap-3">
                 <Link to="/dashboard/veranstaltungen" className="group min-w-0">
-                    <h2 className="text-lg font-extrabold tracking-tight text-[var(--ink)] group-hover:text-[var(--primary)] transition-colors">Nächste Veranstaltungen</h2>
+                    <h2 className="text-lg font-extrabold tracking-tight text-[var(--ink)] group-hover:text-[var(--primary-text)] transition-colors">Nächste Veranstaltungen</h2>
                 </Link>
                 <Link
                     to="/dashboard/veranstaltungen"
