@@ -39,6 +39,14 @@ pub type EventResult<T> = StdResult<T, EventError>;
 const MAX_PEOPLE_COUNT: i32 = 100;
 const MAX_FOOD_COUNT: i32 = 100;
 const MAX_EVENT_CAPACITY: i32 = 10_000;
+const MAX_TITLE_CHARS: usize = 200;
+const MAX_DESCRIPTION_CHARS: usize = 2_000;
+const MAX_LOCATION_CHARS: usize = 200;
+const MAX_COMMENT_CHARS: usize = 500;
+
+const EVENT_SELECT: &str = "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events";
+const SIGNUP_SELECT: &str =
+    "SELECT id,event_id,member_id,people_count,salad_count,cake_count,comment FROM event_signups";
 
 #[derive(Clone)]
 pub struct EventRepository {
@@ -78,9 +86,13 @@ impl EventRepository {
             true,
         )?;
         validate_deadline(payload.signup_deadline.as_deref(), &payload.event_date)?;
+        let description = clean(payload.description);
+        let location = clean(payload.location);
+        validate_text("description", description.as_deref(), MAX_DESCRIPTION_CHARS)?;
+        validate_text("location", location.as_deref(), MAX_LOCATION_CHARS)?;
         let result = sqlx::query("INSERT INTO events (type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-            .bind(event_type(&payload.event_type)).bind(payload.title.trim()).bind(clean(payload.description))
-            .bind(payload.event_date).bind(clean(payload.start_time)).bind(clean(payload.end_time)).bind(clean(payload.location))
+            .bind(event_type(&payload.event_type)).bind(payload.title.trim()).bind(description)
+            .bind(payload.event_date).bind(clean(payload.start_time)).bind(clean(payload.end_time)).bind(location)
             .bind(clean(payload.signup_deadline)).bind(payload.capacity).bind(payload.allow_salad).bind(payload.allow_cake).bind(payload.allow_signups)
             .bind(status(&payload.status)).bind(actor_id).execute(&self.pool).await?;
         self.get_summary(result.last_insert_rowid()).await
@@ -93,35 +105,8 @@ impl EventRepository {
         payload: SignupRequest,
     ) -> EventResult<EventSignup> {
         validate_signup(&payload)?;
-        let event = sqlx::query("SELECT event_date, status, allow_salad, allow_cake, allow_signups, signup_deadline, capacity, (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) AS signup_people_count FROM events WHERE id = ?")
-            .bind(event_id).fetch_optional(&self.pool).await?
-            .ok_or(EventError::NotFound)?;
-        if event.get::<String, _>("status") != "published" {
-            return Err(EventError::Validation(
-                "draft events cannot receive signups".into(),
-            ));
-        }
-        if event_date_has_passed(&event.get::<String, _>("event_date")) {
-            return Err(EventError::Conflict("event has already taken place".into()));
-        }
-        if !event.get::<bool, _>("allow_signups") {
-            return Err(EventError::Conflict(
-                "signups are disabled for this event".into(),
-            ));
-        }
-        if event
-            .get::<Option<String>, _>("signup_deadline")
-            .is_some_and(|deadline| deadline_invalid_or_passed(&deadline))
-        {
-            return Err(EventError::Conflict("signup deadline has passed".into()));
-        }
-        if (!event.get::<bool, _>("allow_salad") && payload.salad_count > 0)
-            || (!event.get::<bool, _>("allow_cake") && payload.cake_count > 0)
-        {
-            return Err(EventError::Validation(
-                "disabled contributions must be zero".into(),
-            ));
-        }
+        let event = self.load_signup_event(event_id).await?;
+        validate_signup_eligibility(&event, &payload)?;
 
         // The capacity check is part of the INSERT statement so concurrent
         // signups cannot both pass a stale read and overbook the event.
@@ -159,7 +144,7 @@ impl EventRepository {
 
     pub async fn list_published_future(&self, _member_id: &str) -> EventResult<Vec<EventSummary>> {
         let rows = sqlx::query(
-            "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE status='published' AND event_date >= ? ORDER BY event_date,start_time",
+            &format!("{EVENT_SELECT} WHERE status='published' AND event_date >= ? ORDER BY event_date,start_time"),
         )
         .bind(berlin_today().to_string())
         .fetch_all(&self.pool)
@@ -172,12 +157,12 @@ impl EventRepository {
         member_id: &str,
     ) -> EventResult<Vec<EventDetail>> {
         let event_rows = sqlx::query(
-            "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE status='published' AND event_date >= ? ORDER BY event_date,start_time",
+            &format!("{EVENT_SELECT} WHERE status='published' AND event_date >= ? ORDER BY event_date,start_time"),
         )
         .bind(berlin_today().to_string())
         .fetch_all(&self.pool)
         .await?;
-        let signup_rows = sqlx::query("SELECT id,event_id,member_id,people_count,salad_count,cake_count,comment FROM event_signups WHERE member_id=?")
+        let signup_rows = sqlx::query(&format!("{SIGNUP_SELECT} WHERE member_id=?"))
             .bind(member_id)
             .fetch_all(&self.pool)
             .await?;
@@ -199,11 +184,9 @@ impl EventRepository {
     }
 
     pub async fn list_all_events(&self) -> EventResult<Vec<EventSummary>> {
-        let rows = sqlx::query(
-            "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events ORDER BY event_date,start_time",
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let rows = sqlx::query(&format!("{EVENT_SELECT} ORDER BY event_date,start_time"))
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows.iter().map(summary).collect())
     }
 
@@ -211,12 +194,10 @@ impl EventRepository {
         &self,
         member_id: &str,
     ) -> EventResult<Vec<EventDetail>> {
-        let event_rows = sqlx::query(
-            "SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events ORDER BY event_date,start_time",
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        let signup_rows = sqlx::query("SELECT id,event_id,member_id,people_count,salad_count,cake_count,comment FROM event_signups WHERE member_id=?")
+        let event_rows = sqlx::query(&format!("{EVENT_SELECT} ORDER BY event_date,start_time"))
+            .fetch_all(&self.pool)
+            .await?;
+        let signup_rows = sqlx::query(&format!("{SIGNUP_SELECT} WHERE member_id=?"))
             .bind(member_id)
             .fetch_all(&self.pool)
             .await?;
@@ -239,8 +220,12 @@ impl EventRepository {
 
     pub async fn get_event(&self, id: i64, member_id: &str) -> EventResult<EventDetail> {
         let event = self.get_summary(id).await?;
-        let own_signup = sqlx::query("SELECT id,event_id,member_id,people_count,salad_count,cake_count,comment FROM event_signups WHERE event_id=? AND member_id=?")
-            .bind(id).bind(member_id).fetch_optional(&self.pool).await?.map(|row| signup(&row));
+        let own_signup = sqlx::query(&format!("{SIGNUP_SELECT} WHERE event_id=? AND member_id=?"))
+            .bind(id)
+            .bind(member_id)
+            .fetch_optional(&self.pool)
+            .await?
+            .map(|row| signup(&row));
         Ok(EventDetail { event, own_signup })
     }
 
@@ -260,7 +245,7 @@ impl EventRepository {
         payload: UpdateEventRequest,
     ) -> EventResult<EventSummary> {
         let mut tx = self.pool.begin().await?;
-        let current = sqlx::query("SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE id=?")
+        let current = sqlx::query(&format!("{EVENT_SELECT} WHERE id=?"))
             .bind(id)
             .fetch_optional(&mut *tx)
             .await?
@@ -296,6 +281,20 @@ impl EventRepository {
         let allow_salad = payload.allow_salad.unwrap_or(current.allow_salad);
         let allow_cake = payload.allow_cake.unwrap_or(current.allow_cake);
         let allow_signups = payload.allow_signups.unwrap_or(current.allow_signups);
+        let description = update_optional(
+            &payload.clear_fields,
+            "description",
+            payload.description,
+            current.description.clone(),
+        );
+        let location = update_optional(
+            &payload.clear_fields,
+            "location",
+            payload.location,
+            current.location.clone(),
+        );
+        validate_text("description", description.as_deref(), MAX_DESCRIPTION_CHARS)?;
+        validate_text("location", location.as_deref(), MAX_LOCATION_CHARS)?;
         // Only enforce the end-requires-start rule when the time pair is being
         // changed: legacy rows with an end but no start must stay editable.
         let touches_times = payload.start_time.is_some()
@@ -363,11 +362,11 @@ impl EventRepository {
         sqlx::query("UPDATE events SET type=?,title=?,description=?,event_date=?,start_time=?,end_time=?,location=?,signup_deadline=?,capacity=?,allow_salad=?,allow_cake=?,allow_signups=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
             .bind(event_type(&new_type))
             .bind(title.trim())
-            .bind(clean(update_optional(&payload.clear_fields, "description", payload.description, current.description)))
+            .bind(clean(description))
             .bind(date)
             .bind(clean(start))
             .bind(clean(end))
-            .bind(clean(update_optional(&payload.clear_fields, "location", payload.location, current.location)))
+            .bind(clean(location))
             .bind(clean(deadline))
             .bind(capacity)
             .bind(allow_salad)
@@ -417,37 +416,8 @@ impl EventRepository {
         payload: SignupRequest,
     ) -> EventResult<EventSignup> {
         validate_signup(&payload)?;
-        let event = sqlx::query("SELECT event_date, status, allow_salad, allow_cake, allow_signups, signup_deadline, capacity, (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) AS signup_people_count FROM events WHERE id=?")
-            .bind(event_id)
-            .fetch_optional(&self.pool)
-            .await?
-            .ok_or(EventError::NotFound)?;
-        if event.get::<String, _>("status") != "published" {
-            return Err(EventError::Validation(
-                "draft events cannot receive signups".into(),
-            ));
-        }
-        if event_date_has_passed(&event.get::<String, _>("event_date")) {
-            return Err(EventError::Conflict("event has already taken place".into()));
-        }
-        if !event.get::<bool, _>("allow_signups") {
-            return Err(EventError::Conflict(
-                "signups are disabled for this event".into(),
-            ));
-        }
-        if event
-            .get::<Option<String>, _>("signup_deadline")
-            .is_some_and(|deadline| deadline_invalid_or_passed(&deadline))
-        {
-            return Err(EventError::Conflict("signup deadline has passed".into()));
-        }
-        if (!event.get::<bool, _>("allow_salad") && payload.salad_count > 0)
-            || (!event.get::<bool, _>("allow_cake") && payload.cake_count > 0)
-        {
-            return Err(EventError::Validation(
-                "disabled contributions must be zero".into(),
-            ));
-        }
+        let event = self.load_signup_event(event_id).await?;
+        validate_signup_eligibility(&event, &payload)?;
         let existing_people: i32 = sqlx::query_scalar(
             "SELECT people_count FROM event_signups WHERE event_id=? AND member_id=?",
         )
@@ -540,7 +510,10 @@ impl EventRepository {
         if exists == 0 {
             return Err(EventError::NotFound);
         }
-        let rows = sqlx::query("SELECT id,event_id,member_id,people_count,salad_count,cake_count,comment FROM event_signups WHERE event_id=? ORDER BY id").bind(event_id).fetch_all(&self.pool).await?;
+        let rows = sqlx::query(&format!("{SIGNUP_SELECT} WHERE event_id=? ORDER BY id"))
+            .bind(event_id)
+            .fetch_all(&self.pool)
+            .await?;
         let signups: Vec<_> = rows.iter().map(signup).collect();
         Ok(SignupSummary {
             total_people: signups.iter().map(|s| s.people_count).sum(),
@@ -551,14 +524,66 @@ impl EventRepository {
     }
 
     async fn get_summary(&self, id: i64) -> EventResult<EventSummary> {
-        let row = sqlx::query("SELECT id,type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,(SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=events.id) signup_people_count FROM events WHERE id=?").bind(id).fetch_optional(&self.pool).await?.ok_or(EventError::NotFound)?;
+        let row = sqlx::query(&format!("{EVENT_SELECT} WHERE id=?"))
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or(EventError::NotFound)?;
         Ok(summary(&row))
     }
 
+    /// Loads the fields needed to validate a signup against an event.
+    async fn load_signup_event(&self, event_id: i64) -> EventResult<sqlx::sqlite::SqliteRow> {
+        sqlx::query(
+            "SELECT event_date, status, allow_salad, allow_cake, allow_signups, signup_deadline FROM events WHERE id=?",
+        )
+        .bind(event_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(EventError::NotFound)
+    }
+
     async fn get_signup(&self, id: i64) -> EventResult<EventSignup> {
-        let row = sqlx::query("SELECT id,event_id,member_id,people_count,salad_count,cake_count,comment FROM event_signups WHERE id=?").bind(id).fetch_one(&self.pool).await?;
+        let row = sqlx::query(&format!("{SIGNUP_SELECT} WHERE id=?"))
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await?;
         Ok(signup(&row))
     }
+}
+
+/// Shared create/update signup eligibility rules.
+fn validate_signup_eligibility(
+    event: &sqlx::sqlite::SqliteRow,
+    payload: &SignupRequest,
+) -> EventResult<()> {
+    if event.get::<String, _>("status") != "published" {
+        return Err(EventError::Validation(
+            "draft events cannot receive signups".into(),
+        ));
+    }
+    if event_date_has_passed(&event.get::<String, _>("event_date")) {
+        return Err(EventError::Conflict("event has already taken place".into()));
+    }
+    if !event.get::<bool, _>("allow_signups") {
+        return Err(EventError::Conflict(
+            "signups are disabled for this event".into(),
+        ));
+    }
+    if event
+        .get::<Option<String>, _>("signup_deadline")
+        .is_some_and(|deadline| deadline_invalid_or_passed(&deadline))
+    {
+        return Err(EventError::Conflict("signup deadline has passed".into()));
+    }
+    if (!event.get::<bool, _>("allow_salad") && payload.salad_count > 0)
+        || (!event.get::<bool, _>("allow_cake") && payload.cake_count > 0)
+    {
+        return Err(EventError::Validation(
+            "disabled contributions must be zero".into(),
+        ));
+    }
+    Ok(())
 }
 
 /// Today's date in the club's time zone. SQLite's `date('now')` is UTC, which
@@ -586,6 +611,11 @@ fn validate_event(
     if title.trim().is_empty() {
         return Err(EventError::Validation("title is required".into()));
     }
+    if title.trim().chars().count() > MAX_TITLE_CHARS {
+        return Err(EventError::Validation(format!(
+            "title must be at most {MAX_TITLE_CHARS} characters"
+        )));
+    }
     if chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").is_err() {
         return Err(EventError::Validation(
             "event date must be YYYY-MM-DD".into(),
@@ -609,7 +639,9 @@ fn validate_event(
         }
     }
     if capacity.is_some_and(|value| !(1..=MAX_EVENT_CAPACITY).contains(&value)) {
-        return Err(EventError::Validation("capacity must be positive".into()));
+        return Err(EventError::Validation(format!(
+            "capacity must be between 1 and {MAX_EVENT_CAPACITY}"
+        )));
     }
     Ok(())
 }
@@ -620,6 +652,24 @@ fn validate_signup(payload: &SignupRequest) -> EventResult<()> {
         || !(0..=MAX_FOOD_COUNT).contains(&payload.cake_count)
     {
         return Err(EventError::Validation("invalid signup counts".into()));
+    }
+    if payload
+        .comment
+        .as_deref()
+        .is_some_and(|comment| comment.trim().chars().count() > MAX_COMMENT_CHARS)
+    {
+        return Err(EventError::Validation(format!(
+            "comment must be at most {MAX_COMMENT_CHARS} characters"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_text(field: &str, value: Option<&str>, max: usize) -> EventResult<()> {
+    if value.is_some_and(|value| value.chars().count() > max) {
+        return Err(EventError::Validation(format!(
+            "{field} must be at most {max} characters"
+        )));
     }
     Ok(())
 }

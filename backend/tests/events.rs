@@ -913,3 +913,71 @@ async fn legacy_end_without_start_does_not_block_unrelated_updates() {
         Err(EventError::Validation(_))
     ));
 }
+
+#[tokio::test]
+async fn event_text_fields_enforce_length_limits() {
+    let repository = repository().await;
+
+    let mut request = event_request();
+    request.title = "x".repeat(201);
+    assert!(matches!(
+        repository.create_event("orga-1", request).await,
+        Err(EventError::Validation(message)) if message.contains("title")
+    ));
+
+    let mut request = event_request();
+    request.description = Some("x".repeat(2001));
+    assert!(matches!(
+        repository.create_event("orga-1", request).await,
+        Err(EventError::Validation(message)) if message.contains("description")
+    ));
+
+    let mut request = event_request();
+    request.location = Some("x".repeat(201));
+    assert!(matches!(
+        repository.create_event("orga-1", request).await,
+        Err(EventError::Validation(message)) if message.contains("location")
+    ));
+
+    let event = repository
+        .create_event("orga-1", event_request())
+        .await
+        .unwrap();
+    assert!(matches!(
+        repository
+            .update_event(
+                event.id,
+                UpdateEventRequest {
+                    description: Some("x".repeat(2001)),
+                    ..Default::default()
+                },
+            )
+            .await,
+        Err(EventError::Validation(message)) if message.contains("description")
+    ));
+}
+
+#[tokio::test]
+async fn signup_comment_enforces_length_limit() {
+    let repository = repository().await;
+    let event = repository
+        .create_event("orga-1", event_request())
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        repository
+            .create_signup(
+                event.id,
+                "member-1",
+                SignupRequest {
+                    people_count: 1,
+                    salad_count: 0,
+                    cake_count: 0,
+                    comment: Some("x".repeat(501)),
+                },
+            )
+            .await,
+        Err(EventError::Validation(message)) if message.contains("comment")
+    ));
+}

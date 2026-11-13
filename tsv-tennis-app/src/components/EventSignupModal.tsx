@@ -8,6 +8,9 @@ import { isPast } from '../utils/dates';
 import ModalShell from './ModalShell';
 import EventDetails from './EventDetails';
 
+// Keep in sync with backend/src/events.rs
+const MAX_COMMENT_CHARS = 500;
+
 type Props = { eventId: number; isOpen: boolean; onClose: () => void };
 
 const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
@@ -173,6 +176,7 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
               <label className="block text-sm font-medium text-[var(--body)]">Kommentar
                 <textarea
                   aria-label="Kommentar"
+                  maxLength={MAX_COMMENT_CHARS}
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   disabled={pending}
