@@ -66,15 +66,19 @@ describe('DashboardOverview', () => {
     expect(screen.getByRole('button', { name: 'Rundmail' })).toBeInTheDocument();
   });
 
-  it('toasts the dashboard error instead of rendering it inline', () => {
+  it('toasts the dashboard error and offers an inline retry', async () => {
+    const user = userEvent.setup();
     const toastSpy = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    const refetch = vi.fn();
     const dashboardError = new Error('Teable ist vorübergehend nicht erreichbar');
-    mocks.useDashboard.mockReturnValue({ data: undefined, isLoading: false, error: dashboardError });
+    mocks.useDashboard.mockReturnValue({ data: undefined, isLoading: false, error: dashboardError, refetch });
 
     renderOverview();
 
     expect(toastSpy).toHaveBeenCalledWith(expect.stringContaining('Teable ist vorübergehend nicht erreichbar'));
-    expect(screen.queryByText(/Arbeitsstunden konnten nicht geladen werden/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Teable ist vorübergehend nicht erreichbar');
+    await user.click(screen.getByRole('button', { name: /Erneut versuchen/i }));
+    expect(refetch).toHaveBeenCalled();
     toastSpy.mockRestore();
   });
 
