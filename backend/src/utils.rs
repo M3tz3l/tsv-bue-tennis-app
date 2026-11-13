@@ -61,6 +61,12 @@ pub fn log_work_entries(entries: &[WorkHourEntry], prefix: &str) {
     }
 }
 
+/// Teable record IDs start with `rec` and are alphanumeric. Reject anything
+/// else before it is interpolated into an API path.
+pub fn is_valid_record_id(id: &str) -> bool {
+    id.len() > 3 && id.starts_with("rec") && id.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
 /// Extracts and verifies user ID from Authorization header
 pub fn extract_user_id_from_headers(
     secret: &str,

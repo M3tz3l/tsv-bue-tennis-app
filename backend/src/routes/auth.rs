@@ -142,6 +142,11 @@ pub async fn select_member(
     };
 
     // Check that the member_id belongs to the email
+    if !crate::utils::is_valid_record_id(&payload.member_id) {
+        warn!("Invalid member_id in select-member request");
+        return Err(axum::http::StatusCode::UNAUTHORIZED);
+    }
+
     let teable_member =
         teable::get_member_by_id(&state.teable_config, &state.http_client, &payload.member_id)
             .await

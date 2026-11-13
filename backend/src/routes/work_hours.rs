@@ -20,6 +20,12 @@ const MIN_WORK_HOURS: f64 = 0.25;
 const MAX_WORK_HOURS: f64 = 24.0;
 const MAX_DESCRIPTION_CHARS: usize = 40;
 
+/// Serializes the duplicate check and create so two concurrent requests cannot
+/// both pass the existence check.
+// shortcut: coordinates one process only; add a store-level uniqueness guard if
+// the backend ever runs multiple instances.
+static CREATE_WORK_HOUR_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Validate work hour date with one-month grace period.
 /// Returns Ok(()) if valid, or a JSON error body to return to the caller.
 fn validate_work_hour_date(date: &str, prefix: &str) -> Result<(), axum::Json<serde_json::Value>> {
@@ -137,8 +143,8 @@ pub fn routes() -> Router<AppState> {
 }
 
 enum OwnershipError {
-    /// Upstream Teable request failed (network/HTTP error).
-    Upstream,
+    /// Upstream Teable request failed; carries the mapped HTTP status.
+    Upstream(axum::http::StatusCode),
     /// Work hour entry was not found or is not owned by the user.
     Denied,
 }
@@ -156,12 +162,17 @@ async fn verify_work_hour_ownership(
     user_id: &str,
     verb: &str,
 ) -> Result<crate::models::WorkHour, OwnershipError> {
+    if !crate::utils::is_valid_record_id(work_hour_id) {
+        warn!(work_hour_id = %work_hour_id, "{verb} Work Hour: invalid record id");
+        return Err(OwnershipError::Denied);
+    }
+
     let existing =
         teable::get_work_hour_by_id(&state.teable_config, &state.http_client, work_hour_id)
             .await
             .map_err(|e| {
                 error!("{verb} Work Hour: Failed to get work hour by id: {}", e);
-                OwnershipError::Upstream
+                OwnershipError::Upstream(teable::status_for_error(&e))
             })?;
 
     let wh = existing.ok_or_else(|| {
@@ -199,7 +210,7 @@ pub async fn get_work_hour_by_id(
 
     let wh = match verify_work_hour_ownership(&state, &work_hour_id, &user_id, "access").await {
         Ok(wh) => wh,
-        Err(OwnershipError::Upstream) => return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+        Err(OwnershipError::Upstream(status)) => return Err(status),
         Err(OwnershipError::Denied) => return Ok(denied_response("access")),
     };
 
@@ -306,6 +317,9 @@ pub async fn create_work_hour(
         hours = payload.hours,
         "Create Work Hour: using submitted hours"
     );
+
+    // Serialize the check+create so concurrent requests cannot both pass it.
+    let _create_guard = CREATE_WORK_HOUR_LOCK.lock().await;
 
     // Check for duplicate entry for this member and date using teable.rs helper
     let work_hour_exists = match teable::work_hour_exists_for_member_at_date(
@@ -423,7 +437,7 @@ pub async fn update_work_hour(
 
     let _wh = match verify_work_hour_ownership(&state, &work_hour_id, &user_id, "edit").await {
         Ok(wh) => wh,
-        Err(OwnershipError::Upstream) => return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+        Err(OwnershipError::Upstream(status)) => return Err(status),
         Err(OwnershipError::Denied) => return Ok(denied_response("edit")),
     };
 
@@ -501,7 +515,7 @@ pub async fn delete_work_hour(
 
     if let Err(err) = verify_work_hour_ownership(&state, &id, &user_id, "delete").await {
         return match err {
-            OwnershipError::Upstream => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+            OwnershipError::Upstream(status) => Err(status),
             OwnershipError::Denied => Ok(denied_response("delete")),
         };
     }
