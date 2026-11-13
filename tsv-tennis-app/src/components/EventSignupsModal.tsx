@@ -52,7 +52,7 @@ const EventSignupsModal = ({ eventId, isOpen, onClose }: Props) => {
                 </tr>
               ) : data.signups.map((signup) => (
                 <tr key={signup.id} className="border-b border-[var(--hairline-soft)]">
-                  <td className={`${td} py-2.5 pr-3 font-medium text-[var(--ink)]`}>{signup.member_name ?? signup.member_id}</td>
+                  <td className={`${td} py-2.5 pr-3 font-medium text-[var(--ink)]`}>{signup.member_name ?? <span className="font-normal text-[var(--muted)]">Mitglied nicht mehr gefunden</span>}</td>
                   <td className={`${td} text-right`}>{signup.people_count}</td>
                   {showSalad && <td className={`${td} text-right`}>{signup.salad_count}</td>}
                   {showCake && <td className={`${td} text-right`}>{signup.cake_count}</td>}

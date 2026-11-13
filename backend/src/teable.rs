@@ -832,6 +832,69 @@ pub async fn get_members_by_email(
     Ok(members)
 }
 
+/// Resolves display names for a set of member record ids in paginated batch
+/// requests instead of one request per member.
+pub async fn get_member_names_by_ids(
+    config: &TeableConfig,
+    client: &Client,
+    member_ids: &[String],
+) -> Result<std::collections::HashMap<String, String>> {
+    if member_ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    const PAGE_SIZE: usize = 100;
+    let url = format!(
+        "{}/table/{}/record",
+        config.api_url, config.members_table_id
+    );
+    let mut names = std::collections::HashMap::new();
+    let mut skip = 0usize;
+
+    loop {
+        let mut request = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", config.token))
+            .header("Accept", "application/json")
+            .query(&[("take", "100"), ("skip", &skip.to_string())])
+            .query(&[("projection[]", "Vorname")])
+            .query(&[("projection[]", "Nachname")]);
+        for id in member_ids {
+            request = request.query(&[("selectedRecordIds[]", id)]);
+        }
+
+        let response = send_with_retry(request, "member_names_by_ids").await?;
+        let response_text = handle_teable_response(response, "member_names_by_ids").await?;
+        let value: Value = serde_json::from_str(&response_text)?;
+        let records = value["records"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
+
+        for record in records {
+            let id = record["id"].as_str().unwrap_or("");
+            if id.is_empty() {
+                continue;
+            }
+            let first = record["fields"]["Vorname"].as_str().unwrap_or("");
+            let last = record["fields"]["Nachname"].as_str().unwrap_or("");
+            let name = format!("{first} {last}").trim().to_string();
+            if !name.is_empty() {
+                names.insert(id.to_string(), name);
+            }
+        }
+
+        let fetched = records.len();
+        let total = value["total"].as_u64();
+        let reached_total = total.is_some_and(|total| (skip + fetched) as u64 >= total);
+        if fetched < PAGE_SIZE || reached_total {
+            break;
+        }
+        skip += fetched;
+    }
+
+    Ok(names)
+}
+
 /// Fetches all active members from Teable with optional role filter.
 /// Uses take/skip pagination (max take=1000 per Teable docs) to retrieve all records.
 pub async fn get_all_active_members(

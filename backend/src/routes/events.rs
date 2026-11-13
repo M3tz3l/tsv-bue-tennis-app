@@ -268,43 +268,36 @@ pub async fn list_signups(
         .list_signups(id)
         .await
         .map_err(error_response)?;
-    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(8));
-    let mut tasks = tokio::task::JoinSet::new();
-    for (index, signup) in summary.signups.iter().enumerate() {
-        let semaphore = semaphore.clone();
-        let config = state.teable_config.clone();
-        let client = state.http_client.clone();
-        let member_id = signup.member_id.clone();
-        tasks.spawn(async move {
-            let _permit = semaphore.acquire_owned().await.expect("lookup semaphore closed");
-            let name = teable::get_member_by_id(&config, &client, &member_id)
-                .await
-                .unwrap_or_else(|error| {
-                    tracing::warn!(member_id = %member_id, %error, "Could not resolve signup member name");
-                    None
-                })
-                .map(|member| member.name());
-            (index, name)
-        });
-    }
-    // Bound the external member-lookup phase with an overall deadline so a slow
-    // Teable instance cannot keep the handler open; unresolved members stay null.
-    let collect_names = async {
-        while let Some(result) = tasks.join_next().await {
-            let (index, name) = result.map_err(|error| {
-                tracing::warn!(%error, "signup member lookup task failed");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"success":false,"message":"member lookup failed","data":null})),
-                )
-            })?;
-            summary.signups[index].member_name = name;
+    let mut member_ids: Vec<String> = summary
+        .signups
+        .iter()
+        .map(|signup| signup.member_id.clone())
+        .collect();
+    member_ids.sort();
+    member_ids.dedup();
+
+    if !member_ids.is_empty() {
+        // One paginated batch instead of one Teable request per signup. A
+        // failure leaves the names empty so the rows (and IDs) are preserved.
+        let lookup = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            teable::get_member_names_by_ids(&state.teable_config, &state.http_client, &member_ids),
+        )
+        .await;
+        match lookup {
+            Ok(Ok(names)) => {
+                for signup in &mut summary.signups {
+                    signup.member_name = names.get(&signup.member_id).cloned();
+                }
+            }
+            Ok(Err(error)) => {
+                tracing::warn!(%error, "Could not resolve signup member names");
+            }
+            Err(_) => {
+                tracing::warn!("Timed out resolving signup member names");
+            }
         }
-        Ok::<_, EventRouteError>(())
-    };
-    match tokio::time::timeout(std::time::Duration::from_secs(15), collect_names).await {
-        Ok(Ok(())) | Err(_) => {}
-        Ok(Err(error)) => return Err(error),
     }
+
     Ok(Json(summary))
 }

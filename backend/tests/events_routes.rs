@@ -199,18 +199,10 @@ async fn orga_list_includes_own_signup() {
 
 #[tokio::test]
 #[serial]
-async fn signup_listing_preserves_rows_when_a_member_lookup_fails() {
+async fn signup_listing_preserves_rows_when_member_lookup_fails() {
     let mut teable = Server::new_async().await;
-    let _success = teable
-        .mock("GET", "/table/members/record/member-ok")
-        .match_query(mockito::Matcher::Any)
-        .with_status(200)
-        .with_header("content-type", "application/json")
-        .with_body(r#"{"id":"member-ok","fields":{"Vorname":"Anna","Nachname":"Okay"}}"#)
-        .create_async()
-        .await;
-    let _failure = teable
-        .mock("GET", "/table/members/record/member-fails")
+    let _batch_failure = teable
+        .mock("GET", "/table/members/record")
         .match_query(mockito::Matcher::Any)
         .with_status(500)
         .create_async()
@@ -253,8 +245,65 @@ async fn signup_listing_preserves_rows_when_a_member_lookup_fails() {
     let body = response.json::<serde_json::Value>();
     assert_eq!(body["signups"].as_array().unwrap().len(), 2);
     assert_eq!(body["total_people"], 2);
-    assert_eq!(body["signups"][0]["member_name"], "Anna Okay");
+    assert_eq!(body["signups"][0]["member_name"], serde_json::Value::Null);
     assert_eq!(body["signups"][1]["member_name"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+#[serial]
+async fn signup_listing_batches_member_names() {
+    let mut teable = Server::new_async().await;
+    let _batch = teable
+        .mock("GET", "/table/members/record")
+        .match_query(mockito::Matcher::Any)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            r#"{"records":[
+                {"id":"member-a","fields":{"Vorname":"Anna","Nachname":"A"}},
+                {"id":"member-b","fields":{"Vorname":"Berta","Nachname":"B"}}
+            ],"total":2}"#,
+        )
+        .create_async()
+        .await;
+    let _orga_role = teable
+        .mock("GET", "/table/members/record/orga-1")
+        .match_query(mockito::Matcher::Any)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"id":"orga-1","fields":{"Rolle":"orga"}}"#)
+        .create_async()
+        .await;
+
+    let (server, repository) = app_with_teable_url(&teable.url()).await;
+    let event = repository
+        .create_event(event_request(EventStatus::Published))
+        .await
+        .unwrap();
+    for member_id in ["member-a", "member-b"] {
+        repository
+            .create_signup(
+                event.id,
+                member_id,
+                tsv_tennis_backend::models::SignupRequest {
+                    people_count: 1,
+                    salad_count: 0,
+                    cake_count: 0,
+                    comment: None,
+                },
+            )
+            .await
+            .unwrap();
+    }
+
+    let response = server
+        .get(&format!("/events/{}/signups", event.id))
+        .authorization(format!("Bearer {}", token("orga-1", Some("orga"))))
+        .await;
+    response.assert_status_ok();
+    let body = response.json::<serde_json::Value>();
+    assert_eq!(body["signups"][0]["member_name"], "Anna A");
+    assert_eq!(body["signups"][1]["member_name"], "Berta B");
 }
 
 #[tokio::test]
