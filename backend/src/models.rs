@@ -47,6 +47,8 @@ pub struct CreateEventRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
 pub struct UpdateEventRequest {
+    #[serde(rename = "type")]
+    pub event_type: Option<EventType>,
     pub title: Option<String>,
     pub description: Option<String>,
     pub event_date: Option<String>,

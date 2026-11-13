@@ -42,7 +42,7 @@ const EventCard = ({ detail, isOrga, onSelect, onEdit, onSignups }: { detail: Ev
         <button onClick={() => onSignups(event)} className={`${buttonVariants.secondary} flex-1`}>Anmeldungen</button>
       </div>
     )}
-    {event.allow_signups && (
+    {event.allow_signups && event.status === 'published' && (
       <div className="mt-3 border-t border-[var(--hairline-soft)] pt-3">
         {ownSignup ? <button onClick={() => onSelect(event.id)} className={`${buttonVariants.primary} w-full`}>Anmeldung bearbeiten</button> : unavailable ? <p className="rounded-md bg-[var(--canvas-soft)] px-3 py-2 text-center text-sm font-medium text-[var(--muted)]">{full ? 'Ausgebucht' : 'Anmeldeschluss erreicht'}</p> : <button onClick={() => onSelect(event.id)} className={`${buttonVariants.primary} w-full`}>Anmelden</button>}
       </div>

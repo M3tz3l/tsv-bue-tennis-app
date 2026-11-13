@@ -760,3 +760,100 @@ async fn food_count_query_error_rolls_back_update_transaction() {
         .expect("the failed transaction must have been rolled back");
     sqlx::query("ROLLBACK").execute(&pool).await.unwrap();
 }
+
+#[tokio::test]
+async fn signups_are_rejected_for_past_events() {
+    let repository = repository().await;
+    let mut request = event_request();
+    request.event_date = "2000-01-01".into();
+    let event = repository.create_event("orga-1", request).await.unwrap();
+
+    let signup = || SignupRequest {
+        people_count: 1,
+        salad_count: 0,
+        cake_count: 0,
+        comment: None,
+    };
+    assert!(matches!(
+        repository.create_signup(event.id, "member-1", signup()).await,
+        Err(EventError::Conflict(message)) if message.contains("already taken place")
+    ));
+
+    // An existing signup cannot be edited once the event date has passed either.
+    let future = repository
+        .create_event("orga-1", event_request())
+        .await
+        .unwrap();
+    repository
+        .create_signup(future.id, "member-1", signup())
+        .await
+        .unwrap();
+    repository
+        .update_event(
+            future.id,
+            UpdateEventRequest {
+                event_date: Some("2000-01-01".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        repository
+            .update_signup(future.id, "member-1", signup())
+            .await,
+        Err(EventError::Conflict(message)) if message.contains("already taken place")
+    ));
+}
+
+#[tokio::test]
+async fn members_cannot_fetch_past_events_by_id() {
+    let repository = repository().await;
+    let mut request = event_request();
+    request.event_date = "2000-01-01".into();
+    let event = repository.create_event("orga-1", request).await.unwrap();
+
+    assert!(matches!(
+        repository.get_published_event(event.id, "member-1").await,
+        Err(EventError::NotFound)
+    ));
+    assert!(repository.get_event(event.id, "member-1").await.is_ok());
+}
+
+#[tokio::test]
+async fn member_list_includes_events_dated_today_in_berlin() {
+    let repository = repository().await;
+    let mut request = event_request();
+    request.event_date = Utc::now()
+        .with_timezone(&chrono_tz::Europe::Berlin)
+        .date_naive()
+        .to_string();
+    let event = repository.create_event("orga-1", request).await.unwrap();
+
+    let events = repository
+        .list_published_future_with_signup("member-1")
+        .await
+        .unwrap();
+    assert!(events.iter().any(|detail| detail.event.id == event.id));
+}
+
+#[tokio::test]
+async fn event_type_can_be_updated() {
+    let repository = repository().await;
+    let event = repository
+        .create_event("orga-1", event_request())
+        .await
+        .unwrap();
+
+    let updated = repository
+        .update_event(
+            event.id,
+            UpdateEventRequest {
+                event_type: Some(EventType::WorkDuty),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated.event_type, EventType::WorkDuty);
+}
