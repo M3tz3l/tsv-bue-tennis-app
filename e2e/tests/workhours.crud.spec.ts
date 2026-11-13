@@ -161,8 +161,12 @@ test.describe('Work Hours', () => {
       page.locator('text=Für dieses Datum existiert bereits ein Eintrag'),
     ).toBeVisible({ timeout: 10_000 });
 
-    // The modal closes after the failed attempt, and no duplicate row is created
-    await expect(page.locator('text=Neue Arbeitsstunden eintragen')).not.toBeVisible();
+    // The modal stays open so the user can correct the duplicate, and no duplicate row is created
+    await expect(page.locator('text=Neue Arbeitsstunden eintragen')).toBeVisible();
+    const addDialog = page.getByRole('dialog').filter({ hasText: 'Neue Arbeitsstunden eintragen' });
+    await addDialog.locator('button:has-text("Abbrechen")').click();
+    await expect(page.locator('text=Neue Arbeitsstunden eintragen')).toHaveCount(0);
+
     const row = page.locator('table tbody tr');
     await expect(row).toHaveCount(1);
     await expect(row).toContainText('E2E Setup Duplikat');
