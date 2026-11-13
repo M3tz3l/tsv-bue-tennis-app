@@ -15,6 +15,8 @@ import DashboardOverview from "./pages/DashboardOverview";
 import Events from "./pages/Events";
 import Impressum from "./pages/Impressum";
 import Datenschutz from "./pages/Datenschutz";
+import NotFound from "./pages/NotFound";
+import ErrorBoundary from "./components/ErrorBoundary";
 import 'react-toastify/dist/ReactToastify.css';
 import './styles/toast.css';
 import { ToastContainer } from "react-toastify";
@@ -48,39 +50,41 @@ const App = () => {
                         theme="light"
                     />
                     <BrowserRouter>
-                        <div className="flex-1">
-                            <Routes>
-                                <Route path="/"
-                                    element={<HomeRedirect />} />
-                                <Route path="/login" element={<Login />} />
-                                <Route path="/forgotPassword"
-                                    element={<ForgotPassword />} />
-                                <Route path="/resetPassword"
-                                    element={<ResetPassword />} />
-                                <Route path="/dashboard"
-                                    element={
-                                        <ProtectedRoute>
-                                             <DashboardOverview />
-                                        </ProtectedRoute>
-                                    } />
-                                <Route path="/dashboard/arbeitsstunden"
-                                    element={
-                                        <ProtectedRoute>
-                                            <Dashboard />
-                                        </ProtectedRoute>
-                                    } />
-                                <Route path="/dashboard/veranstaltungen"
-                                    element={
-                                        <ProtectedRoute>
-                                            <Events />
-                                        </ProtectedRoute>
-                                    } />
-                                <Route path="/impressum" element={<Impressum />} />
-                                <Route path="/datenschutz" element={<Datenschutz />} />
-                                <Route path="*" element={<HomeRedirect />} />
-                            </Routes>
-                        </div>
-                        <Footer />
+                        <ErrorBoundary>
+                            <div className="flex-1">
+                                <Routes>
+                                    <Route path="/"
+                                        element={<HomeRedirect />} />
+                                    <Route path="/login" element={<Login />} />
+                                    <Route path="/forgotPassword"
+                                        element={<ForgotPassword />} />
+                                    <Route path="/resetPassword"
+                                        element={<ResetPassword />} />
+                                    <Route path="/dashboard"
+                                        element={
+                                            <ProtectedRoute>
+                                                 <DashboardOverview />
+                                            </ProtectedRoute>
+                                        } />
+                                    <Route path="/dashboard/arbeitsstunden"
+                                        element={
+                                            <ProtectedRoute>
+                                                <Dashboard />
+                                            </ProtectedRoute>
+                                        } />
+                                    <Route path="/dashboard/veranstaltungen"
+                                        element={
+                                            <ProtectedRoute>
+                                                <Events />
+                                            </ProtectedRoute>
+                                        } />
+                                    <Route path="/impressum" element={<Impressum />} />
+                                    <Route path="/datenschutz" element={<Datenschutz />} />
+                                    <Route path="*" element={<NotFound />} />
+                                </Routes>
+                            </div>
+                            <Footer />
+                        </ErrorBoundary>
                     </BrowserRouter>
                 </div>
             </AuthProvider>

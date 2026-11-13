@@ -119,7 +119,7 @@ const Login = () => {
                             {showBanner && (
                                 <div className="mt-6 mb-4 p-4 border-l-4 border-[var(--primary)] bg-[var(--canvas-soft)]">
                                     <div className="flex">
-                                        <ExclamationTriangleIcon className="h-5 w-5 text-[var(--primary)] mt-0.5" />
+                                        <ExclamationTriangleIcon className="h-5 w-5 text-[var(--primary-text)] mt-0.5" />
                                         <div className="ml-3 flex-1">
                                             <p className="text-sm text-[var(--body)]">
                                                 <strong>Erstanmeldung:</strong> Nutzen Sie "Passwort zurücksetzen" mit Ihrer registrierten E-Mail-Adresse.
@@ -238,7 +238,7 @@ const Login = () => {
                                 <div className="text-center">
                                     <Link
                                         to="/forgotPassword"
-                                        className="inline-flex items-center text-base font-semibold text-[var(--primary-active)] hover:text-[var(--primary)] transition-colors duration-200 hover:underline"
+                                        className="inline-flex items-center text-base font-semibold text-[var(--primary-active)] hover:text-[var(--primary-text)] transition-colors duration-200 hover:underline"
                                     >
                                         <KeyIcon className="h-5 w-5 mr-2" />
                                         Passwort zurücksetzen

@@ -148,15 +148,15 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
         <form id="event-signup-form" onSubmit={submit} className={`${stackMdClass} px-6 py-5`}>
               <div>
                 <label className="block text-sm font-medium text-[var(--body)]">Personen
-                  <input aria-label="Personen" type="number" step="1" value={peopleCount} onChange={(e) => setPeopleCount(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 ${errors.peopleCount ? 'border-[var(--error)]' : 'border-[var(--hairline-strong)]'}`} />
+                  <input aria-label="Personen" type="number" step="1" value={peopleCount} onChange={(e) => setPeopleCount(e.target.value)} disabled={pending} aria-invalid={!!errors.peopleCount} aria-describedby={errors.peopleCount ? 'signup-people-error' : undefined} className={`${fieldControl} mt-1 ${errors.peopleCount ? 'border-[var(--error)]' : 'border-[var(--hairline-strong)]'}`} />
                 </label>
-                {errors.peopleCount && <p className="mt-1 text-sm text-[var(--error)]">{errors.peopleCount}</p>}
+                {errors.peopleCount && <p id="signup-people-error" role="alert" className="mt-1 text-sm text-[var(--error)]">{errors.peopleCount}</p>}
               </div>
               
               {data.event.allow_salad && (
                 <div>
                   <label className="block text-sm font-medium text-[var(--body)]">Salat
-                    <input aria-label="Salat" type="number" step="1" value={saladCount} onChange={(e) => setSaladCount(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 ${errors.contributions ? 'border-[var(--error)]' : 'border-[var(--hairline-strong)]'}`} />
+                    <input aria-label="Salat" type="number" step="1" value={saladCount} onChange={(e) => setSaladCount(e.target.value)} disabled={pending} aria-invalid={!!errors.contributions} aria-describedby={errors.contributions ? 'signup-contributions-error' : undefined} className={`${fieldControl} mt-1 ${errors.contributions ? 'border-[var(--error)]' : 'border-[var(--hairline-strong)]'}`} />
                   </label>
                 </div>
               )}
@@ -164,11 +164,11 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
               {data.event.allow_cake && (
                 <div>
                   <label className="block text-sm font-medium text-[var(--body)]">Kuchen
-                    <input aria-label="Kuchen" type="number" step="1" value={cakeCount} onChange={(e) => setCakeCount(e.target.value)} disabled={pending} className={`${fieldControl} mt-1 ${errors.contributions ? 'border-[var(--error)]' : 'border-[var(--hairline-strong)]'}`} />
+                    <input aria-label="Kuchen" type="number" step="1" value={cakeCount} onChange={(e) => setCakeCount(e.target.value)} disabled={pending} aria-invalid={!!errors.contributions} aria-describedby={errors.contributions ? 'signup-contributions-error' : undefined} className={`${fieldControl} mt-1 ${errors.contributions ? 'border-[var(--error)]' : 'border-[var(--hairline-strong)]'}`} />
                   </label>
                 </div>
               )}
-              {errors.contributions && <p className="text-sm text-[var(--error)]">{errors.contributions}</p>}
+              {errors.contributions && <p id="signup-contributions-error" role="alert" className="text-sm text-[var(--error)]">{errors.contributions}</p>}
               
               <label className="block text-sm font-medium text-[var(--body)]">Kommentar
                 <textarea

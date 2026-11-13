@@ -223,7 +223,7 @@ describe('Events', () => {
     mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
     renderEvents();
 
-    expect(screen.getByRole('button', { name: /Veranstaltung erstellen/i })).toHaveClass('bg-[var(--primary)]');
+    expect(screen.getByRole('button', { name: /Veranstaltung erstellen/i })).toHaveClass('bg-[var(--primary-text)]');
     expect(screen.getAllByRole('button', { name: /^Bearbeiten$/i })[0]).toHaveClass('border-[var(--hairline-strong)]');
   });
 

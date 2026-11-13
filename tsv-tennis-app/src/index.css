@@ -32,8 +32,9 @@
   --hairline: #e4e2e2;
   --hairline-soft: #eae7e7;
   --hairline-strong: #d7d3d3;
-  /* darkened from #ec3013 so white text on primary meets WCAG AA */
-  --primary: #d42a0f;
+  --primary: #ec3013;
+  /* text-safe red for links/labels and primary buttons (AA on light surfaces) */
+  --primary-text: #d42a0f;
   --primary-active: #c5260f;
   --on-primary: #ffffff;
   --success: #007a00;

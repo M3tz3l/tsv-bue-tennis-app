@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -32,5 +32,12 @@ describe('MailComposer member counts', () => {
     rerender(<MailComposer isOpen onClose={onClose} />);
 
     expect(mocks.getMemberCounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns when the recipient count cannot be loaded', async () => {
+    mocks.getMemberCounts.mockResolvedValue({ success: false, message: 'nope' });
+    render(<MailComposer isOpen onClose={vi.fn()} />);
+
+    expect(await screen.findByText(/Empfängerzahl konnte nicht geladen werden/i)).toBeInTheDocument();
   });
 });

@@ -43,7 +43,7 @@ const WorkHoursOverviewCard = ({ data, selectedYear, variant = 'overview', onAdd
     const header = showChrome && (
         <div className="mb-3 flex items-center justify-between gap-2">
             <Link to="/dashboard/arbeitsstunden" className="group">
-                <h2 className="text-lg font-extrabold tracking-tight text-[var(--ink)] group-hover:text-[var(--primary)] transition-colors">{title}</h2>
+                <h2 className="text-lg font-extrabold tracking-tight text-[var(--ink)] group-hover:text-[var(--primary-text)] transition-colors">{title}</h2>
             </Link>
             {addButton}
         </div>

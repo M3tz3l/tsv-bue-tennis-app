@@ -69,7 +69,7 @@ const ForgotPassword = () => {
                         <div className="text-center">
                             <Link
                                 to="/login"
-                                className="text-sm font-medium text-[var(--primary-active)] hover:text-[var(--primary)] transition-colors duration-200"
+                                className="text-sm font-medium text-[var(--primary-active)] hover:text-[var(--primary-text)] transition-colors duration-200"
                             >
                                 ← Zurück zur Anmeldung
                             </Link>

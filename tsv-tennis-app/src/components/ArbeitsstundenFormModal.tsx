@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import { useForm } from 'react-hook-form';
 import { isQuarterHour, parseHoursInput } from '../utils/utils';
+import { berlinToday } from '../utils/dates';
 import type { CreateWorkHourRequest, WorkHourEntry } from '../types';
 import { useQueryClient } from '@tanstack/react-query';
 import BackendService from '../services/backendService';
@@ -34,10 +35,9 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
     const { user } = useAuth();
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-    const today = new Date().toISOString().split('T')[0];
-    const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth();
+    const today = berlinToday();
+    const [currentYear, berlinMonth] = today.split('-').map(Number);
+    const currentMonth = berlinMonth - 1; // 0-based, January = 0
     const minAllowedYear = currentMonth === 0 ? currentYear - 1 : currentYear;
     const minDate = `${minAllowedYear}-01-01`;
 
@@ -63,16 +63,13 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
     }, [isOpen, initialData, userProfile, reset, today]);
 
     const onSubmit = async (values: FormValues) => {
-        // Validate date not in future
-        const selectedDate = new Date(values.Datum);
-        const endOfToday = new Date();
-        endOfToday.setHours(23, 59, 59, 999);
-        if (selectedDate > endOfToday) {
+        // Validate date not in the future (club calendar date)
+        if (values.Datum > today) {
             toast.error('Das Datum darf nicht in der Zukunft liegen');
             return;
         }
 
-        const selYear = selectedDate.getFullYear();
+        const selYear = Number(values.Datum.slice(0, 4));
         if (selYear < minAllowedYear) {
             if (currentMonth === 0) {
                 toast.error(`Arbeitsstunden können nur für ${currentYear} oder ${currentYear - 1} (Nachfrist bis Ende Januar) eingetragen werden.`);

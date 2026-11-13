@@ -7,7 +7,7 @@ describe('design tokens', () => {
   });
 
   it('uses the single red accent (never emerald/green) for the primary action', () => {
-    expect(buttonVariants.primary).toMatch(/var\(--primary\)/);
+    expect(buttonVariants.primary).toMatch(/var\(--primary-text\)/);
     expect(buttonVariants.primary).not.toMatch(/emerald|green/);
   });
 

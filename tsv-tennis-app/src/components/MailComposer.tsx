@@ -24,6 +24,8 @@ interface MailComposerProps {
   onClose: () => void;
 }
 
+const MAX_POLL_FAILURES = 20;
+
 const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const { user } = useAuth();
   const senderFirstName = user?.name?.split(' ')[0] || 'Ihr Name';
@@ -37,8 +39,10 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [memberCounts, setMemberCounts] = useState({ all: 0, orga: 0 });
   const [countsLoaded, setCountsLoaded] = useState(false);
+  const [countsError, setCountsError] = useState(false);
   const [activeJob, setActiveJob] = useState<MailJob | null>(null);
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollFailuresRef = useRef(0);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // New state for redesigned UI
@@ -54,11 +58,14 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
         const response = await BackendService.getMemberCounts();
         if (response.success && response.data) {
           setMemberCounts(response.data);
+          setCountsLoaded(true);
+          setCountsError(false);
+        } else {
+          setCountsError(true);
         }
       } catch (error) {
         console.error('Failed to fetch member counts:', error);
-      } finally {
-        setCountsLoaded(true);
+        setCountsError(true);
       }
     };
 
@@ -81,6 +88,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const pollJobStatus = useCallback(async (jobId: string) => {
     const response = await BackendService.getMailJobStatus(jobId);
     if (response.success && response.job) {
+      pollFailuresRef.current = 0;
       setActiveJob(response.job);
       if (response.job.status === 'completed' || response.job.status === 'failed') {
         if (pollingRef.current) {
@@ -113,9 +121,21 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
         pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
       }
     } else if (response.status === 429 || (response.status ?? 0) >= 500) {
-      // Transient backend/rate-limit failure: keep the progress view alive
-      // and retry instead of tearing down the send flow.
-      pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
+      // Transient backend/rate-limit failure: keep the progress view alive and
+      // retry, but give up after a bounded number of attempts so the modal
+      // cannot stay locked open forever.
+      pollFailuresRef.current += 1;
+      if (pollFailuresRef.current > MAX_POLL_FAILURES) {
+        if (pollingRef.current) {
+          clearTimeout(pollingRef.current);
+          pollingRef.current = null;
+        }
+        setIsLoading(false);
+        setActiveJob(null);
+        toast.error('Job-Status konnte nicht abgerufen werden. Bitte später erneut versuchen.');
+      } else {
+        pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
+      }
     } else {
       if (pollingRef.current) {
         clearTimeout(pollingRef.current);
@@ -243,6 +263,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           return;
         }
         toast.info(`Mail-Versand gestartet für ${total} Empfänger...`);
+        pollFailuresRef.current = 0;
         void pollJobStatus(jobId);
       } else {
         toast.error(response.message || 'Fehler beim Versenden der Mail');
@@ -267,7 +288,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     return (
       <ModalShell isOpen={isOpen} onClose={handleClose} title="Mail versenden" disableClose={isBusy} widthClassName="max-w-lg" headerContent={(
             <div className="flex items-center gap-3">
-              <div className="bg-[var(--primary)]/10 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-[var(--primary)]" /></div>
+              <div className="bg-[var(--primary)]/10 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-[var(--primary-text)]" /></div>
               <DialogTitle className="text-lg font-extrabold text-[var(--ink)]">Mail versenden</DialogTitle>
             </div>
           )} footer={(
@@ -297,8 +318,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                 </h3>
 
                 {/* Progress bar */}
-                <div className="mt-6">
-                  <div className="flex justify-between text-sm text-[var(--muted)] mb-2">
+                <div className="mt-6" role="progressbar" aria-valuemin={0} aria-valuemax={activeJob.total_recipients} aria-valuenow={Math.min(activeJob.total_recipients, activeJob.sent + activeJob.failed)} aria-label="Versandfortschritt">
+                  <div className="flex justify-between text-sm text-[var(--muted)] mb-2" aria-live="polite">
                     <span>{activeJob.sent} gesendet</span>
                     <span>{activeJob.total_recipients} Empfänger</span>
                   </div>
@@ -352,7 +373,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       panelProps={{ onDragOver: handleDragOver, onDragLeave: handleDragLeave, onDrop: handleDrop }}
       headerContent={(
         <div className="flex items-center gap-3">
-          <div className="bg-[var(--primary)]/10 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-[var(--primary)]" /></div>
+          <div className="bg-[var(--primary)]/10 p-2 rounded-lg"><EnvelopeIcon className="h-6 w-6 text-[var(--primary-text)]" /></div>
           <DialogTitle className="text-lg font-extrabold text-[var(--ink)]">Rundmail versenden</DialogTitle>
         </div>
       )}
@@ -366,7 +387,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           </div>
           <div className="flex items-center gap-3">
             {confirmSend ? <>
-              <span className="text-sm text-[var(--muted)]">An {currentRecipientCount} {recipientFilter === 'all' ? 'Mitglieder' : 'Ausschuss-Mitglieder'} senden?</span>
+              <span className="text-sm text-[var(--muted)]">{currentRecipientCount === null ? 'An die ausgewählten Mitglieder senden?' : `An ${currentRecipientCount} ${recipientFilter === 'all' ? 'Mitglieder' : 'Ausschuss-Mitglieder'} senden?`}</span>
               <button onClick={() => setConfirmSend(false)} disabled={isBusy} className={buttonVariants.secondary}>Zurück</button>
               <button onClick={handleSendBulk} disabled={isBusy} className={`${buttonVariants.primary} inline-flex items-center justify-center`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />Jetzt senden</button>
             </> : <button onClick={() => isFormValid && setConfirmSend(true)} disabled={isBusy || !isFormValid} className={`${buttonVariants.primary} inline-flex items-center justify-center`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />{isLoading ? 'Wird gestartet...' : 'Versenden'}{currentRecipientCount !== null && <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold rounded-full bg-[var(--on-primary)]/25 text-[var(--on-primary)]">{currentRecipientCount}</span>}</button>}
@@ -378,8 +399,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           {isDragOver && (
             <div className="absolute inset-0 z-20 bg-[var(--primary)]/5 border-2 border-dashed border-[var(--primary)] rounded-xl flex items-center justify-center pointer-events-none">
               <div className="text-center">
-                <PaperClipIcon className="mx-auto h-12 w-12 text-[var(--primary)]" />
-                <p className="mt-2 text-lg font-medium text-[var(--primary)]">
+                <PaperClipIcon className="mx-auto h-12 w-12 text-[var(--primary-text)]" />
+                <p className="mt-2 text-lg font-medium text-[var(--primary-text)]">
                   Dateien hier ablegen
                 </p>
               </div>
@@ -396,6 +417,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                   <label className="block text-sm font-medium text-[var(--body)] mb-2">
                     Empfängergruppe
                   </label>
+                  {countsError && <p className="mb-2 text-xs text-[var(--error)]">Empfängerzahl konnte nicht geladen werden.</p>}
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
@@ -403,7 +425,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                       disabled={isBusy}
                       className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
                         recipientFilter === 'all'
-                          ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary)]'
+                          ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary-text)]'
                           : 'border-[var(--hairline)] hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 text-[var(--body)]'
                       } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
@@ -413,7 +435,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                         <span
                           className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
                             recipientFilter === 'all'
-                              ? 'bg-[var(--primary)]/15 text-[var(--primary)]'
+                              ? 'bg-[var(--primary)]/15 text-[var(--primary-text)]'
                               : 'bg-[var(--canvas-soft)] text-[var(--muted)]'
                           }`}
                         >
@@ -427,7 +449,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                       disabled={isBusy}
                       className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
                         recipientFilter === 'orga'
-                          ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary)]'
+                          ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary-text)]'
                           : 'border-[var(--hairline)] hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 text-[var(--body)]'
                       } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
@@ -437,7 +459,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                         <span
                           className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
                             recipientFilter === 'orga'
-                              ? 'bg-[var(--primary)]/15 text-[var(--primary)]'
+                              ? 'bg-[var(--primary)]/15 text-[var(--primary-text)]'
                               : 'bg-[var(--canvas-soft)] text-[var(--muted)]'
                           }`}
                         >
@@ -521,7 +543,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isBusy}
-                    className="inline-flex items-center gap-2 px-3 py-2 border border-dashed border-[var(--hairline-strong)] rounded-lg text-sm text-[var(--muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 px-3 py-2 border border-dashed border-[var(--hairline-strong)] rounded-lg text-sm text-[var(--muted)] hover:border-[var(--primary)] hover:text-[var(--primary-text)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <PaperClipIcon className="h-4 w-4" />
                     Dateien anhängen
@@ -634,7 +656,7 @@ const PreviewContent: React.FC<{
       </p>
       <a
         href="mailto:tennisabteilung@tsv-bad-ueberkingen.de"
-        className="text-[var(--primary)] hover:underline"
+        className="text-[var(--primary-text)] hover:underline"
       >
         tennisabteilung@tsv-bad-ueberkingen.de
       </a>

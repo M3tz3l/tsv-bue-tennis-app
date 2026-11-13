@@ -145,6 +145,18 @@ class BackendService {
       async (error: unknown) => {
         const status = asApiError(error).response?.status;
         const config = asApiError(error).config;
+        if (status === 401 && config) {
+          // Expired session: drop the token and send the user back to login.
+          // The login endpoint uses 401 for bad credentials, so never redirect there.
+          const url = String(config.url ?? '');
+          if (!url.endsWith('/login')) {
+            localStorage.removeItem('authToken');
+            if (window.location.pathname !== '/login') {
+              window.location.assign('/login');
+            }
+          }
+          return Promise.reject(error);
+        }
         if (status === 429 && config) {
           const attempts = config._retryCount ?? 0;
           if (attempts < RATE_LIMIT_MAX_RETRIES) {
