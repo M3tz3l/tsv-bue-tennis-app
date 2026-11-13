@@ -188,8 +188,9 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                     className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     lang="de"
                                     aria-invalid={!!errors.Datum}
+                                    aria-describedby={errors.Datum ? 'work-hours-datum-error' : undefined}
                                 />
-                                {errors.Datum && <p role="alert" className="text-xs text-[var(--error)] mt-1">{errors.Datum.message}</p>}
+                                {errors.Datum && <p id="work-hours-datum-error" role="alert" className="text-xs text-[var(--error)] mt-1">{errors.Datum.message}</p>}
                                 <p className="text-xs text-[var(--muted)] mt-1">Datum darf nicht in der Zukunft liegen. {currentMonth === 0 ? `Nur ${currentYear} oder ${currentYear - 1} (Nachfrist bis Ende Januar) erlaubt.` : `Nur ${currentYear} erlaubt.`}</p>
                             </div>
 
@@ -215,8 +216,10 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                     })}
                                     className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     placeholder="z.B. 2.75"
+                                    aria-invalid={!!errors.Stunden}
+                                    aria-describedby={errors.Stunden ? 'work-hours-stunden-error' : undefined}
                                 />
-                                {errors.Stunden && <p role="alert" className="text-xs text-[var(--error)] mt-1">{errors.Stunden.message}</p>}
+                                {errors.Stunden && <p id="work-hours-stunden-error" role="alert" className="text-xs text-[var(--error)] mt-1">{errors.Stunden.message}</p>}
                                 <p className="text-xs text-[var(--muted)] mt-1">Zwischen 0.25 und 24 Stunden (in 0.25er Schritten)</p>
                             </div>
 
@@ -228,9 +231,11 @@ const ArbeitsstundenFormModal: React.FC<Props> = ({ isOpen, onClose, onSave, ini
                                     {...register('Tätigkeit', { required: 'Tätigkeit ist erforderlich', maxLength: { value: 40, message: 'Maximal 40 Zeichen' } })}
                                     className={`${fieldControl} border-[var(--hairline-strong)]`}
                                     placeholder="z.B. Platzpflege, Dienst..."
+                                    aria-invalid={!!errors.Tätigkeit}
+                                    aria-describedby={errors.Tätigkeit ? 'work-hours-taetigkeit-error' : undefined}
                                 />
                                 <div className="text-xs text-[var(--muted)] mt-1">{/* length shown by API consumer if needed */}</div>
-                                {errors.Tätigkeit && <p role="alert" className="text-xs text-[var(--error)] mt-1">{errors.Tätigkeit.message}</p>}
+                                {errors.Tätigkeit && <p id="work-hours-taetigkeit-error" role="alert" className="text-xs text-[var(--error)] mt-1">{errors.Tätigkeit.message}</p>}
                             </div>
                         </div>
 

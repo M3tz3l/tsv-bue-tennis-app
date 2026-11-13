@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { toast } from 'react-toastify';
 import { useQueryClient } from '@tanstack/react-query';
 import BackendService, { getApiErrorMessage } from '../services/backendService.ts';
@@ -20,18 +21,18 @@ export function useWorkHourSave({ userId, email, year, dashboardData, editingRow
     const queryClient = useQueryClient();
     const editing = editingRow ?? null;
 
-    const userProfile = (() => {
-        if (dashboardData?.personal?.name) {
-            const parts = dashboardData.personal.name.split(' ');
-            return { Nachname: parts.slice(1).join(' '), Vorname: parts[0] };
-        }
-        const found = dashboardData?.family?.members?.find((m: { email?: string; name?: string }) => m.email === email);
-        if (found && found.name) {
-            const parts = found.name.split(' ');
-            return { Nachname: parts.slice(1).join(' '), Vorname: parts[0] };
-        }
-        return { Nachname: '', Vorname: '' };
-    })();
+    // Resolve to a string so the memo keeps a stable profile object across
+    // unrelated re-renders; an unstable object would reset the open form.
+    const resolvedName =
+        dashboardData?.personal?.name ||
+        dashboardData?.family?.members?.find(
+            (member: { email?: string; name?: string }) => member.email === email,
+        )?.name;
+    const userProfile = useMemo(() => {
+        if (!resolvedName) return { Nachname: '', Vorname: '' };
+        const parts = resolvedName.split(' ');
+        return { Nachname: parts.slice(1).join(' '), Vorname: parts[0] };
+    }, [resolvedName]);
 
     const handleSave = async (formData: SaveInput): Promise<boolean> => {
         try {

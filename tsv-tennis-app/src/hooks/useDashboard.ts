@@ -11,7 +11,9 @@ export default function useDashboard(userId?: string, year?: number, enabled = t
             const res = await BackendService.getDashboard(y);
             if (!res || !res.success) {
                 throw new Error(
-                    'message' in res ? res.message : 'Dashboard-Daten konnten nicht geladen werden',
+                    res && 'message' in res
+                        ? res.message
+                        : 'Dashboard-Daten konnten nicht geladen werden',
                 );
             }
             return res;

@@ -19,6 +19,14 @@ vi.mock('react-toastify', () => ({
 }));
 
 import { useWorkHourSave } from './useWorkHourSave';
+import type { DashboardResponse } from '../types';
+
+const dashboard: DashboardResponse = {
+  success: true,
+  year: 2026,
+  family: null,
+  personal: { name: 'Anna Mitglied', hours: 0, required: 0, entries: [], exemption_reason: null },
+};
 
 const wrapper = ({ children }: { children: ReactNode }) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -63,5 +71,17 @@ describe('useWorkHourSave', () => {
     });
     expect(saved).toBe(false);
     expect(mocks.toastError).toHaveBeenCalledWith('Speichern fehlgeschlagen');
+  });
+
+  it('keeps the derived user profile stable across re-renders', () => {
+    const { result, rerender } = renderHook(
+      () => useWorkHourSave({ userId: 'u1', year: 2026, dashboardData: dashboard }),
+      { wrapper },
+    );
+
+    const first = result.current.userProfile;
+    expect(first).toEqual({ Nachname: 'Mitglied', Vorname: 'Anna' });
+    rerender();
+    expect(result.current.userProfile).toBe(first);
   });
 });
