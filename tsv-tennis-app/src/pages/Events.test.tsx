@@ -201,6 +201,14 @@ describe('Events', () => {
     expect(screen.queryByText('Entwurf')).not.toBeInTheDocument();
   });
 
+  it('does not offer signup actions on draft events', () => {
+    mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
+    renderEvents([detail({ id: 9, title: 'Draft Event', status: 'draft', allow_signups: true })]);
+
+    expect(screen.queryByRole('button', { name: /^Anmelden$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Anmeldung bearbeiten/i })).not.toBeInTheDocument();
+  });
+
   it('uses shared button variants for event actions', () => {
     mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
     renderEvents();
