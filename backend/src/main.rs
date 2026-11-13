@@ -1492,8 +1492,13 @@ mod tests {
             .add_header("authorization", &format!("Bearer {valid_token}"))
             .await;
 
-        // Will fail because Teable API calls will fail, but shows valid token usage
-        assert!(response.status_code() == 500 || response.status_code() == 404);
+        // Will fail because Teable API calls will fail, but shows valid token usage.
+        // Upstream/dependency failures surface as 503, not a misleading 500.
+        assert!(
+            response.status_code() == 500
+                || response.status_code() == 503
+                || response.status_code() == 404
+        );
     }
 
     // More advanced tests with better mocking setup

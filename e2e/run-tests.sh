@@ -57,6 +57,13 @@ cleanup() {
     # Give processes a moment to exit, then force-kill survivors on our ports
     sleep 1
     for port in 5173 5000 1025 8025; do kill_port_owners "$port"; done
+
+    # Remove seeded test records from Teable so repeated local runs do not
+    # accumulate them. Env is only set once section 2 has run, so skip early exits.
+    if [[ -n "${TEABLE_TOKEN:-}" && -d "$PROJECT_ROOT/e2e/seed/node_modules" ]]; then
+        info "Cleaning up Teable test records…"
+        (cd "$PROJECT_ROOT/e2e/seed" && npx tsx cleanup.ts) || warn "Teable cleanup failed (continuing)"
+    fi
     info "Done."
 }
 trap cleanup EXIT INT TERM

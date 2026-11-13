@@ -207,7 +207,7 @@ pub async fn get_work_hour_by_id(
         .await
         .map_err(|e| {
             error!("Get Work Hour: Failed to get member by id: {}", e);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            teable::status_for_error(&e)
         })?
         .ok_or_else(|| {
             warn!(user_id = %user_id, "Get Work Hour: user not found");
@@ -293,7 +293,7 @@ pub async fn create_work_hour(
     .await
     .map_err(|e| {
         error!("Create Work Hour: Failed to get member by id: {}", e);
-        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        teable::status_for_error(&e)
     })?
     .ok_or_else(|| {
         warn!(user_id = %user_id, "Create Work Hour: user not found");
@@ -322,7 +322,7 @@ pub async fn create_work_hour(
                 "Create Work Hour: Error fetching work hours for date: {}",
                 e
             );
-            return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+            return Err(teable::status_for_error(&e));
         }
     };
 
@@ -345,7 +345,7 @@ pub async fn create_work_hour(
         &date,
         &description,
         payload.hours,
-        current_user.id.clone(),
+        &current_user,
     )
     .await
     {
@@ -437,7 +437,7 @@ pub async fn update_work_hour(
     .await
     .map_err(|e| {
         error!("Update Work Hour: Failed to get member by id: {}", e);
-        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        teable::status_for_error(&e)
     })?
     .ok_or_else(|| {
         warn!(user_id = %user_id, "Update Work Hour: user not found");
@@ -459,7 +459,7 @@ pub async fn update_work_hour(
         &date,
         &description,
         payload.hours,
-        current_user.id.clone(),
+        &current_user,
     )
     .await
     {

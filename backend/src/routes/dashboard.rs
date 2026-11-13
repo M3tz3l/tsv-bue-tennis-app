@@ -47,7 +47,7 @@ pub async fn dashboard(
     .await
     .map_err(|e| {
         error!("Dashboard: Failed to get member by id: {}", e);
-        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        teable::status_for_error(&e)
     })?
     .ok_or_else(|| {
         warn!(user_id = %user_id, "Dashboard: user not found");
@@ -69,7 +69,7 @@ pub async fn dashboard(
             "Dashboard: Failed to get work hours for user {} and year {}: {}",
             current_user.id, year_int, e
         );
-        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        teable::status_for_error(&e)
     })?;
 
     let user_work_hours_raw = work_hours.results;
@@ -111,7 +111,7 @@ pub async fn dashboard(
                     .await
                     .map_err(|e| {
                         error!("Dashboard: Failed to get family members: {}", e);
-                        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+                        teable::status_for_error(&e)
                     })?;
 
             let family_members: Vec<&crate::models::Member> =

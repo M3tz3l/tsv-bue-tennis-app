@@ -6,6 +6,65 @@ use reqwest::{Client, RequestBuilder};
 use serde_json::Value;
 use tracing::{debug, error, info, warn};
 
+/// Structured error for Teable API failures. Carrying the upstream status lets
+/// route handlers distinguish an expired token (401) or missing scope (403)
+/// from a genuine bug instead of collapsing everything into a 500.
+#[derive(Debug)]
+pub enum TeableError {
+    Unauthorized(String),
+    Forbidden(String),
+    RateLimited(Option<u64>),
+    NotFound(String),
+    Upstream { status: u16, body: String },
+}
+
+impl std::fmt::Display for TeableError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TeableError::Unauthorized(msg) => write!(f, "Teable API unauthorized (401): {msg}"),
+            TeableError::Forbidden(msg) => write!(f, "Teable API forbidden (403): {msg}"),
+            TeableError::RateLimited(Some(secs)) => {
+                write!(f, "Teable API rate limited (429), retry after {secs}s")
+            }
+            TeableError::RateLimited(None) => write!(f, "Teable API rate limited (429)"),
+            TeableError::NotFound(msg) => write!(f, "Teable API not found (404): {msg}"),
+            TeableError::Upstream { status, body } => {
+                write!(f, "Teable API error {status}: {body}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for TeableError {}
+
+/// Maps a Teable failure to an HTTP status for route handlers. Auth, upstream
+/// and rate-limit failures are transient dependency problems, so they surface
+/// as 503 rather than a misleading 500. Everything else stays a 500.
+pub fn status_for_error(err: &anyhow::Error) -> axum::http::StatusCode {
+    use axum::http::StatusCode;
+    if let Some(teable_err) = err.downcast_ref::<TeableError>() {
+        return match teable_err {
+            TeableError::Unauthorized(_)
+            | TeableError::Forbidden(_)
+            | TeableError::RateLimited(_)
+            | TeableError::Upstream { .. } => StatusCode::SERVICE_UNAVAILABLE,
+            TeableError::NotFound(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+    }
+    if err.downcast_ref::<reqwest::Error>().is_some() {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
+    StatusCode::INTERNAL_SERVER_ERROR
+}
+
+fn retry_after_secs(response: &reqwest::Response) -> Option<u64> {
+    response
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.trim().parse::<u64>().ok())
+}
+
 const MEMBER_PROJECTION: &[&str] = &[
     "Vorname",
     "Nachname",
@@ -49,13 +108,27 @@ fn parse_member_id(value: Value) -> Option<crate::models::LinkedRecord> {
     }
 }
 
+/// Reads a required member field, warning when Teable omits it (for example
+/// after a field rename or when a projection is missing it) instead of
+/// silently returning an empty value.
+fn required_member_field<'a>(fields: &'a Value, record_id: &str, name: &str) -> &'a str {
+    match fields.get(name).and_then(Value::as_str) {
+        Some(value) => value,
+        None => {
+            warn!(record_id = %record_id, field = %name, "Teable member record missing required field");
+            ""
+        }
+    }
+}
+
 fn member_from_record(record: &Value) -> Member {
     let fields = &record["fields"];
+    let id = record["id"].as_str().unwrap_or("");
     Member {
-        id: record["id"].as_str().unwrap_or("").to_string(),
-        first_name: fields["Vorname"].as_str().unwrap_or("").to_string(),
-        last_name: fields["Nachname"].as_str().unwrap_or("").to_string(),
-        email: fields["Email"].as_str().unwrap_or("").to_string(),
+        id: id.to_string(),
+        first_name: required_member_field(fields, id, "Vorname").to_string(),
+        last_name: required_member_field(fields, id, "Nachname").to_string(),
+        email: required_member_field(fields, id, "Email").to_string(),
         family_id: fields["Familie"]
             .as_str()
             .map(|s| s.to_string())
@@ -128,14 +201,13 @@ pub async fn work_hour_exists_for_member_at_date(
         "{}/table/{}/record",
         config.api_url, config.work_hours_table_id
     );
-    let response = http_client
+    let request = http_client
         .get(&url)
         .header("Authorization", format!("Bearer {}", config.token))
         .header("Accept", "application/json")
         .query(&[("filter", &filter.to_string())])
-        .query(&[("take", "1")])
-        .send()
-        .await?;
+        .query(&[("take", "1")]);
+    let response = send_with_retry(request, "work_hours_for_date").await?;
     let response_text = handle_teable_response(response, "work_hours_for_date").await?;
     let teable_response: serde_json::Value = serde_json::from_str(&response_text)?;
     let records = teable_response["records"]
@@ -145,7 +217,7 @@ pub async fn work_hour_exists_for_member_at_date(
     Ok(!records.is_empty())
 }
 
-/// Makes an authenticated GET request to Teable API
+/// Makes an authenticated GET request to the Teable API, with retry.
 async fn make_teable_request(
     client: &Client,
     url: &str,
@@ -154,20 +226,24 @@ async fn make_teable_request(
 ) -> Result<reqwest::Response> {
     debug!("Making Teable {} request to: {}", operation, url);
 
-    let response = client
+    let request = client
         .get(url)
         .header("Authorization", format!("Bearer {token}"))
-        .header("Accept", "application/json")
-        .send()
-        .await?;
+        .header("Accept", "application/json");
 
-    Ok(response)
+    send_with_retry(request, operation).await
 }
 
-/// Sends a Teable request with retry/backoff on HTTP 429 (rate limited).
-/// Returns the final response after retries are exhausted.
+/// Sends an idempotent Teable request, retrying transient failures (429 and
+/// gateway errors) with exponential backoff and honoring `Retry-After`.
+///
+/// Only GET requests go through here; writes must not be retried blindly.
 async fn send_with_retry(request: RequestBuilder, operation: &str) -> Result<reqwest::Response> {
-    const MAX_ATTEMPTS: u32 = 4;
+    const MAX_RETRIES: u32 = 3;
+    // Longest `Retry-After` we are willing to wait for inside a request handler.
+    // If the upstream asks for longer, return the response instead of retrying
+    // sooner than requested (which only adds load while rate limited).
+    const MAX_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(10);
     let mut attempt: u32 = 0;
 
     loop {
@@ -178,12 +254,36 @@ async fn send_with_retry(request: RequestBuilder, operation: &str) -> Result<req
         let response = request.send().await?;
         let status = response.status();
 
-        if status == reqwest::StatusCode::TOO_MANY_REQUESTS && attempt < MAX_ATTEMPTS {
+        let retryable = matches!(
+            status,
+            reqwest::StatusCode::TOO_MANY_REQUESTS
+                | reqwest::StatusCode::BAD_GATEWAY
+                | reqwest::StatusCode::SERVICE_UNAVAILABLE
+                | reqwest::StatusCode::GATEWAY_TIMEOUT
+        );
+
+        if retryable && attempt < MAX_RETRIES {
             attempt += 1;
-            let backoff = std::time::Duration::from_millis(500 * u64::from(attempt));
+            let backoff = match retry_after_secs(&response) {
+                Some(secs) => {
+                    let delay = std::time::Duration::from_secs(secs);
+                    if delay > MAX_RETRY_DELAY {
+                        warn!(
+                            "Teable {} returned {} with Retry-After {}s, exceeding the {}s retry budget; not retrying",
+                            operation,
+                            status,
+                            secs,
+                            MAX_RETRY_DELAY.as_secs()
+                        );
+                        return Ok(response);
+                    }
+                    delay
+                }
+                None => std::time::Duration::from_millis(250 * 2u64.pow(attempt)),
+            };
             warn!(
-                "Teable {} rate limited (429), retrying in {:?} (attempt {}/{})",
-                operation, backoff, attempt, MAX_ATTEMPTS
+                "Teable {} returned {}, retrying in {:?} (attempt {}/{})",
+                operation, status, backoff, attempt, MAX_RETRIES
             );
             tokio::time::sleep(backoff).await;
             continue;
@@ -193,9 +293,11 @@ async fn send_with_retry(request: RequestBuilder, operation: &str) -> Result<req
     }
 }
 
-/// Handles Teable API response with consistent error handling
+/// Handles a Teable API response, mapping the upstream status to a
+/// [`TeableError`] so callers can react appropriately.
 async fn handle_teable_response(response: reqwest::Response, operation: &str) -> Result<String> {
     let status = response.status();
+    let retry_after = retry_after_secs(&response);
     let response_text = response.text().await?;
 
     if !status.is_success() {
@@ -203,11 +305,17 @@ async fn handle_teable_response(response: reqwest::Response, operation: &str) ->
             "Teable {} API error {}: {}",
             operation, status, response_text
         );
-        return Err(anyhow::anyhow!(
-            "Teable API error {}: {}",
-            status,
-            response_text
-        ));
+        let error = match status {
+            reqwest::StatusCode::UNAUTHORIZED => TeableError::Unauthorized(response_text),
+            reqwest::StatusCode::FORBIDDEN => TeableError::Forbidden(response_text),
+            reqwest::StatusCode::TOO_MANY_REQUESTS => TeableError::RateLimited(retry_after),
+            reqwest::StatusCode::NOT_FOUND => TeableError::NotFound(response_text),
+            other => TeableError::Upstream {
+                status: other.as_u16(),
+                body: response_text,
+            },
+        };
+        return Err(error.into());
     }
 
     debug!(
@@ -216,6 +324,64 @@ async fn handle_teable_response(response: reqwest::Response, operation: &str) ->
         response_text.len()
     );
     Ok(response_text)
+}
+
+/// Fetches every record matching `filter`, paginating with take/skip so large
+/// result sets are not silently truncated by the server's default page size.
+async fn fetch_all_records(
+    client: &Client,
+    url: &str,
+    token: &str,
+    filter: &Value,
+    projection: Option<&[&str]>,
+    operation: &str,
+) -> Result<Vec<Value>> {
+    // Teable recommends 100 and caps some cloud API keys there, so a larger
+    // value can fail or be silently truncated.
+    const PAGE_SIZE: usize = 100;
+
+    let filter = filter.to_string();
+    let mut all_records: Vec<Value> = Vec::new();
+
+    loop {
+        let skip = all_records.len().to_string();
+        let take = PAGE_SIZE.to_string();
+        let mut request = client
+            .get(url)
+            .header("Authorization", format!("Bearer {token}"))
+            .header("Accept", "application/json")
+            .query(&[("filter", &filter), ("take", &take), ("skip", &skip)]);
+
+        if let Some(fields) = projection {
+            for field in fields {
+                request = request.query(&[("projection[]", *field)]);
+            }
+        }
+
+        let response = send_with_retry(request, operation).await?;
+        let response_text = handle_teable_response(response, operation).await?;
+        let value: Value = serde_json::from_str(&response_text)?;
+        let records = value["records"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?
+            .clone();
+
+        let fetched = records.len();
+        all_records.extend(records);
+
+        // Prefer the server-reported total: if a key caps `take` below
+        // PAGE_SIZE, a short page does not necessarily mean the last page.
+        // Only treat a short page as final when no total is available, and stop
+        // on an empty page so a bogus total cannot loop forever.
+        let total = value.get("total").and_then(|total| total.as_u64());
+        let reached_total = total.is_some_and(|total| all_records.len() as u64 >= total);
+        let short_page_is_final = total.is_none() && fetched < PAGE_SIZE;
+        if fetched == 0 || reached_total || short_page_is_final {
+            break;
+        }
+    }
+
+    Ok(all_records)
 }
 
 pub async fn get_member_by_id(
@@ -252,7 +418,11 @@ pub async fn get_member_by_id_with_projection(
             .header("Accept", "application/json")
     };
     debug!(member_id = %id, "Fetching member by ID");
-    let response = req.send().await?;
+    let response = send_with_retry(req, "member_by_id").await?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        debug!(member_id = %id, "No member found (404)");
+        return Ok(None);
+    }
     let response_text = handle_teable_response(response, "member_by_id").await?;
     // Parse Teable response (single record, not array)
     let record: Value = serde_json::from_str(&response_text)?;
@@ -306,7 +476,7 @@ pub async fn get_member_by_email_with_projection(
         }
     }
     debug!("Fetching member by email");
-    let response = req.send().await?;
+    let response = send_with_retry(req, "member_by_email").await?;
     let response_text = handle_teable_response(response, "member_by_email").await?;
     // Parse Teable response
     let teable_response: Value = serde_json::from_str(&response_text)?;
@@ -351,28 +521,19 @@ pub async fn get_family_members_with_projection(
         "{}/table/{}/record",
         config.api_url, config.members_table_id
     );
-    let mut req = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", config.token))
-        .header("Accept", "application/json")
-        .query(&[("filter", &filter.to_string())]);
-    if let Some(proj) = projection {
-        for field in proj {
-            req = req.query(&[("projection[]", *field)]);
-        }
-    }
     debug!(family_id = %family_id, "Fetching family members");
-    let response = req.send().await?;
-    let response_text = handle_teable_response(response, "family_members").await?;
-    // Parse Teable response
-    let teable_response: Value = serde_json::from_str(&response_text)?;
-    let records = teable_response["records"]
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
+    let records = fetch_all_records(
+        client,
+        &url,
+        &config.token,
+        &filter,
+        projection,
+        "family_members",
+    )
+    .await?;
     let mut members = Vec::with_capacity(records.len());
-    for record in records {
-        let member = member_from_record(record);
-        members.push(member);
+    for record in &records {
+        members.push(member_from_record(record));
     }
     debug!(family_id = %family_id, count = members.len(), "Family members found");
     Ok(TeableResponse {
@@ -393,6 +554,10 @@ pub async fn get_work_hour_by_id(
 
     debug!(work_hour_id = %work_hour_id, "Fetching work hour by ID");
     let response = make_teable_request(client, &url, &config.token, "work_hour_by_id").await?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        debug!(work_hour_id = %work_hour_id, "No work hour found (404)");
+        return Ok(None);
+    }
     let response_text = handle_teable_response(response, "work_hour_by_id").await?;
 
     // Parse Teable response (single record, not array)
@@ -458,7 +623,7 @@ pub async fn get_work_hours_for_member_by_year(
         "operator": "isOnOrBefore",
         "value": {
             "mode": "exactDate",
-            "exactDate": format!("{}-12-31T23:59:59.999Z", year),
+            "exactDate": format!("{}-12-31T00:00:00.000Z", year),
             "timeZone": "Europe/Berlin"
         }
     }));
@@ -469,29 +634,11 @@ pub async fn get_work_hours_for_member_by_year(
     });
     debug!("Filtering work hours with filter: {}", filter);
 
-    let response = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", config.token))
-        .header("Accept", "application/json")
-        .query(&[("filter", &filter.to_string())])
-        .send()
-        .await?;
-    let response_text = handle_teable_response(response, "work_hours").await?;
+    let records =
+        fetch_all_records(client, &url, &config.token, &filter, None, "work_hours").await?;
 
-    // Log a preview of the response for debugging
-    debug!(
-        "Teable work hours raw response preview: {}",
-        &response_text[..std::cmp::min(response_text.len(), 500)]
-    );
-
-    // Parse Teable response and convert to compatible format
-    let teable_response: Value = serde_json::from_str(&response_text)?;
-    let records = teable_response["records"]
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
-
-    let mut work_hours = Vec::new();
-    for record in records {
+    let mut work_hours = Vec::with_capacity(records.len());
+    for record in &records {
         let fields = &record["fields"];
 
         // Extract member info from the linked Mitglied_id field
@@ -529,42 +676,28 @@ pub async fn create_work_hour(
     date: &str,
     description: &str,
     duration_hours: f64,
-    member_id: String,
+    member: &Member,
 ) -> Result<WorkHour> {
     let url = format!(
         "{}/table/{}/record",
         config.api_url, config.work_hours_table_id
     );
 
-    // Get the member's information for the payload using get_member_by_id
-    let member = get_member_by_id(config, client, &member_id)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("Member with ID {} not found", member_id))?;
-    debug!("Datum: {}", date);
-    debug!("Tätigkeit: {}", description);
-    debug!("Stunden: {} hours", duration_hours);
-    debug!("Mitglied_id: {} (linked record)", member_id);
-    debug!("Nachname: {}", member.last_name);
-    debug!("Vorname: {}", member.first_name);
+    debug!(member_id = %member.id, "Teable: creating work hour");
 
     // Create the payload for Teable with proper member linkage
     let payload = serde_json::json!({
         "records": [{
             "fields": {
-                "Mitglied_id": {"id": member_id}, // CRITICAL: Link to member record (object format)
-                "Nachname": member.last_name,
-                "Vorname": member.first_name,
+                "Mitglied_id": {"id": &member.id}, // CRITICAL: Link to member record (object format)
+                "Nachname": &member.last_name,
+                "Vorname": &member.first_name,
                 "Stunden": duration_hours, // Hours as-is for Teable
                 "Datum": date,
                 "Tätigkeit": description
             }
         }]
     });
-
-    debug!(
-        "Teable: Sending payload: {}",
-        serde_json::to_string(&payload)?
-    );
 
     let response = client
         .post(&url)
@@ -580,15 +713,24 @@ pub async fn create_work_hour(
 
     // Parse the response to return the created work hour
     let teable_response: Value = serde_json::from_str(&response_text)?;
-    let record = &teable_response["records"][0];
+    let record = teable_response
+        .get("records")
+        .and_then(|value| value.as_array())
+        .and_then(|records| records.first())
+        .ok_or_else(|| anyhow::anyhow!("Teable create_work_hour response missing record"))?;
     let fields = &record["fields"];
+    let id = record["id"]
+        .as_str()
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("Teable create_work_hour response missing record id"))?
+        .to_string();
 
     Ok(WorkHour {
-        id: record["id"].as_str().unwrap_or("").to_string(),
+        id,
         member_id: parse_member_id(fields["Mitglied_id"].clone()),
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
-        created_on: None,
+        created_on: fields["Created on"].as_str().map(|s| s.to_string()),
         date: fields["Datum"].as_str().map(parse_date_berlin),
         description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
         duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
@@ -602,41 +744,28 @@ pub async fn update_work_hour(
     date: &str,
     description: &str,
     duration_hours: f64,
-    member_id: String,
+    member: &Member,
 ) -> Result<WorkHour> {
     let url = format!(
         "{}/table/{}/record/{}",
         config.api_url, config.work_hours_table_id, work_hour_id
     );
 
-    let member = get_member_by_id(config, client, &member_id)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("Member with ID {} not found", member_id))?;
-
-    debug!(work_hour_id = %work_hour_id, "Teable: updating work hour");
-    debug!("Datum: {}", date);
-    debug!("Tätigkeit: {}", description);
-    debug!("Stunden: {} hours", duration_hours);
-    debug!("Mitglied_id: {} (linked record)", member_id);
+    debug!(work_hour_id = %work_hour_id, member_id = %member.id, "Teable: updating work hour");
 
     // Create the payload for Teable update - use the format from frontend service
     let payload = serde_json::json!({
         "record": {
             "fields": {
-                "Mitglied_id": {"id": member_id}, // CRITICAL: Maintain member record link (object format)
-                "Nachname": member.last_name,
-                "Vorname": member.first_name,
+                "Mitglied_id": {"id": &member.id}, // CRITICAL: Maintain member record link (object format)
+                "Nachname": &member.last_name,
+                "Vorname": &member.first_name,
                 "Stunden": duration_hours, // Hours as-is for Teable
                 "Datum": date,
                 "Tätigkeit": description
             }
         }
     });
-
-    debug!(
-        "Teable: Sending update payload: {}",
-        serde_json::to_string(&payload)?
-    );
 
     // Use PATCH method with record ID in URL path (correct Teable API format)
     let response = client
@@ -667,12 +796,16 @@ pub async fn update_work_hour(
         )
     };
 
+    if record_id.is_empty() {
+        anyhow::bail!("Teable update_work_hour response missing record id");
+    }
+
     Ok(WorkHour {
         id: record_id,
         member_id: parse_member_id(fields["Mitglied_id"].clone()),
         last_name: fields["Nachname"].as_str().map(|s| s.to_string()),
         first_name: fields["Vorname"].as_str().map(|s| s.to_string()),
-        created_on: None,
+        created_on: fields["Created on"].as_str().map(|s| s.to_string()),
         date: fields["Datum"].as_str().map(parse_date_berlin),
         description: fields["Tätigkeit"].as_str().map(|s| s.to_string()),
         duration_hours: fields["Stunden"].as_f64(), // Keep hours as-is from Teable
@@ -685,13 +818,15 @@ pub async fn delete_work_hour(
     work_hour_id: &str,
 ) -> Result<()> {
     let url = format!(
-        "{}/table/{}/record/{}",
-        config.api_url, config.work_hours_table_id, work_hour_id
+        "{}/table/{}/record",
+        config.api_url, config.work_hours_table_id
     );
 
     let response = client
         .delete(&url)
         .header("Authorization", format!("Bearer {}", config.token))
+        .header("Accept", "application/json")
+        .query(&[("recordIds[]", work_hour_id)])
         .send()
         .await?;
 
@@ -719,24 +854,18 @@ pub async fn get_members_by_email(
         "{}/table/{}/record",
         config.api_url, config.members_table_id
     );
-    let mut req = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", config.token))
-        .header("Accept", "application/json")
-        .query(&[("filter", &filter.to_string())]);
-    for field in MEMBER_PROJECTION.iter() {
-        req = req.query(&[("projection[]", *field)]);
-    }
-    let response = req.send().await?;
-    let response_text = handle_teable_response(response, "members_by_email").await?;
-    let teable_response: Value = serde_json::from_str(&response_text)?;
-    let records = teable_response["records"]
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
+    let records = fetch_all_records(
+        client,
+        &url,
+        &config.token,
+        &filter,
+        Some(MEMBER_PROJECTION),
+        "members_by_email",
+    )
+    .await?;
     let mut members = Vec::with_capacity(records.len());
-    for record in records {
-        let member = member_from_record(record);
-        members.push(member);
+    for record in &records {
+        members.push(member_from_record(record));
     }
     Ok(members)
 }
@@ -753,7 +882,8 @@ pub async fn get_all_active_members(
         config.api_url, config.members_table_id
     );
 
-    let page_size = 1000;
+    // Teable recommends 100 and caps some cloud API keys there.
+    let page_size = 100;
     let mut all_records: Vec<Value> = Vec::new();
 
     loop {
@@ -812,8 +942,15 @@ pub async fn get_all_active_members(
             all_records.len()
         );
 
-        // Stop when this page returned fewer records than requested (last page)
-        if fetched < page_size {
+        // Stop when the server total is reached, or on a short/empty page when
+        // no total is reported. The empty-page stop prevents endless paging if
+        // the server reports a total it never fulfills.
+        let total = teable_response
+            .get("total")
+            .and_then(|total| total.as_u64());
+        let reached_total = total.is_some_and(|total| all_records.len() as u64 >= total);
+        let short_page_is_final = total.is_none() && fetched < page_size;
+        if fetched == 0 || reached_total || short_page_is_final {
             break;
         }
     }
