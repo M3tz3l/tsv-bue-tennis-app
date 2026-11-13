@@ -96,6 +96,27 @@ fn init_tracing() {
     }
 }
 
+/// Logs a startup table-access failure with an actionable hint for the common
+/// Teable auth problems (401 = bad/expired token, 403 = missing scope/base access).
+fn log_teable_access_error(table: &str, error: &anyhow::Error) {
+    error!(%error, table, "Teable table inaccessible");
+    match error.downcast_ref::<teable::TeableError>() {
+        Some(teable::TeableError::Unauthorized(_)) => {
+            error!("TEABLE_TOKEN is invalid or expired (401); update it and restart")
+        }
+        Some(teable::TeableError::Forbidden(_)) => {
+            error!("TEABLE_TOKEN lacks access to table '{table}' (403); check its scopes and base access")
+        }
+        Some(teable::TeableError::RateLimited(_)) => {
+            error!(
+                table,
+                "Teable rate limited (429) during startup; retry shortly"
+            )
+        }
+        _ => {}
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Load .env file
@@ -121,6 +142,7 @@ async fn main() -> anyhow::Result<()> {
 
     let http_client = Client::builder()
         .timeout(std::time::Duration::from_secs(10))
+        .connect_timeout(std::time::Duration::from_secs(5))
         .build()?;
 
     let teable_config = teable::TeableConfig {
@@ -140,7 +162,7 @@ async fn main() -> anyhow::Result<()> {
     .await
     {
         Ok(count) => info!(records = count, "Members table accessible"),
-        Err(e) => error!(error = %e, "Members table inaccessible"),
+        Err(e) => log_teable_access_error("members", &e),
     }
 
     // 2. Verify work_hours table is accessible
@@ -153,7 +175,7 @@ async fn main() -> anyhow::Result<()> {
     .await
     {
         Ok(count) => info!(records = count, "Work hours table accessible"),
-        Err(e) => error!(error = %e, "Work hours table inaccessible"),
+        Err(e) => log_teable_access_error("work_hours", &e),
     }
 
     // 3. Verify SQLite database
@@ -1402,12 +1424,15 @@ mod tests {
 
         // Mock work hours API call
         let _work_hour_by_id_mock = teable_server
-            .mock("GET", "/table/test_work_hours_table/record/work_hour_1")
+            .mock(
+                "GET",
+                "/table/test_work_hours_table/record/recWORKHOUR00001",
+            )
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
                 r#"{
-                "id": "work_hour_1",
+                "id": "recWORKHOUR00001",
                 "fields": {
                     "Datum": "2024-01-15",
                     "Tätigkeit": "Test work",
@@ -1425,7 +1450,7 @@ mod tests {
 
         // Test work hours endpoint with valid token - use dashboard endpoint
         let response = server
-            .get("/api/arbeitsstunden/work_hour_1")
+            .get("/api/arbeitsstunden/recWORKHOUR00001")
             .add_header("authorization", &format!("Bearer {valid_token}"))
             .await;
 

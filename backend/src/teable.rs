@@ -2,6 +2,7 @@
 
 use crate::models::{Member, TeableResponse, WorkHour};
 use anyhow::{Context, Result};
+use rand::Rng;
 use reqwest::{Client, RequestBuilder};
 use serde_json::Value;
 use tracing::{debug, error, info, warn};
@@ -39,7 +40,7 @@ impl std::error::Error for TeableError {}
 
 /// Maps a Teable failure to an HTTP status for route handlers. Auth, upstream
 /// and rate-limit failures are transient dependency problems, so they surface
-/// as 503 rather than a misleading 500. Everything else stays a 500.
+/// as 503 rather than a misleading 500. A missing table/record is a 404.
 pub fn status_for_error(err: &anyhow::Error) -> axum::http::StatusCode {
     use axum::http::StatusCode;
     if let Some(teable_err) = err.downcast_ref::<TeableError>() {
@@ -48,7 +49,7 @@ pub fn status_for_error(err: &anyhow::Error) -> axum::http::StatusCode {
             | TeableError::Forbidden(_)
             | TeableError::RateLimited(_)
             | TeableError::Upstream { .. } => StatusCode::SERVICE_UNAVAILABLE,
-            TeableError::NotFound(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            TeableError::NotFound(_) => StatusCode::NOT_FOUND,
         };
     }
     if err.downcast_ref::<reqwest::Error>().is_some() {
@@ -161,14 +162,9 @@ pub async fn check_table_access(
         .await
         .context(format!("Request failed for table '{table_name}'"))?;
 
-    let status = response.status();
-    let text = response.text().await.context(format!(
-        "Failed to read response body for table '{table_name}'"
-    ))?;
-
-    if !status.is_success() {
-        anyhow::bail!("Table '{table_name}' ({table_id}): HTTP {status} — {text}");
-    }
+    let text = handle_teable_response(response, &format!("check_{table_name}"))
+        .await
+        .with_context(|| format!("Table '{table_name}' ({table_id}) is inaccessible"))?;
 
     // Extract total record count; propagate JSON parse errors,
     // but keep the 0 fallback for valid JSON that lacks a numeric total
@@ -190,6 +186,19 @@ pub async fn work_hour_exists_for_member_at_date(
     member_id: &str,
     date: &str,
 ) -> Result<bool> {
+    work_hour_exists_for_member_at_date_excluding(config, http_client, member_id, date, None).await
+}
+
+/// Like [`work_hour_exists_for_member_at_date`], but ignores
+/// `exclude_work_hour_id` so an update that keeps the same date does not count
+/// itself as a duplicate.
+pub async fn work_hour_exists_for_member_at_date_excluding(
+    config: &TeableConfig,
+    http_client: &Client,
+    member_id: &str,
+    date: &str,
+    exclude_work_hour_id: Option<&str>,
+) -> Result<bool> {
     let filter = serde_json::json!({
         "conjunction": "and",
         "filterSet": [
@@ -201,12 +210,17 @@ pub async fn work_hour_exists_for_member_at_date(
         "{}/table/{}/record",
         config.api_url, config.work_hours_table_id
     );
+    let take = if exclude_work_hour_id.is_some() {
+        "2"
+    } else {
+        "1"
+    };
     let request = http_client
         .get(&url)
         .header("Authorization", format!("Bearer {}", config.token))
         .header("Accept", "application/json")
         .query(&[("filter", &filter.to_string())])
-        .query(&[("take", "1")]);
+        .query(&[("take", take)]);
     let response = send_with_retry(request, "work_hours_for_date").await?;
     let response_text = handle_teable_response(response, "work_hours_for_date").await?;
     let teable_response: serde_json::Value = serde_json::from_str(&response_text)?;
@@ -214,7 +228,9 @@ pub async fn work_hour_exists_for_member_at_date(
         .as_array()
         .cloned()
         .unwrap_or_default();
-    Ok(!records.is_empty())
+    Ok(records
+        .iter()
+        .any(|record| record["id"].as_str() != exclude_work_hour_id))
 }
 
 /// Makes an authenticated GET request to the Teable API, with retry.
@@ -279,7 +295,11 @@ async fn send_with_retry(request: RequestBuilder, operation: &str) -> Result<req
                     }
                     delay
                 }
-                None => std::time::Duration::from_millis(250 * 2u64.pow(attempt)),
+                None => {
+                    let base = 250u64 * 2u64.pow(attempt);
+                    let jitter = rand::thread_rng().gen_range(0..=(base / 2).max(1));
+                    std::time::Duration::from_millis(base + jitter)
+                }
             };
             warn!(
                 "Teable {} returned {}, retrying in {:?} (attempt {}/{})",
@@ -434,64 +454,6 @@ pub async fn get_member_by_id_with_projection(
     let member = member_from_record(&record);
     debug!(member_id = %member.id, "Member found");
     Ok(Some(member))
-}
-
-/// Get a specific member by email - optimized to filter at API level
-pub async fn get_member_by_email(
-    config: &TeableConfig,
-    client: &Client,
-    email: &str,
-) -> Result<Option<Member>> {
-    get_member_by_email_with_projection(config, client, email, Some(MEMBER_PROJECTION)).await
-}
-
-pub async fn get_member_by_email_with_projection(
-    config: &TeableConfig,
-    client: &Client,
-    email: &str,
-    projection: Option<&[&str]>,
-) -> Result<Option<Member>> {
-    let email_lowercase = email.to_lowercase();
-
-    let filter = serde_json::json!({
-        "conjunction": "and",
-        "filterSet": [{
-            "fieldId": "Email",
-            "operator": "is",
-            "value": email_lowercase
-        }]
-    });
-    let url = format!(
-        "{}/table/{}/record",
-        config.api_url, config.members_table_id
-    );
-    let mut req = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", config.token))
-        .header("Accept", "application/json")
-        .query(&[("filter", &filter.to_string())]);
-    if let Some(proj) = projection {
-        for field in proj {
-            req = req.query(&[("projection[]", *field)]);
-        }
-    }
-    debug!("Fetching member by email");
-    let response = send_with_retry(req, "member_by_email").await?;
-    let response_text = handle_teable_response(response, "member_by_email").await?;
-    // Parse Teable response
-    let teable_response: Value = serde_json::from_str(&response_text)?;
-    let records = teable_response["records"]
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
-
-    if let Some(record) = records.first() {
-        let member = member_from_record(record);
-        debug!(member_id = %member.id, "Member found by email");
-        Ok(Some(member))
-    } else {
-        debug!("No member found for supplied email");
-        Ok(None)
-    }
 }
 
 /// Get family members by family ID - optimized to filter at API level
@@ -897,17 +859,25 @@ pub async fn get_all_active_members(
                 ("skip", &skip.to_string()),
             ]);
 
-        // Build filter set: only active members (no Austrittsdatum)
-        let mut filter_set = vec![serde_json::json!({
-            "fieldId": "Austrittsdatum",
-            "operator": "isEmpty",
-            "value": serde_json::Value::Null
-        })];
+        // Build filter set: active members (no Austrittsdatum) that have an
+        // email, since callers use this list for mail recipients.
+        let mut filter_set = vec![
+            serde_json::json!({
+                "fieldId": "Austrittsdatum",
+                "operator": "isEmpty",
+                "value": serde_json::Value::Null
+            }),
+            serde_json::json!({
+                "fieldId": "Email",
+                "operator": "isNotEmpty",
+                "value": serde_json::Value::Null
+            }),
+        ];
 
         if let Some(role) = role_filter {
             filter_set.push(serde_json::json!({
                 "fieldId": "Rolle",
-                "operator": "contains",
+                "operator": "is",
                 "value": role
             }));
         }
@@ -973,4 +943,63 @@ pub async fn get_all_active_members(
         "Fetched active members"
     );
     Ok(members)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mockito::Matcher;
+
+    #[tokio::test]
+    async fn paginates_past_capped_pages_using_total() {
+        let mut server = mockito::Server::new_async().await;
+        let url = format!("{}/table/tbl/record", server.url());
+
+        // Three pages of 50 while we ask for 100: a capped server must not make
+        // the loop stop before the reported total of 150 is reached.
+        for (skip, start) in [(0usize, 0usize), (50, 50), (100, 100)] {
+            let records: Vec<_> = (0..50)
+                .map(|i| serde_json::json!({"id": format!("rec{start}{i}")}))
+                .collect();
+            let body = serde_json::json!({"records": records, "total": 150}).to_string();
+            server
+                .mock("GET", "/table/tbl/record")
+                .match_query(Matcher::AllOf(vec![
+                    Matcher::UrlEncoded("skip".into(), skip.to_string()),
+                    Matcher::UrlEncoded("take".into(), "100".into()),
+                ]))
+                .with_status(200)
+                .with_header("content-type", "application/json")
+                .with_body(body)
+                .create_async()
+                .await;
+        }
+
+        let client = Client::new();
+        let filter = serde_json::json!({"conjunction": "and", "filterSet": []});
+        let records = fetch_all_records(&client, &url, "token", &filter, None, "test")
+            .await
+            .unwrap();
+        assert_eq!(records.len(), 150);
+    }
+
+    #[tokio::test]
+    async fn does_not_retry_when_retry_after_exceeds_budget() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/")
+            .with_status(429)
+            .with_header("retry-after", "60")
+            .expect(1)
+            .create_async()
+            .await;
+
+        let client = Client::new();
+        let response = send_with_retry(client.get(server.url()), "test")
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), reqwest::StatusCode::TOO_MANY_REQUESTS);
+        mock.assert_async().await;
+    }
 }

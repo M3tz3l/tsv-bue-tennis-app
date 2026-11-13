@@ -9,6 +9,8 @@ use axum::{
 };
 use chrono::{Datelike, Utc};
 use chrono_tz::Europe::Berlin;
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, Mutex, Weak};
 use tracing::{debug, error, info, warn};
 
 use crate::models::CreateWorkHourRequest;
@@ -19,6 +21,33 @@ use crate::utils::extract_user_id_from_headers;
 const MIN_WORK_HOURS: f64 = 0.25;
 const MAX_WORK_HOURS: f64 = 24.0;
 const MAX_DESCRIPTION_CHARS: usize = 40;
+
+/// Per member+date locks. Only submissions for the same person and day need to
+/// be serialized, so a slow lookup never blocks other members. Entries are
+/// reclaimed on each acquisition, keeping the map bounded by in-flight keys.
+// shortcut: coordinates one process only; add a store-level uniqueness guard if
+// the backend ever runs multiple instances.
+static WORK_HOUR_LOCKS: LazyLock<Mutex<HashMap<String, Weak<tokio::sync::Mutex<()>>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+async fn lock_work_hour(member_id: &str, date: &str) -> tokio::sync::OwnedMutexGuard<()> {
+    let key = format!("{member_id}:{date}");
+    let mutex = {
+        let mut locks = WORK_HOUR_LOCKS
+            .lock()
+            .expect("work hour lock registry poisoned");
+        locks.retain(|_, weak| weak.strong_count() > 0);
+        match locks.get(&key).and_then(Weak::upgrade) {
+            Some(mutex) => mutex,
+            None => {
+                let mutex = Arc::new(tokio::sync::Mutex::new(()));
+                locks.insert(key, Arc::downgrade(&mutex));
+                mutex
+            }
+        }
+    };
+    mutex.lock_owned().await
+}
 
 /// Validate work hour date with one-month grace period.
 /// Returns Ok(()) if valid, or a JSON error body to return to the caller.
@@ -137,8 +166,8 @@ pub fn routes() -> Router<AppState> {
 }
 
 enum OwnershipError {
-    /// Upstream Teable request failed (network/HTTP error).
-    Upstream,
+    /// Upstream Teable request failed; carries the mapped HTTP status.
+    Upstream(axum::http::StatusCode),
     /// Work hour entry was not found or is not owned by the user.
     Denied,
 }
@@ -156,12 +185,17 @@ async fn verify_work_hour_ownership(
     user_id: &str,
     verb: &str,
 ) -> Result<crate::models::WorkHour, OwnershipError> {
+    if !crate::utils::is_valid_record_id(work_hour_id) {
+        warn!(work_hour_id = %work_hour_id, "{verb} Work Hour: invalid record id");
+        return Err(OwnershipError::Denied);
+    }
+
     let existing =
         teable::get_work_hour_by_id(&state.teable_config, &state.http_client, work_hour_id)
             .await
             .map_err(|e| {
                 error!("{verb} Work Hour: Failed to get work hour by id: {}", e);
-                OwnershipError::Upstream
+                OwnershipError::Upstream(teable::status_for_error(&e))
             })?;
 
     let wh = existing.ok_or_else(|| {
@@ -199,7 +233,7 @@ pub async fn get_work_hour_by_id(
 
     let wh = match verify_work_hour_ownership(&state, &work_hour_id, &user_id, "access").await {
         Ok(wh) => wh,
-        Err(OwnershipError::Upstream) => return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+        Err(OwnershipError::Upstream(status)) => return Err(status),
         Err(OwnershipError::Denied) => return Ok(denied_response("access")),
     };
 
@@ -306,6 +340,10 @@ pub async fn create_work_hour(
         hours = payload.hours,
         "Create Work Hour: using submitted hours"
     );
+
+    // Serialize the check+create for this member+date so concurrent requests
+    // cannot both pass it.
+    let _create_guard = lock_work_hour(&current_user.id, &date).await;
 
     // Check for duplicate entry for this member and date using teable.rs helper
     let work_hour_exists = match teable::work_hour_exists_for_member_at_date(
@@ -423,7 +461,7 @@ pub async fn update_work_hour(
 
     let _wh = match verify_work_hour_ownership(&state, &work_hour_id, &user_id, "edit").await {
         Ok(wh) => wh,
-        Err(OwnershipError::Upstream) => return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+        Err(OwnershipError::Upstream(status)) => return Err(status),
         Err(OwnershipError::Denied) => return Ok(denied_response("edit")),
     };
 
@@ -450,6 +488,38 @@ pub async fn update_work_hour(
         hours = payload.hours,
         "Update Work Hour: using submitted hours"
     );
+
+    // Enforce the same one-entry-per-member-and-day rule as create. The lock is
+    // keyed identically in both paths, and the edited record is excluded so an
+    // unchanged date is not treated as a duplicate.
+    let _update_guard = lock_work_hour(&current_user.id, &date).await;
+    let duplicate = match teable::work_hour_exists_for_member_at_date_excluding(
+        &state.teable_config,
+        &state.http_client,
+        &current_user.id,
+        &date,
+        Some(&work_hour_id),
+    )
+    .await
+    {
+        Ok(exists) => exists,
+        Err(e) => {
+            error!("Update Work Hour: Error checking destination date: {}", e);
+            return Err(teable::status_for_error(&e));
+        }
+    };
+
+    if duplicate {
+        warn!(
+            user_id = %current_user.id,
+            date = %date,
+            "Update Work Hour: duplicate entry"
+        );
+        return Ok(axum::Json(serde_json::json!({
+            "success": false,
+            "error": "Für dieses Datum existiert bereits ein Eintrag. Pro Person und Tag ist nur ein Eintrag erlaubt."
+        })));
+    }
 
     // Try to update the work hour in Teable
     match teable::update_work_hour(
@@ -501,7 +571,7 @@ pub async fn delete_work_hour(
 
     if let Err(err) = verify_work_hour_ownership(&state, &id, &user_id, "delete").await {
         return match err {
-            OwnershipError::Upstream => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+            OwnershipError::Upstream(status) => Err(status),
             OwnershipError::Denied => Ok(denied_response("delete")),
         };
     }

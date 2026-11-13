@@ -27,6 +27,16 @@ impl Config {
             anyhow::bail!("JWT_SECRET must not be empty");
         }
 
+        // Trim here so a stray newline/space in the secret cannot cause a
+        // mysterious 401 from Teable.
+        let teable_token = env::var("TEABLE_TOKEN")
+            .context("TEABLE_TOKEN must be set")?
+            .trim()
+            .to_string();
+        if teable_token.is_empty() {
+            anyhow::bail!("TEABLE_TOKEN must not be empty");
+        }
+
         Ok(Config {
             port,
             database_url: env::var("DATABASE_URL").context("DATABASE_URL must be set")?,
@@ -34,7 +44,7 @@ impl Config {
             frontend_url: env::var("FRONTEND_URL")
                 .unwrap_or_else(|_| "http://localhost:5173".to_string()),
             teable_api_url: env::var("TEABLE_API_URL").context("TEABLE_API_URL must be set")?,
-            teable_token: env::var("TEABLE_TOKEN").context("TEABLE_TOKEN must be set")?,
+            teable_token,
             members_table_id: env::var("MEMBERS_TABLE_ID")
                 .context("MEMBERS_TABLE_ID must be set")?,
             work_hours_table_id: env::var("WORK_HOURS_TABLE_ID")
