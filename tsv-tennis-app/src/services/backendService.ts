@@ -30,6 +30,7 @@ type MemberCountResponse = {
 };
 
 export type ApiError = { success: false; message: string; status?: number };
+export type EventScope = 'upcoming' | 'past';
 export type VerifyTokenResponse = ApiResult & { user?: UserResponse; status?: number };
 export type MailSendResponse = ApiResult & { job_id?: string; total_recipients?: number };
 type SendTestMailPayload = { subject?: string; message?: string };
@@ -426,9 +427,11 @@ class BackendService {
     }
   }
 
-  async getEvents(): Promise<EventDetail[] | ApiError> {
+  async getEvents(scope: EventScope = 'upcoming'): Promise<EventDetail[] | ApiError> {
     try {
-      const response = await this.api.get<EventDetail[]>('/events');
+      const response = scope === 'past'
+        ? await this.api.get<EventDetail[]>('/events', { params: { scope: 'past' } })
+        : await this.api.get<EventDetail[]>('/events');
       return response.data;
     } catch (error: unknown) {
       logApiError('Error fetching events:', error);

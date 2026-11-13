@@ -100,11 +100,11 @@ fn event_request(status: EventStatus) -> CreateEventRequest {
 async fn regular_members_only_see_published_events_and_own_signup() {
     let (server, repository, _teable) = app().await;
     let published = repository
-        .create_event("orga-1", event_request(EventStatus::Published))
+        .create_event(event_request(EventStatus::Published))
         .await
         .unwrap();
     repository
-        .create_event("orga-1", event_request(EventStatus::Draft))
+        .create_event(event_request(EventStatus::Draft))
         .await
         .unwrap();
     repository
@@ -141,11 +141,16 @@ async fn regular_members_only_see_published_events_and_own_signup() {
 
 #[tokio::test]
 #[serial]
-async fn orga_list_includes_drafts_and_past_events() {
+async fn orga_list_includes_drafts_but_hides_past_events() {
     let (server, repository, _teable) = app().await;
-    let mut draft = event_request(EventStatus::Draft);
-    draft.event_date = "2000-01-01".into();
-    repository.create_event("orga-1", draft).await.unwrap();
+    let mut past = event_request(EventStatus::Draft);
+    past.event_date = "2000-01-01".into();
+    past.title = "Past draft".into();
+    repository.create_event(past).await.unwrap();
+
+    let mut future = event_request(EventStatus::Draft);
+    future.title = "Future draft".into();
+    repository.create_event(future).await.unwrap();
 
     let response = server
         .get("/events")
@@ -154,6 +159,7 @@ async fn orga_list_includes_drafts_and_past_events() {
     response.assert_status_ok();
     let events = response.json::<Vec<serde_json::Value>>();
     assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["event"]["title"], "Future draft");
     assert_eq!(events[0]["event"]["status"], "draft");
 }
 
@@ -162,7 +168,7 @@ async fn orga_list_includes_drafts_and_past_events() {
 async fn orga_list_includes_own_signup() {
     let (server, repository, _teable) = app().await;
     let published = repository
-        .create_event("orga-1", event_request(EventStatus::Published))
+        .create_event(event_request(EventStatus::Published))
         .await
         .unwrap();
     repository
@@ -193,18 +199,10 @@ async fn orga_list_includes_own_signup() {
 
 #[tokio::test]
 #[serial]
-async fn signup_listing_preserves_rows_when_a_member_lookup_fails() {
+async fn signup_listing_preserves_rows_when_member_lookup_fails() {
     let mut teable = Server::new_async().await;
-    let _success = teable
-        .mock("GET", "/table/members/record/member-ok")
-        .match_query(mockito::Matcher::Any)
-        .with_status(200)
-        .with_header("content-type", "application/json")
-        .with_body(r#"{"id":"member-ok","fields":{"Vorname":"Anna","Nachname":"Okay"}}"#)
-        .create_async()
-        .await;
-    let _failure = teable
-        .mock("GET", "/table/members/record/member-fails")
+    let _batch_failure = teable
+        .mock("GET", "/table/members/record")
         .match_query(mockito::Matcher::Any)
         .with_status(500)
         .create_async()
@@ -220,7 +218,7 @@ async fn signup_listing_preserves_rows_when_a_member_lookup_fails() {
 
     let (server, repository) = app_with_teable_url(&teable.url()).await;
     let event = repository
-        .create_event("orga-1", event_request(EventStatus::Published))
+        .create_event(event_request(EventStatus::Published))
         .await
         .unwrap();
     for member_id in ["member-ok", "member-fails"] {
@@ -247,8 +245,65 @@ async fn signup_listing_preserves_rows_when_a_member_lookup_fails() {
     let body = response.json::<serde_json::Value>();
     assert_eq!(body["signups"].as_array().unwrap().len(), 2);
     assert_eq!(body["total_people"], 2);
-    assert_eq!(body["signups"][0]["member_name"], "Anna Okay");
+    assert_eq!(body["signups"][0]["member_name"], serde_json::Value::Null);
     assert_eq!(body["signups"][1]["member_name"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+#[serial]
+async fn signup_listing_batches_member_names() {
+    let mut teable = Server::new_async().await;
+    let _batch = teable
+        .mock("GET", "/table/members/record")
+        .match_query(mockito::Matcher::Any)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            r#"{"records":[
+                {"id":"member-a","fields":{"Vorname":"Anna","Nachname":"A"}},
+                {"id":"member-b","fields":{"Vorname":"Berta","Nachname":"B"}}
+            ],"total":2}"#,
+        )
+        .create_async()
+        .await;
+    let _orga_role = teable
+        .mock("GET", "/table/members/record/orga-1")
+        .match_query(mockito::Matcher::Any)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"id":"orga-1","fields":{"Rolle":"orga"}}"#)
+        .create_async()
+        .await;
+
+    let (server, repository) = app_with_teable_url(&teable.url()).await;
+    let event = repository
+        .create_event(event_request(EventStatus::Published))
+        .await
+        .unwrap();
+    for member_id in ["member-a", "member-b"] {
+        repository
+            .create_signup(
+                event.id,
+                member_id,
+                tsv_tennis_backend::models::SignupRequest {
+                    people_count: 1,
+                    salad_count: 0,
+                    cake_count: 0,
+                    comment: None,
+                },
+            )
+            .await
+            .unwrap();
+    }
+
+    let response = server
+        .get(&format!("/events/{}/signups", event.id))
+        .authorization(format!("Bearer {}", token("orga-1", Some("orga"))))
+        .await;
+    response.assert_status_ok();
+    let body = response.json::<serde_json::Value>();
+    assert_eq!(body["signups"][0]["member_name"], "Anna A");
+    assert_eq!(body["signups"][1]["member_name"], "Berta B");
 }
 
 #[tokio::test]
@@ -256,7 +311,7 @@ async fn signup_listing_preserves_rows_when_a_member_lookup_fails() {
 async fn regular_members_cannot_fetch_draft_details_but_orga_can() {
     let (server, repository, _teable) = app().await;
     let draft = repository
-        .create_event("orga-1", event_request(EventStatus::Draft))
+        .create_event(event_request(EventStatus::Draft))
         .await
         .unwrap();
 
@@ -278,7 +333,7 @@ async fn regular_members_cannot_fetch_draft_details_but_orga_can() {
 async fn normalized_orga_can_manage_events_but_members_cannot_view_signups() {
     let (server, repository, _teable) = app().await;
     let event = repository
-        .create_event("orga-1", event_request(EventStatus::Published))
+        .create_event(event_request(EventStatus::Published))
         .await
         .unwrap();
     let response = server
@@ -300,7 +355,7 @@ async fn normalized_orga_can_manage_events_but_members_cannot_view_signups() {
 async fn management_and_signup_routes_require_their_proper_authentication() {
     let (server, repository, _teable) = app().await;
     let event = repository
-        .create_event("orga-1", event_request(EventStatus::Published))
+        .create_event(event_request(EventStatus::Published))
         .await
         .unwrap();
     let member = format!("Bearer {}", token("member-1", Some("member")));
@@ -351,7 +406,7 @@ async fn signup_enforces_authenticated_ownership_deadline_and_capacity() {
     let (server, repository, _teable) = app().await;
     let mut limited = event_request(EventStatus::Published);
     limited.capacity = Some(1);
-    let event = repository.create_event("orga-1", limited).await.unwrap();
+    let event = repository.create_event(limited).await.unwrap();
 
     let first = server
         .post(&format!("/events/{}/signup", event.id))
@@ -380,10 +435,7 @@ async fn signup_enforces_authenticated_ownership_deadline_and_capacity() {
 
     let mut expired_request = event_request(EventStatus::Published);
     expired_request.signup_deadline = Some("2000-01-01".into());
-    let expired = repository
-        .create_event("orga-1", expired_request)
-        .await
-        .unwrap();
+    let expired = repository.create_event(expired_request).await.unwrap();
     let deadline = server
         .post(&format!("/events/{}/signup", expired.id))
         .authorization(format!("Bearer {}", token("member-3", None)))
@@ -398,7 +450,7 @@ async fn concurrent_signups_cannot_exceed_capacity() {
     let (server, repository, _teable) = app().await;
     let mut limited = event_request(EventStatus::Published);
     limited.capacity = Some(1);
-    let event = repository.create_event("orga-1", limited).await.unwrap();
+    let event = repository.create_event(limited).await.unwrap();
 
     let first = async {
         server
@@ -436,7 +488,7 @@ async fn signup_deletion_returns_deadline_message_and_preserves_signup() {
     let (server, repository, _teable) = app().await;
     let mut expired = event_request(EventStatus::Published);
     expired.signup_deadline = Some("2000-01-01".into());
-    let event = repository.create_event("orga-1", expired).await.unwrap();
+    let event = repository.create_event(expired).await.unwrap();
     sqlx::query("INSERT INTO event_signups (event_id, member_id, people_count) VALUES (?, ?, ?)")
         .bind(event.id)
         .bind("member-1")
@@ -461,7 +513,7 @@ async fn signup_update_enforces_deadline_and_capacity() {
     let (server, repository, _teable) = app().await;
     let mut limited = event_request(EventStatus::Published);
     limited.capacity = Some(2);
-    let event = repository.create_event("orga-1", limited).await.unwrap();
+    let event = repository.create_event(limited).await.unwrap();
     repository
         .create_signup(
             event.id,
@@ -485,7 +537,7 @@ async fn signup_update_enforces_deadline_and_capacity() {
 
     let mut expired = event_request(EventStatus::Published);
     expired.signup_deadline = Some("2000-01-01".into());
-    let expired = repository.create_event("orga-1", expired).await.unwrap();
+    let expired = repository.create_event(expired).await.unwrap();
     sqlx::query("INSERT INTO event_signups (event_id, member_id, people_count) VALUES (?, ?, ?)")
         .bind(expired.id)
         .bind("member-1")
@@ -515,7 +567,7 @@ async fn malformed_deadlines_are_rejected_and_cannot_receive_signups() {
     response.assert_status(StatusCode::BAD_REQUEST);
 
     let event = repository
-        .create_event("orga-1", event_request(EventStatus::Published))
+        .create_event(event_request(EventStatus::Published))
         .await
         .unwrap();
     sqlx::query("UPDATE events SET signup_deadline='not-a-deadline' WHERE id=?")
@@ -537,7 +589,7 @@ async fn signup_endpoints_reject_disabled_events_with_conflict() {
     let (server, repository, _teable) = app().await;
     let mut request = event_request(EventStatus::Published);
     request.allow_signups = false;
-    let event = repository.create_event("orga-1", request).await.unwrap();
+    let event = repository.create_event(request).await.unwrap();
 
     let post = server
         .post(&format!("/events/{}/signup", event.id))
@@ -594,11 +646,11 @@ async fn demoted_orga_token_cannot_manage_or_view_organizer_data() {
 
     let (server, repository) = app_with_teable_url(&teable.url()).await;
     let draft = repository
-        .create_event("orga-1", event_request(EventStatus::Draft))
+        .create_event(event_request(EventStatus::Draft))
         .await
         .unwrap();
     let published = repository
-        .create_event("orga-1", event_request(EventStatus::Published))
+        .create_event(event_request(EventStatus::Published))
         .await
         .unwrap();
     let orga_token = format!("Bearer {}", token("orga-1", Some("orga")));
@@ -640,4 +692,33 @@ async fn demoted_orga_token_cannot_manage_or_view_organizer_data() {
         .authorization(orga_token)
         .await;
     hidden.assert_status_not_found();
+}
+
+#[tokio::test]
+#[serial]
+async fn event_list_past_scope_uses_role_specific_windows() {
+    let (server, repository, _teable) = app().await;
+    for (days, title) in [(5i64, "Recent"), (60, "Old"), (200, "Older")] {
+        let mut request = event_request(EventStatus::Published);
+        request.event_date = (Utc::now().date_naive() - Duration::days(days)).to_string();
+        request.title = title.into();
+        repository.create_event(request).await.unwrap();
+    }
+
+    let member = server
+        .get("/events?scope=past")
+        .authorization(format!("Bearer {}", token("member-1", None)))
+        .await;
+    member.assert_status_ok();
+    let member_events = member.json::<Vec<serde_json::Value>>();
+    assert_eq!(member_events.len(), 1);
+    assert_eq!(member_events[0]["event"]["title"], "Recent");
+
+    let orga = server
+        .get("/events?scope=past")
+        .authorization(format!("Bearer {}", token("orga-1", Some("orga"))))
+        .await;
+    orga.assert_status_ok();
+    let orga_events = orga.json::<Vec<serde_json::Value>>();
+    assert_eq!(orga_events.len(), 3);
 }

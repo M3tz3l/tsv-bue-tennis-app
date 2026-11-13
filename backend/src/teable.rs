@@ -832,6 +832,58 @@ pub async fn get_members_by_email(
     Ok(members)
 }
 
+/// Resolves display names for a set of member record ids in batch requests
+/// instead of one request per member. IDs are sent in chunks of 100, which is
+/// also Teable's recommended page size.
+pub async fn get_member_names_by_ids(
+    config: &TeableConfig,
+    client: &Client,
+    member_ids: &[String],
+) -> Result<std::collections::HashMap<String, String>> {
+    const CHUNK_SIZE: usize = 100;
+
+    let url = format!(
+        "{}/table/{}/record",
+        config.api_url, config.members_table_id
+    );
+    let mut names = std::collections::HashMap::new();
+
+    for chunk in member_ids.chunks(CHUNK_SIZE) {
+        let mut request = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", config.token))
+            .header("Accept", "application/json")
+            .query(&[("take", "100")])
+            .query(&[("projection[]", "Vorname")])
+            .query(&[("projection[]", "Nachname")]);
+        for id in chunk {
+            request = request.query(&[("selectedRecordIds[]", id)]);
+        }
+
+        let response = send_with_retry(request, "member_names_by_ids").await?;
+        let response_text = handle_teable_response(response, "member_names_by_ids").await?;
+        let value: Value = serde_json::from_str(&response_text)?;
+        let records = value["records"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("Invalid Teable response format"))?;
+
+        for record in records {
+            let id = record["id"].as_str().unwrap_or("");
+            if id.is_empty() {
+                continue;
+            }
+            let first = record["fields"]["Vorname"].as_str().unwrap_or("");
+            let last = record["fields"]["Nachname"].as_str().unwrap_or("");
+            let name = format!("{first} {last}").trim().to_string();
+            if !name.is_empty() {
+                names.insert(id.to_string(), name);
+            }
+        }
+    }
+
+    Ok(names)
+}
+
 /// Fetches all active members from Teable with optional role filter.
 /// Uses take/skip pagination (max take=1000 per Teable docs) to retrieve all records.
 pub async fn get_all_active_members(
@@ -1000,6 +1052,68 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::TOO_MANY_REQUESTS);
+        mock.assert_async().await;
+    }
+
+    fn batch_config(url: &str) -> TeableConfig {
+        TeableConfig {
+            api_url: url.to_string(),
+            token: "token".into(),
+            members_table_id: "tbl".into(),
+            work_hours_table_id: "hours".into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn member_name_lookup_sends_one_request_for_100_ids() {
+        let mut server = mockito::Server::new_async().await;
+        let records: Vec<_> = (0..100)
+            .map(|i| {
+                serde_json::json!({
+                    "id": format!("rec{i}"),
+                    "fields": { "Vorname": "A", "Nachname": "B" },
+                })
+            })
+            .collect();
+        let body = serde_json::json!({ "records": records }).to_string();
+        let mock = server
+            .mock("GET", "/table/tbl/record")
+            .match_query(Matcher::Any)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(body)
+            .expect(1)
+            .create_async()
+            .await;
+
+        let ids: Vec<String> = (0..100).map(|i| format!("rec{i}")).collect();
+        let names = get_member_names_by_ids(&batch_config(&server.url()), &Client::new(), &ids)
+            .await
+            .unwrap();
+
+        assert_eq!(names.len(), 100);
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn member_name_lookup_chunks_more_than_100_ids() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/table/tbl/record")
+            .match_query(Matcher::Any)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"records":[]}"#)
+            .expect(2)
+            .create_async()
+            .await;
+
+        let ids: Vec<String> = (0..101).map(|i| format!("rec{i}")).collect();
+        let names = get_member_names_by_ids(&batch_config(&server.url()), &Client::new(), &ids)
+            .await
+            .unwrap();
+
+        assert!(names.is_empty());
         mock.assert_async().await;
     }
 }

@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Json, Path, State},
+    extract::{Json, Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -13,6 +13,11 @@ use crate::{
     teable,
     utils::{extract_auth_claims_from_headers, extract_user_id_from_headers},
 };
+
+#[derive(Default, serde::Deserialize)]
+pub struct ListEventsQuery {
+    scope: Option<String>,
+}
 
 pub fn routes() -> Router<AppState> {
     read_routes().merge(write_routes())
@@ -124,24 +129,28 @@ async fn require_orga(state: &AppState, headers: &HeaderMap) -> Result<String, E
 
 pub async fn list_events(
     State(state): State<AppState>,
+    Query(query): Query<ListEventsQuery>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, EventRouteError> {
     let claims =
         extract_auth_claims_from_headers(&state.jwt_secret, &headers).map_err(auth_error)?;
     let is_orga = has_orga_claim(&claims) && member_has_live_orga_role(&state, &claims.sub).await?;
-    let details = if is_orga {
-        state
-            .event_repository
-            .list_all_events_with_signup(&claims.sub)
-            .await
-            .map_err(error_response)?
+
+    // Past view: members see the last 30 days, organizers the last year.
+    // Past drafts are not useful, so drafts are only included when upcoming.
+    let past = query.scope.as_deref() == Some("past");
+    let past_days: Option<i64> = if past {
+        Some(if is_orga { 365 } else { 30 })
     } else {
-        state
-            .event_repository
-            .list_published_future_with_signup(&claims.sub)
-            .await
-            .map_err(error_response)?
+        None
     };
+    let include_drafts = is_orga && !past;
+
+    let details = state
+        .event_repository
+        .list_visible_events_with_signup(&claims.sub, include_drafts, past_days)
+        .await
+        .map_err(error_response)?;
     Ok(Json(details))
 }
 
@@ -168,11 +177,11 @@ pub async fn create_event(
     headers: HeaderMap,
     Json(payload): Json<CreateEventRequest>,
 ) -> Result<impl IntoResponse, EventRouteError> {
-    let actor_id = require_orga(&state, &headers).await?;
+    require_orga(&state, &headers).await?;
     Ok(Json(
         state
             .event_repository
-            .create_event(&actor_id, payload)
+            .create_event(payload)
             .await
             .map_err(error_response)?,
     ))
@@ -268,43 +277,36 @@ pub async fn list_signups(
         .list_signups(id)
         .await
         .map_err(error_response)?;
-    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(8));
-    let mut tasks = tokio::task::JoinSet::new();
-    for (index, signup) in summary.signups.iter().enumerate() {
-        let semaphore = semaphore.clone();
-        let config = state.teable_config.clone();
-        let client = state.http_client.clone();
-        let member_id = signup.member_id.clone();
-        tasks.spawn(async move {
-            let _permit = semaphore.acquire_owned().await.expect("lookup semaphore closed");
-            let name = teable::get_member_by_id(&config, &client, &member_id)
-                .await
-                .unwrap_or_else(|error| {
-                    tracing::warn!(member_id = %member_id, %error, "Could not resolve signup member name");
-                    None
-                })
-                .map(|member| member.name());
-            (index, name)
-        });
-    }
-    // Bound the external member-lookup phase with an overall deadline so a slow
-    // Teable instance cannot keep the handler open; unresolved members stay null.
-    let collect_names = async {
-        while let Some(result) = tasks.join_next().await {
-            let (index, name) = result.map_err(|error| {
-                tracing::warn!(%error, "signup member lookup task failed");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"success":false,"message":"member lookup failed","data":null})),
-                )
-            })?;
-            summary.signups[index].member_name = name;
+    let mut member_ids: Vec<String> = summary
+        .signups
+        .iter()
+        .map(|signup| signup.member_id.clone())
+        .collect();
+    member_ids.sort();
+    member_ids.dedup();
+
+    if !member_ids.is_empty() {
+        // One paginated batch instead of one Teable request per signup. A
+        // failure leaves the names empty so the rows (and IDs) are preserved.
+        let lookup = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            teable::get_member_names_by_ids(&state.teable_config, &state.http_client, &member_ids),
+        )
+        .await;
+        match lookup {
+            Ok(Ok(names)) => {
+                for signup in &mut summary.signups {
+                    signup.member_name = names.get(&signup.member_id).cloned();
+                }
+            }
+            Ok(Err(error)) => {
+                tracing::warn!(%error, "Could not resolve signup member names");
+            }
+            Err(_) => {
+                tracing::warn!("Timed out resolving signup member names");
+            }
         }
-        Ok::<_, EventRouteError>(())
-    };
-    match tokio::time::timeout(std::time::Duration::from_secs(15), collect_names).await {
-        Ok(Ok(())) | Err(_) => {}
-        Ok(Err(error)) => return Err(error),
     }
+
     Ok(Json(summary))
 }
