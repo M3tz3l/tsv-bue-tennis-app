@@ -283,18 +283,18 @@ impl EventRepository {
         let allow_salad = payload.allow_salad.unwrap_or(current.allow_salad);
         let allow_cake = payload.allow_cake.unwrap_or(current.allow_cake);
         let allow_signups = payload.allow_signups.unwrap_or(current.allow_signups);
-        let description = update_optional(
+        let description = clean(update_optional(
             &payload.clear_fields,
             "description",
             payload.description,
             current.description.clone(),
-        );
-        let location = update_optional(
+        ));
+        let location = clean(update_optional(
             &payload.clear_fields,
             "location",
             payload.location,
             current.location.clone(),
-        );
+        ));
         validate_text("description", description.as_deref(), MAX_DESCRIPTION_CHARS)?;
         validate_text("location", location.as_deref(), MAX_LOCATION_CHARS)?;
         // Only enforce the end-requires-start rule when the time pair is being
@@ -364,11 +364,11 @@ impl EventRepository {
         sqlx::query("UPDATE events SET type=?,title=?,description=?,event_date=?,start_time=?,end_time=?,location=?,signup_deadline=?,capacity=?,allow_salad=?,allow_cake=?,allow_signups=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
             .bind(event_type(&new_type))
             .bind(title.trim())
-            .bind(clean(description))
+            .bind(description)
             .bind(date)
             .bind(clean(start))
             .bind(clean(end))
-            .bind(clean(location))
+            .bind(location)
             .bind(clean(deadline))
             .bind(capacity)
             .bind(allow_salad)

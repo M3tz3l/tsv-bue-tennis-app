@@ -938,3 +938,24 @@ async fn signup_comment_enforces_length_limit() {
         Err(EventError::Validation(message)) if message.contains("comment")
     ));
 }
+
+#[tokio::test]
+async fn update_trims_optional_text_before_length_validation() {
+    let repository = repository().await;
+    let event = repository.create_event(event_request()).await.unwrap();
+
+    let updated = repository
+        .update_event(
+            event.id,
+            UpdateEventRequest {
+                description: Some(format!("{} ", "x".repeat(200))),
+                location: Some(format!("{} ", "y".repeat(200))),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(updated.description.as_deref().map(str::len), Some(200));
+    assert_eq!(updated.location.as_deref().map(str::len), Some(200));
+}
