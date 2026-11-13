@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import BackendService, { type ApiError, type ApiResult } from '../services/backendService';
+import BackendService, { type ApiError, type ApiResult, type EventScope } from '../services/backendService';
 import type {
   CreateEventRequest,
   EventSignup,
@@ -8,9 +8,10 @@ import type {
   UpdateEventRequest,
 } from '@/types';
 
-export const EVENTS_QUERY_KEY = (userId?: string) => [
-  'events',
-  userId ?? 'anon',
+const EVENTS_QUERY_ROOT = (userId?: string) => ['events', userId ?? 'anon'];
+export const EVENTS_QUERY_KEY = (userId?: string, scope: EventScope = 'upcoming') => [
+  ...EVENTS_QUERY_ROOT(userId),
+  scope,
 ];
 export const EVENT_DETAIL_QUERY_KEY = (userId?: string, eventId?: number) => [
   'event',
@@ -33,7 +34,7 @@ function throwOnFailure<T>(result: T | ApiError): T {
 function useEventInvalidation(userId?: string, eventId?: number) {
   const queryClient = useQueryClient();
   return async (affectedEventId = eventId) => {
-    await queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY(userId) });
+    await queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_ROOT(userId) });
     if (affectedEventId !== undefined) {
       await queryClient.invalidateQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(userId, affectedEventId) });
       await queryClient.invalidateQueries({ queryKey: EVENT_SIGNUPS_QUERY_KEY(userId, affectedEventId) });
@@ -41,10 +42,10 @@ function useEventInvalidation(userId?: string, eventId?: number) {
   };
 }
 
-export function useEvents(userId?: string, authenticated = true) {
+export function useEvents(userId?: string, authenticated = true, scope: EventScope = 'upcoming') {
   return useQuery({
-    queryKey: EVENTS_QUERY_KEY(userId),
-    queryFn: async () => throwOnFailure(await BackendService.getEvents()),
+    queryKey: EVENTS_QUERY_KEY(userId, scope),
+    queryFn: async () => throwOnFailure(await BackendService.getEvents(scope)),
     enabled: authenticated && !!userId,
     staleTime: 1000 * 60,
   });

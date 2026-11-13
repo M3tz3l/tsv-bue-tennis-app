@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Json, Path, State},
+    extract::{Json, Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -13,6 +13,11 @@ use crate::{
     teable,
     utils::{extract_auth_claims_from_headers, extract_user_id_from_headers},
 };
+
+#[derive(Default, serde::Deserialize)]
+pub struct ListEventsQuery {
+    scope: Option<String>,
+}
 
 pub fn routes() -> Router<AppState> {
     read_routes().merge(write_routes())
@@ -124,24 +129,28 @@ async fn require_orga(state: &AppState, headers: &HeaderMap) -> Result<String, E
 
 pub async fn list_events(
     State(state): State<AppState>,
+    Query(query): Query<ListEventsQuery>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, EventRouteError> {
     let claims =
         extract_auth_claims_from_headers(&state.jwt_secret, &headers).map_err(auth_error)?;
     let is_orga = has_orga_claim(&claims) && member_has_live_orga_role(&state, &claims.sub).await?;
-    let details = if is_orga {
-        state
-            .event_repository
-            .list_all_events_with_signup(&claims.sub)
-            .await
-            .map_err(error_response)?
+
+    // Past view: members see the last 30 days, organizers the last year.
+    // Past drafts are not useful, so drafts are only included when upcoming.
+    let past = query.scope.as_deref() == Some("past");
+    let past_days: Option<i64> = if past {
+        Some(if is_orga { 365 } else { 30 })
     } else {
-        state
-            .event_repository
-            .list_published_future_with_signup(&claims.sub)
-            .await
-            .map_err(error_response)?
+        None
     };
+    let include_drafts = is_orga && !past;
+
+    let details = state
+        .event_repository
+        .list_visible_events_with_signup(&claims.sub, include_drafts, past_days)
+        .await
+        .map_err(error_response)?;
     Ok(Json(details))
 }
 

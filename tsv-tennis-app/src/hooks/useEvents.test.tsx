@@ -51,7 +51,7 @@ describe('event query hooks', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('builds user- and event-scoped stable keys', () => {
-    expect(EVENTS_QUERY_KEY('member-1')).toEqual(['events', 'member-1']);
+    expect(EVENTS_QUERY_KEY('member-1')).toEqual(['events', 'member-1', 'upcoming']);
     expect(EVENT_DETAIL_QUERY_KEY('member-1', 42)).toEqual(['event', 'member-1', 42]);
   });
 
@@ -71,6 +71,7 @@ describe('event query hooks', () => {
     await waitFor(() => expect(list.result.current.isSuccess).toBe(true));
     await waitFor(() => expect(detailHook.result.current.isSuccess).toBe(true));
     expect(serviceMocks.getEvents).toHaveBeenCalledOnce();
+    expect(serviceMocks.getEvents).toHaveBeenCalledWith('upcoming');
     expect(serviceMocks.getEvent).toHaveBeenCalledWith(42);
     expect(serviceMocks.getEvents).not.toHaveBeenCalledTimes(2);
     expect(disabled.result.current.fetchStatus).toBe('idle');
@@ -115,7 +116,7 @@ describe('event query hooks', () => {
       await removeSignup.result.current.mutateAsync(42);
     });
 
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: EVENTS_QUERY_KEY('member-1') });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['events', 'member-1'] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: EVENT_DETAIL_QUERY_KEY('member-1', 42) });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['event-signups', 'member-1', 42] });
   });
@@ -132,7 +133,7 @@ describe('event query hooks', () => {
       await result.current.mutateAsync({} as never);
     });
 
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: EVENTS_QUERY_KEY('member-1') });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['events', 'member-1'] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: EVENT_DETAIL_QUERY_KEY('member-1', 77) });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['event-signups', 'member-1', 77] });
   });

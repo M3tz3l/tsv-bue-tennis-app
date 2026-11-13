@@ -138,86 +138,98 @@ impl EventRepository {
         self.get_signup(signup_id).await
     }
 
-    pub async fn list_published_future(&self, _member_id: &str) -> EventResult<Vec<EventSummary>> {
-        let rows = sqlx::query(
-            &format!("{EVENT_SELECT} WHERE status='published' AND event_date >= ? ORDER BY event_date,start_time"),
-        )
-        .bind(berlin_today().to_string())
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(rows.iter().map(summary).collect())
+    /// Lists events with the current member's own signup attached.
+    ///
+    /// `past_days = None` returns upcoming events; `Some(n)` returns events from
+    /// the last `n` calendar days (today counts as upcoming).
+    pub async fn list_visible_events_with_signup(
+        &self,
+        member_id: &str,
+        include_drafts: bool,
+        past_days: Option<i64>,
+    ) -> EventResult<Vec<EventDetail>> {
+        let today = berlin_today();
+        let mut query = String::from(EVENT_SELECT);
+        let binds: Vec<String> = match past_days {
+            Some(days) => {
+                let from = (today - chrono::Duration::days(days)).to_string();
+                query.push_str(" WHERE event_date < ? AND event_date >= ?");
+                if !include_drafts {
+                    query.push_str(" AND status='published'");
+                }
+                query.push_str(" ORDER BY event_date DESC,start_time DESC");
+                vec![today.to_string(), from]
+            }
+            None => {
+                query.push_str(" WHERE event_date >= ?");
+                if !include_drafts {
+                    query.push_str(" AND status='published'");
+                }
+                query.push_str(" ORDER BY event_date,start_time");
+                vec![today.to_string()]
+            }
+        };
+
+        let mut request = sqlx::query(&query);
+        for bind in &binds {
+            request = request.bind(bind.as_str());
+        }
+        let event_rows = request.fetch_all(&self.pool).await?;
+
+        let signup_rows = sqlx::query(&format!("{SIGNUP_SELECT} WHERE member_id=?"))
+            .bind(member_id)
+            .fetch_all(&self.pool)
+            .await?;
+        let signups_by_event: std::collections::HashMap<i64, EventSignup> = signup_rows
+            .iter()
+            .map(|row| {
+                let signup = signup(row);
+                (signup.event_id, signup)
+            })
+            .collect();
+
+        Ok(event_rows
+            .iter()
+            .map(|row| {
+                let event = summary(row);
+                let own_signup = signups_by_event.get(&event.id).cloned();
+                EventDetail { event, own_signup }
+            })
+            .collect())
+    }
+
+    pub async fn list_published_future(&self, member_id: &str) -> EventResult<Vec<EventSummary>> {
+        Ok(self
+            .list_visible_events_with_signup(member_id, false, None)
+            .await?
+            .into_iter()
+            .map(|detail| detail.event)
+            .collect())
     }
 
     pub async fn list_published_future_with_signup(
         &self,
         member_id: &str,
     ) -> EventResult<Vec<EventDetail>> {
-        let event_rows = sqlx::query(
-            &format!("{EVENT_SELECT} WHERE status='published' AND event_date >= ? ORDER BY event_date,start_time"),
-        )
-        .bind(berlin_today().to_string())
-        .fetch_all(&self.pool)
-        .await?;
-        let signup_rows = sqlx::query(&format!("{SIGNUP_SELECT} WHERE member_id=?"))
-            .bind(member_id)
-            .fetch_all(&self.pool)
-            .await?;
-        let signups_by_event: std::collections::HashMap<i64, EventSignup> = signup_rows
-            .iter()
-            .map(|row| {
-                let s = signup(row);
-                (s.event_id, s)
-            })
-            .collect();
-        Ok(event_rows
-            .iter()
-            .map(|row| {
-                let event = summary(row);
-                let own_signup = signups_by_event.get(&event.id).cloned();
-                EventDetail { event, own_signup }
-            })
-            .collect())
+        self.list_visible_events_with_signup(member_id, false, None)
+            .await
     }
 
     pub async fn list_all_events(&self) -> EventResult<Vec<EventSummary>> {
-        let rows = sqlx::query(&format!(
-            "{EVENT_SELECT} WHERE event_date >= ? ORDER BY event_date,start_time"
-        ))
-        .bind(berlin_today().to_string())
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(rows.iter().map(summary).collect())
+        Ok(self
+            .list_visible_events_with_signup("", true, None)
+            .await?
+            .into_iter()
+            .map(|detail| detail.event)
+            .collect())
     }
 
     pub async fn list_all_events_with_signup(
         &self,
         member_id: &str,
     ) -> EventResult<Vec<EventDetail>> {
-        let event_rows = sqlx::query(&format!(
-            "{EVENT_SELECT} WHERE event_date >= ? ORDER BY event_date,start_time"
-        ))
-        .bind(berlin_today().to_string())
-        .fetch_all(&self.pool)
-        .await?;
-        let signup_rows = sqlx::query(&format!("{SIGNUP_SELECT} WHERE member_id=?"))
-            .bind(member_id)
-            .fetch_all(&self.pool)
-            .await?;
-        let signups_by_event: std::collections::HashMap<i64, EventSignup> = signup_rows
-            .iter()
-            .map(|row| {
-                let s = signup(row);
-                (s.event_id, s)
-            })
-            .collect();
-        Ok(event_rows
-            .iter()
-            .map(|row| {
-                let event = summary(row);
-                let own_signup = signups_by_event.get(&event.id).cloned();
-                EventDetail { event, own_signup }
-            })
-            .collect())
+        self.list_visible_events_with_signup(member_id, true, None)
+            .await
     }
 
     pub async fn get_event(&self, id: i64, member_id: &str) -> EventResult<EventDetail> {

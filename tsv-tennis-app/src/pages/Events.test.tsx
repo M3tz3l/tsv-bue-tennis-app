@@ -59,7 +59,7 @@ describe('Events', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.useAuth.mockReturnValue({ user: { id: 'member-1', role: 'member' } });
-    mocks.useEvents.mockReturnValue({ data: [detail({}, { people_count: 2 }), detail({ id: 2, title: 'Vergangen', event_date: '2000-01-01' }), detail({ id: 3, title: 'Entwurf', status: 'draft' })], isLoading: false, error: null });
+    mocks.useEvents.mockReturnValue({ data: [detail({}, { people_count: 2 }), detail({ id: 2, title: 'Vergangenes Fest', event_date: '2000-01-01' }), detail({ id: 3, title: 'Entwurf', status: 'draft' })], isLoading: false, error: null });
   });
 
   it('renders only future published events and required metadata', () => {
@@ -69,7 +69,7 @@ describe('Events', () => {
     expect(screen.getByText(/Clubheim/)).toBeInTheDocument();
     expect(screen.getByText(/3 von 20/)).toBeInTheDocument();
     expect(screen.getByText(/Anmeldung bis/)).toBeInTheDocument();
-    expect(screen.queryByText('Vergangen')).not.toBeInTheDocument();
+    expect(screen.queryByText('Vergangenes Fest')).not.toBeInTheDocument();
     expect(screen.queryByText('Entwurf')).not.toBeInTheDocument();
   });
 
@@ -198,12 +198,24 @@ describe('Events', () => {
     expect(screen.getAllByRole('button', { name: /^Bearbeiten$/i })).toHaveLength(2);
   });
 
+  it('switches to past events and hides signup actions for them', async () => {
+    const user = userEvent.setup();
+    mocks.useEvents.mockReturnValue({ data: [detail({ id: 2, title: 'Vergangenes Fest', event_date: '2000-01-01' })], isLoading: false, error: null });
+    renderEvents();
+
+    await user.click(screen.getByRole('button', { name: 'Vergangen' }));
+
+    expect(screen.getByText('Vergangenes Fest')).toBeInTheDocument();
+    expect(mocks.useEvents).toHaveBeenLastCalledWith('member-1', true, 'past');
+    expect(screen.queryByRole('button', { name: /Anmelden/i })).not.toBeInTheDocument();
+  });
+
   it('hides past events from Orga as well', () => {
     mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
-    renderEvents([detail({ id: 2, title: 'Vergangen', event_date: '2000-01-01' }), detail({ id: 1, title: 'Sommerfest' })]);
+    renderEvents([detail({ id: 2, title: 'Vergangenes Fest', event_date: '2000-01-01' }), detail({ id: 1, title: 'Sommerfest' })]);
 
     expect(screen.getByText('Sommerfest')).toBeInTheDocument();
-    expect(screen.queryByText('Vergangen')).not.toBeInTheDocument();
+    expect(screen.queryByText('Vergangenes Fest')).not.toBeInTheDocument();
   });
 
   it('shows an Entwurf badge on draft events for Orga', () => {

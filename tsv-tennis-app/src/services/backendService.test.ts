@@ -345,6 +345,14 @@ describe('BackendService', () => {
       expect(mockInstance.get).toHaveBeenNthCalledWith(2, '/events/42');
     });
 
+    it('requests past events with the scope parameter', async () => {
+      mockInstance.get.mockResolvedValue({ data: [] });
+
+      await BackendService.getEvents('past');
+
+      expect(mockInstance.get).toHaveBeenCalledWith('/events', { params: { scope: 'past' } });
+    });
+
     it('uses the event CRUD methods and payloads', async () => {
       mockInstance.post.mockResolvedValue({ data: { success: true } });
       mockInstance.put.mockResolvedValue({ data: { success: true } });

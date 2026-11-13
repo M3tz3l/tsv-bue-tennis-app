@@ -959,3 +959,32 @@ async fn update_trims_optional_text_before_length_validation() {
     assert_eq!(updated.description.as_deref().map(str::len), Some(200));
     assert_eq!(updated.location.as_deref().map(str::len), Some(200));
 }
+
+#[tokio::test]
+async fn past_listing_window_is_configurable() {
+    let repository = repository().await;
+    let mut recent = event_request();
+    recent.event_date = (Utc::now().date_naive() - Duration::days(5)).to_string();
+    recent.title = "Recent".into();
+    repository.create_event(recent).await.unwrap();
+
+    let mut old = event_request();
+    old.event_date = (Utc::now().date_naive() - Duration::days(60)).to_string();
+    old.title = "Old".into();
+    repository.create_event(old).await.unwrap();
+
+    let last_month = repository
+        .list_visible_events_with_signup("member-1", false, Some(30))
+        .await
+        .unwrap();
+    assert_eq!(last_month.len(), 1);
+    assert_eq!(last_month[0].event.title, "Recent");
+
+    let last_year = repository
+        .list_visible_events_with_signup("orga-1", false, Some(365))
+        .await
+        .unwrap();
+    assert_eq!(last_year.len(), 2);
+    assert_eq!(last_year[0].event.title, "Recent");
+    assert_eq!(last_year[1].event.title, "Old");
+}

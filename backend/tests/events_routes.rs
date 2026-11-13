@@ -693,3 +693,32 @@ async fn demoted_orga_token_cannot_manage_or_view_organizer_data() {
         .await;
     hidden.assert_status_not_found();
 }
+
+#[tokio::test]
+#[serial]
+async fn event_list_past_scope_uses_role_specific_windows() {
+    let (server, repository, _teable) = app().await;
+    for (days, title) in [(5i64, "Recent"), (60, "Old"), (200, "Older")] {
+        let mut request = event_request(EventStatus::Published);
+        request.event_date = (Utc::now().date_naive() - Duration::days(days)).to_string();
+        request.title = title.into();
+        repository.create_event(request).await.unwrap();
+    }
+
+    let member = server
+        .get("/events?scope=past")
+        .authorization(format!("Bearer {}", token("member-1", None)))
+        .await;
+    member.assert_status_ok();
+    let member_events = member.json::<Vec<serde_json::Value>>();
+    assert_eq!(member_events.len(), 1);
+    assert_eq!(member_events[0]["event"]["title"], "Recent");
+
+    let orga = server
+        .get("/events?scope=past")
+        .authorization(format!("Bearer {}", token("orga-1", Some("orga"))))
+        .await;
+    orga.assert_status_ok();
+    let orga_events = orga.json::<Vec<serde_json::Value>>();
+    assert_eq!(orga_events.len(), 3);
+}
