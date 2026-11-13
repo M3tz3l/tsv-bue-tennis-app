@@ -579,6 +579,11 @@ fn validate_event(
     if start.is_some() && parsed_start.is_none() || end.is_some() && parsed_end.is_none() {
         return Err(EventError::Validation("times must be HH:MM".into()));
     }
+    if end.is_some() && start.is_none() {
+        return Err(EventError::Validation(
+            "end time requires a start time".into(),
+        ));
+    }
     if let (Some(start), Some(end)) = (parsed_start, parsed_end) {
         if end < start {
             return Err(EventError::Validation(

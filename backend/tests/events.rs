@@ -857,3 +857,16 @@ async fn event_type_can_be_updated() {
         .unwrap();
     assert_eq!(updated.event_type, EventType::WorkDuty);
 }
+
+#[tokio::test]
+async fn end_time_requires_a_start_time() {
+    let repository = repository().await;
+    let mut request = event_request();
+    request.start_time = None;
+    request.end_time = Some("21:00".into());
+
+    assert!(matches!(
+        repository.create_event("orga-1", request).await,
+        Err(EventError::Validation(message)) if message.contains("start time")
+    ));
+}

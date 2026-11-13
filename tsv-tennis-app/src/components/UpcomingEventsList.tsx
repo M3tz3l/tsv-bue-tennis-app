@@ -54,7 +54,17 @@ const UpcomingEventsList = ({ events, limit = 3, isLoading = false, error }: Upc
     }
 
     if (error) {
-        return null;
+        return (
+            <section aria-label="Nächste Veranstaltungen" className={`${cardShellClass} min-h-56`}>
+                <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-lg font-extrabold tracking-tight text-[var(--ink)]">Nächste Veranstaltungen</h2>
+                </div>
+                <p role="alert" className="mt-8 text-center text-sm text-[var(--muted)]">Veranstaltungen konnten nicht geladen werden.</p>
+                <p className="mt-2 text-center text-sm">
+                    <Link className="font-medium text-[var(--primary-active)] underline underline-offset-4" to="/dashboard/veranstaltungen">Zu den Veranstaltungen</Link>
+                </p>
+            </section>
+        );
     }
 
     return (

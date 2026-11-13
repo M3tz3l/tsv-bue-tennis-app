@@ -65,8 +65,25 @@ describe('EventSignupModal', () => {
     expect(screen.queryByLabelText(/Kuchen/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Anmelden|Aktualisieren|Speichern/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Abmelden/i }));
+    await user.click(screen.getByRole('button', { name: /Anmeldung stornieren/i }));
     expect(mocks.remove).toHaveBeenCalledWith(1);
+  });
+
+  it('renders a read-only state when the signup deadline has passed', () => {
+    mocks.useEvent.mockReturnValue({
+      data: detail({
+        event: { ...detail().event, signup_deadline: '2000-01-01' },
+        own_signup: { id: 7, event_id: 1, member_id: 'member-1', people_count: 2, salad_count: 0, cake_count: 0, comment: null },
+      }),
+      isLoading: false,
+      error: null,
+    });
+    render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByText(/Ihre Anmeldung: 2 Personen/)).toBeInTheDocument();
+    expect(screen.getByText(/Anmeldeschluss ist erreicht/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Personen/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Anmeldung stornieren|Aktualisieren|Speichern/i })).not.toBeInTheDocument();
   });
 
   it('defaults people to one and renders enabled contribution fields only', () => {
@@ -130,7 +147,7 @@ describe('EventSignupModal', () => {
     expect(screen.getByLabelText(/Personen/i)).toHaveValue(2);
     await user.click(screen.getByRole('button', { name: /Aktualisieren/i }));
     expect(mocks.update).toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: /Abmelden/i }));
+    await user.click(screen.getByRole('button', { name: /Anmeldung stornieren/i }));
     expect(mocks.remove).toHaveBeenCalledWith(1);
   });
 
@@ -185,7 +202,7 @@ describe('EventSignupModal', () => {
     mocks.useEvent.mockReturnValue({ data: detail({ own_signup: { id: 7, event_id: 1, member_id: 'member-1', people_count: 2, salad_count: 1, cake_count: 0, comment: 'Hi' } }), isLoading: false, error: null });
     render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
 
-    expect(screen.getByRole('button', { name: /Abmelden/i })).toHaveClass('action-control');
+    expect(screen.getByRole('button', { name: /Anmeldung stornieren/i })).toHaveClass('action-control');
   });
 
   it('shows API errors through a toast and keeps the modal open', async () => {

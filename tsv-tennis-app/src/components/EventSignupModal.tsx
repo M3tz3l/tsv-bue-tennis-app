@@ -4,6 +4,7 @@ import { buttonVariants, fieldControl, stackMdClass } from '../styles/tokens';
 import { useAuth } from '../context/AuthContext';
 import { useCreateEventSignup, useDeleteEventSignup, useEvent, useUpdateEventSignup } from '../hooks/useEvents';
 import type { SignupRequest } from '../types';
+import { isPast } from '../utils/dates';
 import ModalShell from './ModalShell';
 import EventDetails from './EventDetails';
 
@@ -17,6 +18,7 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
   const deleteSignup = useDeleteEventSignup(user?.id);
   const signup = data?.own_signup;
   const event = data?.event;
+  const deadlinePassed = event?.signup_deadline ? isPast(event.signup_deadline) : false;
   const [peopleCount, setPeopleCount] = useState('1');
   const [saladCount, setSaladCount] = useState('0');
   const [cakeCount, setCakeCount] = useState('0');
@@ -90,8 +92,8 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
     if (!pending) onClose();
   };
 
-  if (event && !event.allow_signups) {
-    if (!signup) return null;
+  if (event && (deadlinePassed || !event.allow_signups)) {
+    if (!signup && !deadlinePassed) return null;
     return (
       <ModalShell
         isOpen={isOpen}
@@ -102,15 +104,16 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
         panelClassName="max-h-[90vh] overflow-y-auto"
         footer={null}
         footerActions={{
-          destructive: <button type="button" onClick={() => void cancelSignup()} disabled={pending} className={buttonVariants.destructive}>Abmelden</button>,
-          secondary: <button type="button" onClick={close} disabled={pending} className={buttonVariants.secondary}>Abbrechen</button>,
+          destructive: !deadlinePassed && <button type="button" onClick={() => void cancelSignup()} disabled={pending} className={buttonVariants.destructive}>Anmeldung stornieren</button>,
+          secondary: <button type="button" onClick={close} disabled={pending} className={buttonVariants.secondary}>{signup ? 'Abbrechen' : 'Schließen'}</button>,
         }}
       >
         <div className={`${stackMdClass} px-6 py-5`}>
-          <p className="text-sm font-medium text-[var(--body)]">Ihre Anmeldung: {signup.people_count} Personen</p>
-          {signup.salad_count > 0 && <p className="text-sm text-[var(--body)]">Salate: {signup.salad_count}</p>}
-          {signup.cake_count > 0 && <p className="text-sm text-[var(--body)]">Kuchen: {signup.cake_count}</p>}
-          {signup.comment && <p className="text-sm text-[var(--body)]">Kommentar: {signup.comment}</p>}
+          {signup && <p className="text-sm font-medium text-[var(--body)]">Ihre Anmeldung: {signup.people_count} Personen</p>}
+          {signup && signup.salad_count > 0 && <p className="text-sm text-[var(--body)]">Salate: {signup.salad_count}</p>}
+          {signup && signup.cake_count > 0 && <p className="text-sm text-[var(--body)]">Kuchen: {signup.cake_count}</p>}
+          {signup?.comment && <p className="text-sm text-[var(--body)]">Kommentar: {signup.comment}</p>}
+          {deadlinePassed && <p className="text-sm text-[var(--muted)]">Der Anmeldeschluss ist erreicht. Änderungen sind nicht mehr möglich.</p>}
         </div>
       </ModalShell>
     );
@@ -126,7 +129,7 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
       panelClassName="max-h-[90vh] overflow-y-auto"
        footer={null}
        footerActions={{
-         destructive: signup && <button type="button" onClick={() => void cancelSignup()} disabled={pending} className={buttonVariants.destructive}>Abmelden</button>,
+         destructive: signup && <button type="button" onClick={() => void cancelSignup()} disabled={pending} className={buttonVariants.destructive}>Anmeldung stornieren</button>,
          secondary: <button type="button" onClick={close} disabled={pending} className={buttonVariants.secondary}>Abbrechen</button>,
          primary: data?.event && <button type="submit" form="event-signup-form" disabled={pending} className={buttonVariants.primary}>{pending ? 'Speichern...' : signup ? 'Aktualisieren' : 'Anmelden'}</button>,
        }}
