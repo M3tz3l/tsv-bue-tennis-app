@@ -109,6 +109,8 @@ const EventSignupModal = ({ eventId, isOpen, onClose }: Props) => {
         }}
       >
         <div className={`${stackMdClass} px-6 py-5`}>
+          {event.description && <p className="whitespace-pre-wrap text-sm text-[var(--body)]">{event.description}</p>}
+          <EventDetails event={event} />
           {signup && <p className="text-sm font-medium text-[var(--body)]">Ihre Anmeldung: {signup.people_count} Personen</p>}
           {signup && signup.salad_count > 0 && <p className="text-sm text-[var(--body)]">Salate: {signup.salad_count}</p>}
           {signup && signup.cake_count > 0 && <p className="text-sm text-[var(--body)]">Kuchen: {signup.cake_count}</p>}

@@ -72,7 +72,7 @@ describe('EventSignupModal', () => {
   it('renders a read-only state when the signup deadline has passed', () => {
     mocks.useEvent.mockReturnValue({
       data: detail({
-        event: { ...detail().event, signup_deadline: '2000-01-01' },
+        event: { ...detail().event, description: 'Gemeinsamer Abend', signup_deadline: '2000-01-01' },
         own_signup: { id: 7, event_id: 1, member_id: 'member-1', people_count: 2, salad_count: 0, cake_count: 0, comment: null },
       }),
       isLoading: false,
@@ -81,6 +81,7 @@ describe('EventSignupModal', () => {
     render(<EventSignupModal eventId={1} isOpen onClose={vi.fn()} />);
 
     expect(screen.getByText(/Ihre Anmeldung: 2 Personen/)).toBeInTheDocument();
+    expect(screen.getByText('Gemeinsamer Abend')).toBeInTheDocument();
     expect(screen.getByText(/Anmeldeschluss ist erreicht/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/Personen/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Anmeldung stornieren|Aktualisieren|Speichern/i })).not.toBeInTheDocument();
