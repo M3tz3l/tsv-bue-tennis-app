@@ -68,7 +68,7 @@ const Events = () => {
   const [editingEvent, setEditingEvent] = useState<EventSummary | null | undefined>(undefined);
   const [signupsEvent, setSignupsEvent] = useState<number | null>(null);
   const [showMailComposer, setShowMailComposer] = useState(false);
-  const visibleEvents = (events ?? []).filter((detail) => isOrga || (detail.event.status === 'published' && !isPast(detail.event.event_date)));
+  const visibleEvents = (events ?? []).filter((detail) => !isPast(detail.event.event_date) && (isOrga || detail.event.status === 'published'));
 
   if (isLoading) return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><Spinner label="Veranstaltungen werden geladen..." /></DashboardShell>;
   if (error) {

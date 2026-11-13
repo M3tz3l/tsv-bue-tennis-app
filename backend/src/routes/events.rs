@@ -168,11 +168,11 @@ pub async fn create_event(
     headers: HeaderMap,
     Json(payload): Json<CreateEventRequest>,
 ) -> Result<impl IntoResponse, EventRouteError> {
-    let actor_id = require_orga(&state, &headers).await?;
+    require_orga(&state, &headers).await?;
     Ok(Json(
         state
             .event_repository
-            .create_event(&actor_id, payload)
+            .create_event(payload)
             .await
             .map_err(error_response)?,
     ))

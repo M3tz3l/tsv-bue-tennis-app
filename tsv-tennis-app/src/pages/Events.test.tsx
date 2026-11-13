@@ -195,7 +195,15 @@ describe('Events', () => {
     renderEvents();
     expect(screen.getByRole('button', { name: /Veranstaltung erstellen/i })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Anmeldungen/i })).not.toHaveLength(0);
-    expect(screen.getAllByRole('button', { name: /^Bearbeiten$/i })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: /^Bearbeiten$/i })).toHaveLength(2);
+  });
+
+  it('hides past events from Orga as well', () => {
+    mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
+    renderEvents([detail({ id: 2, title: 'Vergangen', event_date: '2000-01-01' }), detail({ id: 1, title: 'Sommerfest' })]);
+
+    expect(screen.getByText('Sommerfest')).toBeInTheDocument();
+    expect(screen.queryByText('Vergangen')).not.toBeInTheDocument();
   });
 
   it('shows an Entwurf badge on draft events for Orga', () => {

@@ -72,11 +72,7 @@ impl EventRepository {
         &self.pool
     }
 
-    pub async fn create_event(
-        &self,
-        actor_id: &str,
-        payload: CreateEventRequest,
-    ) -> EventResult<EventSummary> {
+    pub async fn create_event(&self, payload: CreateEventRequest) -> EventResult<EventSummary> {
         validate_event(
             &payload.title,
             &payload.event_date,
@@ -90,11 +86,11 @@ impl EventRepository {
         let location = clean(payload.location);
         validate_text("description", description.as_deref(), MAX_DESCRIPTION_CHARS)?;
         validate_text("location", location.as_deref(), MAX_LOCATION_CHARS)?;
-        let result = sqlx::query("INSERT INTO events (type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        let result = sqlx::query("INSERT INTO events (type,title,description,event_date,start_time,end_time,location,signup_deadline,capacity,allow_salad,allow_cake,allow_signups,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
             .bind(event_type(&payload.event_type)).bind(payload.title.trim()).bind(description)
             .bind(payload.event_date).bind(clean(payload.start_time)).bind(clean(payload.end_time)).bind(location)
             .bind(clean(payload.signup_deadline)).bind(payload.capacity).bind(payload.allow_salad).bind(payload.allow_cake).bind(payload.allow_signups)
-            .bind(status(&payload.status)).bind(actor_id).execute(&self.pool).await?;
+            .bind(status(&payload.status)).execute(&self.pool).await?;
         self.get_summary(result.last_insert_rowid()).await
     }
 
@@ -184,9 +180,12 @@ impl EventRepository {
     }
 
     pub async fn list_all_events(&self) -> EventResult<Vec<EventSummary>> {
-        let rows = sqlx::query(&format!("{EVENT_SELECT} ORDER BY event_date,start_time"))
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query(&format!(
+            "{EVENT_SELECT} WHERE event_date >= ? ORDER BY event_date,start_time"
+        ))
+        .bind(berlin_today().to_string())
+        .fetch_all(&self.pool)
+        .await?;
         Ok(rows.iter().map(summary).collect())
     }
 
@@ -194,9 +193,12 @@ impl EventRepository {
         &self,
         member_id: &str,
     ) -> EventResult<Vec<EventDetail>> {
-        let event_rows = sqlx::query(&format!("{EVENT_SELECT} ORDER BY event_date,start_time"))
-            .fetch_all(&self.pool)
-            .await?;
+        let event_rows = sqlx::query(&format!(
+            "{EVENT_SELECT} WHERE event_date >= ? ORDER BY event_date,start_time"
+        ))
+        .bind(berlin_today().to_string())
+        .fetch_all(&self.pool)
+        .await?;
         let signup_rows = sqlx::query(&format!("{SIGNUP_SELECT} WHERE member_id=?"))
             .bind(member_id)
             .fetch_all(&self.pool)

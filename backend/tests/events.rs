@@ -71,10 +71,7 @@ async fn database_initialization_creates_event_tables() {
 async fn event_repository_connect_initializes_event_tables() {
     let repository = EventRepository::connect("sqlite::memory:").await.unwrap();
 
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
     assert_eq!(event.title, "Sommerfest");
 
     let foreign_keys: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
@@ -106,10 +103,7 @@ async fn foreign_keys_are_enabled_on_every_event_pool_connection() {
 #[tokio::test]
 async fn signup_is_unique_per_event_and_member() {
     let repository = repository().await;
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
     let signup = SignupRequest {
         people_count: 1,
         salad_count: 0,
@@ -139,7 +133,7 @@ async fn signups_are_rejected_when_disabled_but_deletion_is_allowed() {
     let repository = repository().await;
     let mut request = event_request();
     request.allow_signups = false;
-    let event = repository.create_event("orga-1", request).await.unwrap();
+    let event = repository.create_event(request).await.unwrap();
 
     let create_error = repository
         .create_signup(
@@ -185,10 +179,7 @@ async fn signups_are_rejected_when_disabled_but_deletion_is_allowed() {
 #[tokio::test]
 async fn toggling_allow_signups_off_keeps_existing_signups_and_blocks_new_ones() {
     let repository = repository().await;
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
     repository
         .create_signup(
             event.id,
@@ -240,7 +231,7 @@ async fn reenabling_allow_signups_accepts_signups_again() {
     let repository = repository().await;
     let mut request = event_request();
     request.allow_signups = false;
-    let event = repository.create_event("orga-1", request).await.unwrap();
+    let event = repository.create_event(request).await.unwrap();
 
     let error = repository
         .create_signup(
@@ -286,10 +277,7 @@ async fn reenabling_allow_signups_accepts_signups_again() {
 #[tokio::test]
 async fn events_allow_signups_by_default() {
     let repository = repository().await;
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
     assert!(event.allow_signups);
     repository
         .create_signup(
@@ -313,21 +301,18 @@ async fn event_and_signup_validation_rejects_invalid_values() {
     let mut invalid_event = event_request();
     invalid_event.title = " ".into();
     assert!(matches!(
-        repository.create_event("orga-1", invalid_event).await,
+        repository.create_event(invalid_event).await,
         Err(EventError::Validation(_))
     ));
 
     let mut invalid_event = event_request();
     invalid_event.event_date = "15.08.2026".into();
     assert!(matches!(
-        repository.create_event("orga-1", invalid_event).await,
+        repository.create_event(invalid_event).await,
         Err(EventError::Validation(_))
     ));
 
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
     let invalid_signup = SignupRequest {
         people_count: 0,
         salad_count: 0,
@@ -358,10 +343,7 @@ async fn event_and_signup_validation_rejects_invalid_values() {
 #[tokio::test]
 async fn signup_counts_have_realistic_upper_bounds() {
     let repository = repository().await;
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
 
     for (people_count, salad_count, cake_count) in [(101, 0, 0), (1, 101, 0), (1, 0, 101)] {
         let result = repository
@@ -383,10 +365,7 @@ async fn signup_counts_have_realistic_upper_bounds() {
 #[tokio::test]
 async fn invalid_event_update_does_not_change_existing_event() {
     let repository = repository().await;
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
     repository
         .create_signup(
             event.id,
@@ -436,7 +415,7 @@ async fn event_validation_rejects_malformed_times_and_non_positive_capacity() {
         request.end_time = end_time.map(str::to_owned);
         request.capacity = capacity;
         assert!(matches!(
-            repository.create_event("orga-1", request).await,
+            repository.create_event(request).await,
             Err(EventError::Validation(_))
         ));
     }
@@ -448,14 +427,11 @@ async fn signup_deadline_must_not_follow_event_date_on_create_or_update() {
     let mut request = event_request();
     request.signup_deadline = Some(future_date(12));
     assert!(matches!(
-        repository.create_event("orga-1", request).await,
+        repository.create_event(request).await,
         Err(EventError::Validation(_))
     ));
 
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
     assert!(matches!(
         repository
             .update_event(
@@ -471,16 +447,30 @@ async fn signup_deadline_must_not_follow_event_date_on_create_or_update() {
 }
 
 #[tokio::test]
-async fn orga_event_listing_includes_drafts_and_past_events() {
+async fn orga_event_listing_includes_drafts_but_hides_past_events() {
     let repository = repository().await;
-    let mut draft = event_request();
-    draft.status = EventStatus::Draft;
-    draft.event_date = "2000-01-01".into();
-    repository.create_event("orga-1", draft).await.unwrap();
+    let mut past_draft = event_request();
+    past_draft.status = EventStatus::Draft;
+    past_draft.event_date = "2000-01-01".into();
+    past_draft.title = "Past draft".into();
+    repository.create_event(past_draft).await.unwrap();
+
+    let mut future_draft = event_request();
+    future_draft.status = EventStatus::Draft;
+    future_draft.title = "Future draft".into();
+    repository.create_event(future_draft).await.unwrap();
 
     let events = repository.list_all_events().await.unwrap();
     assert_eq!(events.len(), 1);
+    assert_eq!(events[0].title, "Future draft");
     assert_eq!(events[0].status, EventStatus::Draft);
+
+    let detailed = repository
+        .list_all_events_with_signup("orga-1")
+        .await
+        .unwrap();
+    assert_eq!(detailed.len(), 1);
+    assert_eq!(detailed[0].event.title, "Future draft");
 
     let published = repository.list_published_future("member-1").await.unwrap();
     assert!(published.is_empty());
@@ -489,10 +479,7 @@ async fn orga_event_listing_includes_drafts_and_past_events() {
 #[tokio::test]
 async fn event_update_can_clear_optional_fields_and_preserves_omitted_fields() {
     let repository = repository().await;
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
 
     let updated = repository
         .update_event(
@@ -517,10 +504,7 @@ async fn signup_crud_enforces_published_events_and_reports_missing_records() {
     let repository = repository().await;
     let mut draft_request = event_request();
     draft_request.status = EventStatus::Draft;
-    let draft = repository
-        .create_event("orga-1", draft_request)
-        .await
-        .unwrap();
+    let draft = repository.create_event(draft_request).await.unwrap();
     let signup = SignupRequest {
         people_count: 1,
         salad_count: 0,
@@ -555,10 +539,7 @@ async fn signup_crud_enforces_published_events_and_reports_missing_records() {
 #[tokio::test]
 async fn signup_deletion_is_blocked_after_deadline() {
     let repository = repository().await;
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
     repository
         .create_signup(
             event.id,
@@ -595,10 +576,7 @@ async fn signup_deletion_is_blocked_after_deadline() {
 #[tokio::test]
 async fn event_capacity_cannot_be_reduced_below_existing_signup_total() {
     let repository = repository().await;
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
     repository
         .create_signup(
             event.id,
@@ -630,7 +608,7 @@ async fn event_capacity_cannot_be_reduced_below_existing_signup_total() {
 async fn disabling_food_options_requires_existing_signup_counts_to_be_zero() {
     let repository = repository().await;
     let event = repository
-        .create_event("orga-1", {
+        .create_event({
             let mut request = event_request();
             request.allow_salad = true;
             request.allow_cake = true;
@@ -668,10 +646,7 @@ async fn disabling_food_options_requires_existing_signup_counts_to_be_zero() {
 #[tokio::test]
 async fn published_event_with_signups_cannot_be_unpublished() {
     let repository = repository().await;
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
     repository
         .create_signup(
             event.id,
@@ -698,10 +673,7 @@ async fn published_event_with_signups_cannot_be_unpublished() {
         .unwrap_err();
     assert!(matches!(error, EventError::Conflict(_)));
 
-    let empty = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let empty = repository.create_event(event_request()).await.unwrap();
     assert!(repository
         .update_event(
             empty.id,
@@ -723,7 +695,7 @@ async fn food_count_query_error_rolls_back_update_transaction() {
         .unwrap();
     let repository = EventRepository::new(pool.clone()).await.unwrap();
     let event = repository
-        .create_event("orga-1", {
+        .create_event({
             let mut request = event_request();
             request.allow_cake = true;
             request
@@ -766,7 +738,7 @@ async fn signups_are_rejected_for_past_events() {
     let repository = repository().await;
     let mut request = event_request();
     request.event_date = "2000-01-01".into();
-    let event = repository.create_event("orga-1", request).await.unwrap();
+    let event = repository.create_event(request).await.unwrap();
 
     let signup = || SignupRequest {
         people_count: 1,
@@ -780,10 +752,7 @@ async fn signups_are_rejected_for_past_events() {
     ));
 
     // An existing signup cannot be edited once the event date has passed either.
-    let future = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let future = repository.create_event(event_request()).await.unwrap();
     repository
         .create_signup(future.id, "member-1", signup())
         .await
@@ -811,7 +780,7 @@ async fn members_cannot_fetch_past_events_by_id() {
     let repository = repository().await;
     let mut request = event_request();
     request.event_date = "2000-01-01".into();
-    let event = repository.create_event("orga-1", request).await.unwrap();
+    let event = repository.create_event(request).await.unwrap();
 
     assert!(matches!(
         repository.get_published_event(event.id, "member-1").await,
@@ -828,7 +797,7 @@ async fn member_list_includes_events_dated_today_in_berlin() {
         .with_timezone(&chrono_tz::Europe::Berlin)
         .date_naive()
         .to_string();
-    let event = repository.create_event("orga-1", request).await.unwrap();
+    let event = repository.create_event(request).await.unwrap();
 
     let events = repository
         .list_published_future_with_signup("member-1")
@@ -840,10 +809,7 @@ async fn member_list_includes_events_dated_today_in_berlin() {
 #[tokio::test]
 async fn event_type_can_be_updated() {
     let repository = repository().await;
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
 
     let updated = repository
         .update_event(
@@ -866,7 +832,7 @@ async fn end_time_requires_a_start_time() {
     request.end_time = Some("21:00".into());
 
     assert!(matches!(
-        repository.create_event("orga-1", request).await,
+        repository.create_event(request).await,
         Err(EventError::Validation(message)) if message.contains("start time")
     ));
 }
@@ -874,10 +840,7 @@ async fn end_time_requires_a_start_time() {
 #[tokio::test]
 async fn legacy_end_without_start_does_not_block_unrelated_updates() {
     let repository = repository().await;
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
     // Simulate a row created before the end-requires-start rule existed.
     sqlx::query("UPDATE events SET start_time=NULL, end_time='21:00' WHERE id=?")
         .bind(event.id)
@@ -921,28 +884,25 @@ async fn event_text_fields_enforce_length_limits() {
     let mut request = event_request();
     request.title = "x".repeat(201);
     assert!(matches!(
-        repository.create_event("orga-1", request).await,
+        repository.create_event(request).await,
         Err(EventError::Validation(message)) if message.contains("title")
     ));
 
     let mut request = event_request();
     request.description = Some("x".repeat(2001));
     assert!(matches!(
-        repository.create_event("orga-1", request).await,
+        repository.create_event(request).await,
         Err(EventError::Validation(message)) if message.contains("description")
     ));
 
     let mut request = event_request();
     request.location = Some("x".repeat(201));
     assert!(matches!(
-        repository.create_event("orga-1", request).await,
+        repository.create_event(request).await,
         Err(EventError::Validation(message)) if message.contains("location")
     ));
 
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
     assert!(matches!(
         repository
             .update_event(
@@ -960,10 +920,7 @@ async fn event_text_fields_enforce_length_limits() {
 #[tokio::test]
 async fn signup_comment_enforces_length_limit() {
     let repository = repository().await;
-    let event = repository
-        .create_event("orga-1", event_request())
-        .await
-        .unwrap();
+    let event = repository.create_event(event_request()).await.unwrap();
 
     assert!(matches!(
         repository

@@ -106,7 +106,6 @@ impl Database {
                 allow_cake INTEGER NOT NULL,
                 allow_signups INTEGER NOT NULL DEFAULT 1,
                 status TEXT NOT NULL,
-                created_by TEXT NOT NULL,
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
@@ -141,6 +140,18 @@ impl Database {
         .await?;
         if has_allow_signups == 0 {
             sqlx::query("ALTER TABLE events ADD COLUMN allow_signups INTEGER NOT NULL DEFAULT 1")
+                .execute(pool)
+                .await?;
+        }
+
+        // Drop the legacy created_by column if it still exists.
+        let has_created_by: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM pragma_table_info('events') WHERE name = 'created_by'",
+        )
+        .fetch_one(pool)
+        .await?;
+        if has_created_by > 0 {
+            sqlx::query("ALTER TABLE events DROP COLUMN created_by")
                 .execute(pool)
                 .await?;
         }
