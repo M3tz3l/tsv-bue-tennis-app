@@ -12,8 +12,23 @@ export const formatDate = (value: string): string => {
   return date ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'long' }).format(date) : value;
 };
 
-export const isPast = (value: string): boolean =>
-  (parseEventDate(value, true)?.getTime() ?? 0) < Date.now();
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const berlinDate = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Berlin',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** Today's calendar date in the club timezone (Europe/Berlin), as YYYY-MM-DD. */
+export const berlinToday = (): string => berlinDate.format(new Date());
+
+export const isPast = (value: string): boolean => {
+  // Date-only values are club calendar dates, not instants: stay "not past"
+  // through the whole Berlin day, regardless of the browser timezone.
+  if (DATE_ONLY.test(value)) return value < berlinToday();
+  return (parseEventDate(value, true)?.getTime() ?? 0) < Date.now();
+};
 
 export const isFutureEvent = (event: Pick<EventSummary, 'event_date' | 'status'>): boolean =>
   event.status === 'published' && !isPast(event.event_date);

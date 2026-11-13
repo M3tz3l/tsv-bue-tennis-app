@@ -127,7 +127,7 @@ impl EventRepository {
         let result = sqlx::query(
             "INSERT INTO event_signups (event_id,member_id,people_count,salad_count,cake_count,comment) \
              SELECT id, ?, ?, ?, ?, ? FROM events \
-             WHERE id = ? AND status = 'published' AND allow_signups = 1 \
+             WHERE id = ? AND status = 'published' AND allow_signups = 1 AND event_date >= ? \
                AND (capacity IS NULL OR (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id = events.id) + ? <= capacity)",
         )
         .bind(member_id)
@@ -136,6 +136,7 @@ impl EventRepository {
         .bind(payload.cake_count)
         .bind(clean(payload.comment))
         .bind(event_id)
+        .bind(berlin_today().to_string())
         .bind(payload.people_count)
         .execute(&self.pool)
         .await;
@@ -377,6 +378,9 @@ impl EventRepository {
 
     async fn classify_failed_signup(&self, event_id: i64, people_count: i32) -> EventError {
         match self.get_summary(event_id).await {
+            Ok(summary) if event_date_has_passed(&summary.event_date) => {
+                EventError::Conflict("event has already taken place".into())
+            }
             Ok(summary)
                 if summary.capacity.is_some_and(|capacity| {
                     i64::from(summary.signup_people_count) + i64::from(people_count)
@@ -442,6 +446,7 @@ impl EventRepository {
         let result = sqlx::query(
             "UPDATE event_signups SET people_count=?,salad_count=?,cake_count=?,comment=?,updated_at=CURRENT_TIMESTAMP \
              WHERE event_id=? AND member_id=? \
+               AND (SELECT event_date FROM events WHERE id=?) >= ? \
                AND ((SELECT capacity FROM events WHERE id=?) IS NULL \
                     OR (SELECT COALESCE(SUM(people_count),0) FROM event_signups WHERE event_id=?) - people_count + ? <= (SELECT capacity FROM events WHERE id=?))",
         )
@@ -452,6 +457,8 @@ impl EventRepository {
         .bind(event_id)
         .bind(member_id)
         .bind(event_id)
+        .bind(berlin_today().to_string())
+        .bind(event_id)
         .bind(event_id)
         .bind(payload.people_count)
         .bind(event_id)
@@ -460,6 +467,9 @@ impl EventRepository {
 
         if result.rows_affected() == 0 {
             let summary = self.get_summary(event_id).await?;
+            if event_date_has_passed(&summary.event_date) {
+                return Err(EventError::Conflict("event has already taken place".into()));
+            }
             if summary.capacity.is_some_and(|capacity| {
                 i64::from(summary.signup_people_count) - i64::from(existing_people)
                     + i64::from(payload.people_count)
