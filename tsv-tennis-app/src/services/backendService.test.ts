@@ -323,6 +323,7 @@ describe('BackendService', () => {
       status: 'published' as const,
     };
     const updatePayload = {
+      type: null,
       title: 'Neues Sommerfest', description: null, event_date: null, start_time: null,
       end_time: null, location: null, signup_deadline: null, capacity: null,
       clear_fields: [], allow_salad: null, allow_cake: null, allow_signups: null, status: null,
