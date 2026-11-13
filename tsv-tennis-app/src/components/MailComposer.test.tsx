@@ -39,5 +39,6 @@ describe('MailComposer member counts', () => {
     render(<MailComposer isOpen onClose={vi.fn()} />);
 
     expect(await screen.findByText(/Empfängerzahl konnte nicht geladen werden/i)).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(/Empfängerzahl konnte nicht geladen werden/i);
   });
 });

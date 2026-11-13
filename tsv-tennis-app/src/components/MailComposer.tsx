@@ -41,6 +41,9 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const [countsLoaded, setCountsLoaded] = useState(false);
   const [countsError, setCountsError] = useState(false);
   const [activeJob, setActiveJob] = useState<MailJob | null>(null);
+  const [pendingJobId, setPendingJobId] = useState<string | null>(null);
+  const [statusRetryError, setStatusRetryError] = useState(false);
+  const [isRetryingStatus, setIsRetryingStatus] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollFailuresRef = useRef(0);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -96,6 +99,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           pollingRef.current = null;
         }
         setIsLoading(false);
+        setPendingJobId(null);
+        setStatusRetryError(false);
         const job = response.job;
         if (job.status === 'failed') {
           toast.error(job.error || `Mail-Versand fehlgeschlagen (${job.failed}/${job.total_recipients} fehlgeschlagen)`);
@@ -113,6 +118,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           setRecipientFilter('all');
           setAttachments([]);
           setActiveJob(null);
+          setPendingJobId(null);
+          setStatusRetryError(false);
           setConfirmSend(false);
           onClose();
         }, 2000);
@@ -130,9 +137,11 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           clearTimeout(pollingRef.current);
           pollingRef.current = null;
         }
+        // Keep the accepted job id and progress view: the send may still be
+        // running server-side, so a new submission must stay blocked.
         setIsLoading(false);
-        setActiveJob(null);
-        toast.error('Job-Status konnte nicht abgerufen werden. Bitte später erneut versuchen.');
+        setStatusRetryError(true);
+        toast.error('Versandstatus nicht erreichbar. Der Versand läuft möglicherweise weiter.');
       } else {
         pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
       }
@@ -147,7 +156,11 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     }
   }, [onClose]);
 
-  const isBusy = isLoading || isSendingTest || (activeJob !== null && activeJob.status !== 'completed' && activeJob.status !== 'failed');
+  // While the accepted job is unresolved, block new submissions. After a status
+  // failure the user may close the modal, but the job id stays in state so the
+  // progress view (and the send block) returns on reopen.
+  const jobUnresolved = pendingJobId !== null && !statusRetryError;
+  const isBusy = isLoading || isSendingTest || jobUnresolved;
 
   const handleClose = () => {
     if (isBusy) return;
@@ -159,10 +172,22 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       clearTimeout(resetTimeoutRef.current);
       resetTimeoutRef.current = null;
     }
-    setActiveJob(null);
+    if (!statusRetryError) {
+      setActiveJob(null);
+      setPendingJobId(null);
+      setConfirmSend(false);
+    }
     setIsLoading(false);
-    setConfirmSend(false);
     onClose();
+  };
+
+  const handleRetryStatus = async () => {
+    if (!pendingJobId) return;
+    setIsRetryingStatus(true);
+    pollFailuresRef.current = 0;
+    setStatusRetryError(false);
+    await pollJobStatus(pendingJobId);
+    setIsRetryingStatus(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -264,6 +289,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
         }
         toast.info(`Mail-Versand gestartet für ${total} Empfänger...`);
         pollFailuresRef.current = 0;
+        setPendingJobId(jobId);
+        setStatusRetryError(false);
         void pollJobStatus(jobId);
       } else {
         toast.error(response.message || 'Fehler beim Versenden der Mail');
@@ -293,7 +320,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
             </div>
           )} footer={(
             <button onClick={handleClose} disabled={isBusy} className={buttonVariants.secondary}>
-              {activeJob.status === 'completed' || activeJob.status === 'failed' ? 'Schließen' : 'Abbrechen'}
+              {activeJob.status === 'completed' || activeJob.status === 'failed' || statusRetryError ? 'Schließen' : 'Abbrechen'}
             </button>
           )}>
             {/* Progress content */}
@@ -353,6 +380,23 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
                 {activeJob.status === 'completed' && (
                   <p className="mt-3 text-sm text-[var(--muted)]">Fenster schließt automatisch...</p>
+                )}
+
+                {statusRetryError && (
+                  <div className="mt-4 rounded-md bg-[var(--canvas-soft)] p-3 text-left">
+                    <p className="text-sm text-[var(--body)]">
+                      Der Versandstatus ist derzeit nicht erreichbar. Der Versand läuft möglicherweise weiter.
+                      Starten Sie keine neue Rundmail, bevor der Status geklärt ist.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleRetryStatus()}
+                      disabled={isRetryingStatus}
+                      className={`${buttonVariants.secondary} mt-3`}
+                    >
+                      {isRetryingStatus ? 'Status wird geprüft...' : 'Status erneut prüfen'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -417,7 +461,9 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                   <label className="block text-sm font-medium text-[var(--body)] mb-2">
                     Empfängergruppe
                   </label>
-                  {countsError && <p className="mb-2 text-xs text-[var(--error)]">Empfängerzahl konnte nicht geladen werden.</p>}
+                  <p role="status" aria-live="polite" className="mb-2 text-xs text-[var(--error)]">
+                    {countsError ? 'Empfängerzahl konnte nicht geladen werden.' : ''}
+                  </p>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
