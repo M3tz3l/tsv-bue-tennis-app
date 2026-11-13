@@ -77,18 +77,22 @@ const Events = () => {
       : !isPast(detail.event.event_date) && (isOrga || detail.event.status === 'published'),
   );
 
-  if (isLoading) return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><Spinner label="Veranstaltungen werden geladen..." /></DashboardShell>;
+  const scopeControls = (
+    <div role="group" aria-label="Zeitraum" className="flex gap-2">
+      <button type="button" aria-pressed={scope === 'upcoming'} onClick={() => setScope('upcoming')} className={scope === 'upcoming' ? buttonVariants.primary : buttonVariants.secondary}>Anstehend</button>
+      <button type="button" aria-pressed={scope === 'past'} onClick={() => setScope('past')} className={scope === 'past' ? buttonVariants.primary : buttonVariants.secondary}>Vergangen</button>
+    </div>
+  );
+
+  if (isLoading) return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><div className="mb-6 flex flex-wrap items-center justify-between gap-3">{scopeControls}</div><Spinner label="Veranstaltungen werden geladen..." /></DashboardShell>;
   if (error) {
-    return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><div className={`${cardShellClass} p-8 text-center`}><p role="alert" className="text-[var(--body)]">{getApiErrorMessage(error, 'Veranstaltungen konnten nicht geladen werden.')}</p><button type="button" onClick={() => void refetch()} className={`${buttonVariants.primary} mt-4`}>Erneut versuchen</button></div></DashboardShell>;
+    return <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}><div className="mb-6 flex flex-wrap items-center justify-between gap-3">{scopeControls}</div><div className={`${cardShellClass} p-8 text-center`}><p role="alert" className="text-[var(--body)]">{getApiErrorMessage(error, 'Veranstaltungen konnten nicht geladen werden.')}</p><button type="button" onClick={() => void refetch()} className={`${buttonVariants.primary} mt-4`}>Erneut versuchen</button></div></DashboardShell>;
   }
 
   return (
     <DashboardShell title="Veranstaltungen" onOpenMailComposer={() => setShowMailComposer(true)} isMailComposerOpen={showMailComposer} onCloseMailComposer={() => setShowMailComposer(false)}>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div role="group" aria-label="Zeitraum" className="flex gap-2">
-            <button type="button" aria-pressed={scope === 'upcoming'} onClick={() => setScope('upcoming')} className={scope === 'upcoming' ? buttonVariants.primary : buttonVariants.secondary}>Anstehend</button>
-            <button type="button" aria-pressed={scope === 'past'} onClick={() => setScope('past')} className={scope === 'past' ? buttonVariants.primary : buttonVariants.secondary}>Vergangen</button>
-          </div>
+          {scopeControls}
           {isOrga && <button onClick={() => setEditingEvent(null)} className={buttonVariants.primary}>Veranstaltung erstellen</button>}
         </div>
         {visibleEvents.length === 0 ? <div className="rounded-lg bg-white p-8 text-center text-[var(--muted)]"><CalendarIcon className="mx-auto mb-3 h-12 w-12 text-[var(--hairline)]" /><p>{scope === 'past' ? 'Keine vergangenen Veranstaltungen' : 'Keine anstehenden Veranstaltungen'}</p></div> : <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{visibleEvents.map((detail) => <EventCard key={detail.event.id} detail={detail} isOrga={isOrga} onSelect={signupModal.open} onEdit={setEditingEvent} onSignups={setSignupsEvent} />)}</div>}

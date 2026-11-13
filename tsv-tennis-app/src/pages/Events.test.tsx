@@ -210,6 +210,22 @@ describe('Events', () => {
     expect(screen.queryByRole('button', { name: /Anmelden/i })).not.toBeInTheDocument();
   });
 
+  it('keeps the scope controls available while loading', () => {
+    mocks.useEvents.mockReturnValue({ data: undefined, isLoading: true, error: null });
+    renderEvents();
+
+    expect(screen.getByRole('button', { name: 'Vergangen' })).toBeInTheDocument();
+  });
+
+  it('keeps the scope controls available after an error and can switch scopes', async () => {
+    const user = userEvent.setup();
+    mocks.useEvents.mockReturnValue({ data: undefined, isLoading: false, error: new Error('nope') });
+    renderEvents();
+
+    await user.click(screen.getByRole('button', { name: 'Vergangen' }));
+    expect(mocks.useEvents).toHaveBeenLastCalledWith('member-1', true, 'past');
+  });
+
   it('hides past events from Orga as well', () => {
     mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', role: 'orga' } });
     renderEvents([detail({ id: 2, title: 'Vergangenes Fest', event_date: '2000-01-01' }), detail({ id: 1, title: 'Sommerfest' })]);
