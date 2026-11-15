@@ -25,6 +25,24 @@ pub fn write_routes() -> axum::Router<AppState> {
         .route("/mail/test-send", axum::routing::post(send_test_mail))
         .route("/mail/send", axum::routing::post(send_bulk_mail))
         .layer(axum::extract::DefaultBodyLimit::max(MAX_MAIL_BODY_BYTES))
+        .layer(axum::middleware::map_response(mail_error_json))
+}
+
+/// Turn empty 413 responses (body limit, attachment limits) into a JSON error
+/// the composer can display.
+async fn mail_error_json(response: axum::response::Response) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    if response.status() == StatusCode::PAYLOAD_TOO_LARGE {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(serde_json::json!({
+                "success": false,
+                "message": "Die Anhänge sind zu groß (max. 5 Dateien, 25 MB pro Datei, 50 MB gesamt)."
+            })),
+        )
+            .into_response();
+    }
+    response
 }
 
 const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024;
@@ -36,6 +54,8 @@ const BULK_MAIL_BATCH_SIZE: usize = 9;
 const BULK_MAIL_BATCH_DELAY_SECS: u64 = 5;
 const BULK_MAIL_RETRIES: usize = 3;
 const BULK_MAIL_RETRY_DELAY_SECS: u64 = 3;
+const BULK_SEND_BUSY_MESSAGE: &str =
+    "Es läuft bereits ein Rundmail-Versand. Bitte warten Sie, bis er abgeschlossen ist.";
 
 struct MailForm {
     subject: String,
@@ -282,6 +302,15 @@ pub async fn send_bulk_mail(
         }
     };
 
+    // Cheap early check so a rejected send does not fetch all recipients first.
+    if has_active_job(&*state.mail_jobs.read().await) {
+        warn!("Bulk mail rejected early: another send is already running");
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "message": BULK_SEND_BUSY_MESSAGE
+        })));
+    }
+
     // Fetch recipients
     let recipients = match recipient_filter {
         RecipientFilter::Orga => {
@@ -348,7 +377,7 @@ pub async fn send_bulk_mail(
             warn!("Bulk mail rejected: another send is already running");
             return Ok(Json(serde_json::json!({
                 "success": false,
-                "message": "Es läuft bereits ein Rundmail-Versand. Bitte warten Sie, bis er abgeschlossen ist."
+                "message": BULK_SEND_BUSY_MESSAGE
             })));
         }
         jobs.insert(

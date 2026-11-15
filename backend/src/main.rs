@@ -1898,6 +1898,9 @@ mod tests {
             .await;
 
         assert_eq!(response.status_code(), 413);
+        let body: serde_json::Value = response.json();
+        assert_eq!(body["success"], false);
+        assert!(body["message"].as_str().unwrap_or("").contains("Anhänge"));
     }
 
     #[serial_test::serial]
@@ -1926,5 +1929,7 @@ mod tests {
             .await;
 
         assert_eq!(response.status_code(), 413);
+        let body: serde_json::Value = response.json();
+        assert_eq!(body["success"], false);
     }
 }

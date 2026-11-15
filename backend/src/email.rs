@@ -640,7 +640,14 @@ impl EmailService {
                         }
                     };
 
-                    let result = send_with_retry(&transport, email_msg, retries, retry_delay).await;
+                    let result = send_with_retry(
+                        &transport,
+                        email_msg,
+                        retries,
+                        retry_delay,
+                        SMTP_SEND_TIMEOUT,
+                    )
+                    .await;
                     drop(permit);
                     match result {
                         Ok(_) => Ok(email_addr),
@@ -846,10 +853,11 @@ async fn send_with_retry(
     message: Message,
     max_retries: usize,
     delay: std::time::Duration,
+    timeout: std::time::Duration,
 ) -> Result<(), &'static str> {
     let mut attempt = 0usize;
     loop {
-        let result = tokio::time::timeout(SMTP_SEND_TIMEOUT, transport.send(message.clone())).await;
+        let result = tokio::time::timeout(timeout, transport.send(message.clone())).await;
         let result = match result {
             Ok(result) => result,
             Err(_) => {
@@ -999,4 +1007,43 @@ fn build_message(
     ));
 
     Ok(message)
+}
+
+#[cfg(test)]
+mod smtp_timeout_tests {
+    use super::{send_with_retry, AsyncSmtpTransport, Message, Tokio1Executor};
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn send_with_retry_times_out_when_the_server_never_replies() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        // Accept the connection but never send the SMTP greeting.
+        let server = tokio::spawn(async move {
+            let (_socket, _) = listener.accept().await.unwrap();
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        });
+
+        let transport = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous("127.0.0.1")
+            .port(port)
+            .build();
+        let message = Message::builder()
+            .from("Test <test@example.com>".parse().unwrap())
+            .to("Dest <dest@example.com>".parse().unwrap())
+            .subject("Test")
+            .body("Hallo".to_string())
+            .unwrap();
+
+        let result = send_with_retry(
+            &transport,
+            message,
+            0,
+            Duration::ZERO,
+            Duration::from_millis(100),
+        )
+        .await;
+
+        assert_eq!(result, Err("smtp_timeout"));
+        server.abort();
+    }
 }
