@@ -20,7 +20,17 @@ pub fn member_count_routes() -> axum::Router<AppState> {
     axum::Router::new().route("/mail/recipient-counts", get(get_member_counts))
 }
 
+pub fn write_routes() -> axum::Router<AppState> {
+    axum::Router::new()
+        .route("/mail/test-send", axum::routing::post(send_test_mail))
+        .route("/mail/send", axum::routing::post(send_bulk_mail))
+        .layer(axum::extract::DefaultBodyLimit::max(MAX_MAIL_BODY_BYTES))
+}
+
 const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024;
+const MAX_ATTACHMENT_COUNT: usize = 5;
+const MAX_TOTAL_ATTACHMENT_SIZE: usize = 50 * 1024 * 1024;
+const MAX_MAIL_BODY_BYTES: usize = 55 * 1024 * 1024;
 const BULK_MAIL_CONCURRENCY: usize = 3;
 const BULK_MAIL_BATCH_SIZE: usize = 9;
 const BULK_MAIL_BATCH_DELAY_SECS: u64 = 5;
@@ -35,12 +45,21 @@ struct MailForm {
     recipient_filter: String,
 }
 
+/// True when the organizer already has a bulk send that has not finished.
+fn user_has_active_job(jobs: &std::collections::HashMap<String, MailJob>, user_id: &str) -> bool {
+    jobs.values().any(|job| {
+        job.user_id == user_id
+            && matches!(job.status, MailJobStatus::Pending | MailJobStatus::Running)
+    })
+}
+
 async fn parse_mail_multipart(mut multipart: Multipart) -> Result<MailForm, StatusCode> {
     let mut subject = String::new();
     let mut message = String::new();
     let mut recipient_filter = String::from("all");
     let mut include_greeting = true;
     let mut attachments: Vec<email::EmailAttachment> = Vec::new();
+    let mut attachment_bytes = 0usize;
 
     while let Some(field) = multipart
         .next_field()
@@ -63,15 +82,21 @@ async fn parse_mail_multipart(mut multipart: Multipart) -> Result<MailForm, Stat
                 include_greeting = val != "false" && val != "0";
             }
             _ => {
+                if attachments.len() >= MAX_ATTACHMENT_COUNT {
+                    return Err(StatusCode::PAYLOAD_TOO_LARGE);
+                }
                 let file_name = field.file_name().unwrap_or("attachment").to_string();
                 let content_type = field
                     .content_type()
                     .unwrap_or("application/octet-stream")
                     .to_string();
                 let data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?;
-                if data.len() > MAX_ATTACHMENT_SIZE {
-                    return Err(StatusCode::BAD_REQUEST);
+                if data.len() > MAX_ATTACHMENT_SIZE
+                    || attachment_bytes + data.len() > MAX_TOTAL_ATTACHMENT_SIZE
+                {
+                    return Err(StatusCode::PAYLOAD_TOO_LARGE);
                 }
+                attachment_bytes += data.len();
                 attachments.push(email::EmailAttachment {
                     filename: file_name,
                     content_type,
@@ -307,20 +332,33 @@ pub async fn send_bulk_mail(
         .map(|r| (r.email, r.first_name))
         .collect();
 
-    // Create job and return immediately
+    // Create the job and register it under one lock so two concurrent requests
+    // from the same organizer cannot both start a send.
     let job_id = uuid::Uuid::new_v4().to_string();
-    let job = MailJob {
-        id: job_id.clone(),
-        status: MailJobStatus::Pending,
-        total_recipients: total as i32,
-        sent: 0,
-        failed: 0,
-        failed_recipients: Vec::new(),
-        error: None,
-        created_at: chrono::Utc::now(),
-    };
-
-    state.mail_jobs.write().await.insert(job_id.clone(), job);
+    {
+        let mut jobs = state.mail_jobs.write().await;
+        if user_has_active_job(&jobs, &user.id) {
+            warn!(user_id = %user.id, "Bulk mail rejected: a send is already running");
+            return Ok(Json(serde_json::json!({
+                "success": false,
+                "message": "Ein Rundmail-Versand läuft bereits. Bitte warten Sie, bis er abgeschlossen ist."
+            })));
+        }
+        jobs.insert(
+            job_id.clone(),
+            MailJob {
+                id: job_id.clone(),
+                user_id: user.id.clone(),
+                status: MailJobStatus::Pending,
+                total_recipients: total as i32,
+                sent: 0,
+                failed: 0,
+                failed_recipients: Vec::new(),
+                error: None,
+                created_at: chrono::Utc::now(),
+            },
+        );
+    }
 
     // Spawn background task
     let email_service = state.email_service.clone();
@@ -484,4 +522,38 @@ pub async fn get_member_counts(
             "orga": orga
         }
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::user_has_active_job;
+    use crate::models::{MailJob, MailJobStatus};
+    use std::collections::HashMap;
+
+    fn job(id: &str, user: &str, status: MailJobStatus) -> MailJob {
+        MailJob {
+            id: id.into(),
+            user_id: user.into(),
+            status,
+            total_recipients: 0,
+            sent: 0,
+            failed: 0,
+            failed_recipients: vec![],
+            error: None,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    #[test]
+    fn active_jobs_block_only_the_same_organizer() {
+        let mut jobs = HashMap::new();
+        jobs.insert("a".into(), job("a", "u1", MailJobStatus::Running));
+        jobs.insert("b".into(), job("b", "u2", MailJobStatus::Pending));
+        jobs.insert("c".into(), job("c", "u3", MailJobStatus::Completed));
+
+        assert!(user_has_active_job(&jobs, "u1"));
+        assert!(user_has_active_job(&jobs, "u2"));
+        assert!(!user_has_active_job(&jobs, "u3"));
+        assert!(!user_has_active_job(&jobs, "u4"));
+    }
 }

@@ -328,14 +328,7 @@ fn build_router(
 
     // Write operations with stricter rate limiting
     let write_routes = Router::new()
-        .route(
-            "/mail/test-send",
-            axum::routing::post(routes::mail::send_test_mail),
-        )
-        .route(
-            "/mail/send",
-            axum::routing::post(routes::mail::send_bulk_mail),
-        )
+        .merge(routes::mail::write_routes())
         .merge(routes::events::write_routes())
         .layer(GovernorLayer {
             config: write_governor_conf,
@@ -604,14 +597,7 @@ mod tests {
             .route("/verify-token", get(get_user))
             .route("/dashboard/:year", get(routes::dashboard::dashboard))
             .route("/user", get(get_user))
-            .route(
-                "/mail/test-send",
-                axum::routing::post(routes::mail::send_test_mail),
-            )
-            .route(
-                "/mail/send",
-                axum::routing::post(routes::mail::send_bulk_mail),
-            )
+            .merge(routes::mail::write_routes())
             .route("/mail/jobs/:job_id", get(routes::mail::get_mail_job_status))
             .nest("/arbeitsstunden", routes::work_hours::routes())
             .merge(routes::events::routes())
@@ -1855,5 +1841,56 @@ mod tests {
             test_email,
             selection_token
         );
+    }
+
+    #[serial_test::serial]
+    #[tokio::test]
+    async fn test_send_bulk_mail_rejects_too_many_attachments() {
+        use axum_test::multipart::{MultipartForm, Part};
+        use mockito::Server;
+
+        let mut teable_server = Server::new_async().await;
+        let _member_mock = teable_server
+            .mock("GET", "/table/test_members_table/record/orga_user_1")
+            .match_query(mockito::Matcher::Any)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+                "id": "orga_user_1",
+                "fields": {
+                    "Vorname": "Orga",
+                    "Nachname": "User",
+                    "Email": "orga@example.com"
+                }
+            }"#,
+            )
+            .create_async()
+            .await;
+
+        let app = create_test_app_with_teable_url(&teable_server.url()).await;
+        let server = TestServer::new(app).unwrap();
+        let token = auth::create_token(TEST_JWT_SECRET, "orga_user_1", Some("orga"))
+            .expect("Failed to create orga test token");
+
+        let mut form = MultipartForm::new()
+            .add_text("subject", "Test")
+            .add_text("message", "Hallo");
+        for index in 0..6 {
+            form = form.add_part(
+                "attachments",
+                Part::bytes(vec![0u8; 4])
+                    .file_name(format!("file-{index}.txt"))
+                    .mime_type("text/plain"),
+            );
+        }
+
+        let response = server
+            .post("/api/mail/send")
+            .add_header("authorization", &format!("Bearer {token}"))
+            .multipart(form)
+            .await;
+
+        assert_eq!(response.status_code(), 413);
     }
 }
