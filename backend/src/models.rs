@@ -187,7 +187,6 @@ pub enum MailJobStatus {
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct MailJob {
     pub id: String,
-    pub user_id: String,
     pub status: MailJobStatus,
     pub total_recipients: i32,
     pub sent: i32,

@@ -45,12 +45,10 @@ struct MailForm {
     recipient_filter: String,
 }
 
-/// True when the organizer already has a bulk send that has not finished.
-fn user_has_active_job(jobs: &std::collections::HashMap<String, MailJob>, user_id: &str) -> bool {
-    jobs.values().any(|job| {
-        job.user_id == user_id
-            && matches!(job.status, MailJobStatus::Pending | MailJobStatus::Running)
-    })
+/// True when any bulk send is still running (globally, one at a time).
+fn has_active_job(jobs: &std::collections::HashMap<String, MailJob>) -> bool {
+    jobs.values()
+        .any(|job| matches!(job.status, MailJobStatus::Pending | MailJobStatus::Running))
 }
 
 async fn parse_mail_multipart(mut multipart: Multipart) -> Result<MailForm, StatusCode> {
@@ -332,23 +330,22 @@ pub async fn send_bulk_mail(
         .map(|r| (r.email, r.first_name))
         .collect();
 
-    // Create the job and register it under one lock so two concurrent requests
-    // from the same organizer cannot both start a send.
+    // Create the job and register it under one lock so concurrent requests
+    // cannot both start a send. Only one bulk send runs at a time.
     let job_id = uuid::Uuid::new_v4().to_string();
     {
         let mut jobs = state.mail_jobs.write().await;
-        if user_has_active_job(&jobs, &user.id) {
-            warn!(user_id = %user.id, "Bulk mail rejected: a send is already running");
+        if has_active_job(&jobs) {
+            warn!("Bulk mail rejected: another send is already running");
             return Ok(Json(serde_json::json!({
                 "success": false,
-                "message": "Ein Rundmail-Versand läuft bereits. Bitte warten Sie, bis er abgeschlossen ist."
+                "message": "Es läuft bereits ein Rundmail-Versand. Bitte warten Sie, bis er abgeschlossen ist."
             })));
         }
         jobs.insert(
             job_id.clone(),
             MailJob {
                 id: job_id.clone(),
-                user_id: user.id.clone(),
                 status: MailJobStatus::Pending,
                 total_recipients: total as i32,
                 sent: 0,
@@ -526,14 +523,13 @@ pub async fn get_member_counts(
 
 #[cfg(test)]
 mod tests {
-    use super::user_has_active_job;
+    use super::has_active_job;
     use crate::models::{MailJob, MailJobStatus};
     use std::collections::HashMap;
 
-    fn job(id: &str, user: &str, status: MailJobStatus) -> MailJob {
+    fn job(id: &str, status: MailJobStatus) -> MailJob {
         MailJob {
             id: id.into(),
-            user_id: user.into(),
             status,
             total_recipients: 0,
             sent: 0,
@@ -545,15 +541,18 @@ mod tests {
     }
 
     #[test]
-    fn active_jobs_block_only_the_same_organizer() {
-        let mut jobs = HashMap::new();
-        jobs.insert("a".into(), job("a", "u1", MailJobStatus::Running));
-        jobs.insert("b".into(), job("b", "u2", MailJobStatus::Pending));
-        jobs.insert("c".into(), job("c", "u3", MailJobStatus::Completed));
+    fn pending_or_running_jobs_block_new_sends() {
+        let mut running = HashMap::new();
+        running.insert("a".into(), job("a", MailJobStatus::Running));
+        assert!(has_active_job(&running));
 
-        assert!(user_has_active_job(&jobs, "u1"));
-        assert!(user_has_active_job(&jobs, "u2"));
-        assert!(!user_has_active_job(&jobs, "u3"));
-        assert!(!user_has_active_job(&jobs, "u4"));
+        let mut pending = HashMap::new();
+        pending.insert("b".into(), job("b", MailJobStatus::Pending));
+        assert!(has_active_job(&pending));
+
+        let mut finished = HashMap::new();
+        finished.insert("c".into(), job("c", MailJobStatus::Completed));
+        finished.insert("d".into(), job("d", MailJobStatus::Failed));
+        assert!(!has_active_job(&finished));
     }
 }
