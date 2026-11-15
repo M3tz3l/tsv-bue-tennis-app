@@ -73,8 +73,9 @@ test.describe('Send Bulk Mail', () => {
     // Select "Alle Mitglieder" (should be default)
     await page.click('button:has-text("Alle Mitglieder")');
 
-    // Click send — shows inline confirmation
+    // Click send — shows inline confirmation with a freshly refreshed count
     await page.click('button:has-text("Versenden"):not(:has-text("Jetzt"))');
+    await expect(page.getByText(/An \d+ Mitglieder senden\?/)).toBeVisible({ timeout: 5_000 });
 
     // Confirm inline — click "Jetzt senden"
     await page.click('button:has-text("Jetzt senden")');
