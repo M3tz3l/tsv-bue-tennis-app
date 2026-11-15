@@ -832,6 +832,11 @@ Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese E-Mail bitte.
     }
 }
 
+/// Upper bound for one SMTP send attempt. Lettre's own timeout covers the TCP
+/// connect, not a stalled response read, so without this a job could stay
+/// Running forever and keep the global bulk-send reservation.
+const SMTP_SEND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// Build a lettre `Message` with optional attachments (shared by sync and async paths)
 /// Send with a bounded number of retries for transient failures (e.g. the SMTP
 /// server dropping the connection mid-conversation, reported by lettre as
@@ -844,7 +849,22 @@ async fn send_with_retry(
 ) -> Result<(), &'static str> {
     let mut attempt = 0usize;
     loop {
-        match transport.send(message.clone()).await {
+        let result = tokio::time::timeout(SMTP_SEND_TIMEOUT, transport.send(message.clone())).await;
+        let result = match result {
+            Ok(result) => result,
+            Err(_) => {
+                // Do not retry our own timeout: the server may have accepted
+                // the message and only the reply stalled, so a retry could
+                // deliver it twice. Failing this recipient finishes the job.
+                warn!(
+                    attempt,
+                    category = "smtp_timeout",
+                    "Bulk mail send timed out"
+                );
+                return Err("smtp_timeout");
+            }
+        };
+        match result {
             Ok(_) => return Ok(()),
             Err(e) => {
                 let category = smtp_error_category(&e);
