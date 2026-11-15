@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -15,7 +16,6 @@ import MailComposer, {
   mergeAttachments,
   MAX_ATTACHMENT_COUNT,
   MAX_ATTACHMENT_SIZE,
-  MAX_TOTAL_ATTACHMENT_SIZE,
 } from './MailComposer';
 
 describe('MailComposer member counts', () => {
@@ -37,6 +37,65 @@ describe('MailComposer member counts', () => {
     rerender(<MailComposer isOpen onClose={onClose} />);
 
     expect(mocks.getMemberCounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes the counts before showing the confirmation', async () => {
+    const user = userEvent.setup();
+    render(<MailComposer isOpen onClose={vi.fn()} />);
+    await waitFor(() => expect(mocks.getMemberCounts).toHaveBeenCalledTimes(1));
+
+    await user.type(screen.getByLabelText('Betreff'), 'Hallo');
+    await user.type(screen.getByLabelText('Nachricht'), 'Text');
+    await user.click(screen.getByRole('button', { name: /Versenden/ }));
+
+    await waitFor(() => expect(mocks.getMemberCounts).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not reopen confirmation when the composer closes during a refresh', async () => {
+    const user = userEvent.setup();
+    let resolveCounts!: (value: { success: boolean; data?: { all: number; orga: number } }) => void;
+    mocks.getMemberCounts
+      .mockResolvedValueOnce({ success: true, data: { all: 10, orga: 3 } })
+      .mockReturnValueOnce(new Promise((resolve) => { resolveCounts = resolve; }));
+
+    const onClose = vi.fn();
+    render(<MailComposer isOpen onClose={onClose} />);
+    await waitFor(() => expect(mocks.getMemberCounts).toHaveBeenCalledTimes(1));
+
+    await user.type(screen.getByLabelText('Betreff'), 'Hallo');
+    await user.type(screen.getByLabelText('Nachricht'), 'Text');
+    await user.click(screen.getByRole('button', { name: /Versenden/ }));
+    await waitFor(() => expect(mocks.getMemberCounts).toHaveBeenCalledTimes(2));
+
+    await user.click(screen.getByRole('button', { name: /Abbrechen/ }));
+    await act(async () => {
+      resolveCounts({ success: true, data: { all: 10, orga: 3 } });
+    });
+
+    expect(onClose).toHaveBeenCalled();
+    expect(screen.queryByText(/Jetzt senden/)).not.toBeInTheDocument();
+  });
+
+  it('marks counts unavailable when the confirmation refresh fails', async () => {
+    const user = userEvent.setup();
+    mocks.getMemberCounts
+      .mockResolvedValueOnce({ success: true, data: { all: 10, orga: 3 } })
+      .mockResolvedValueOnce({ success: false, message: 'nope' });
+
+    render(<MailComposer isOpen onClose={vi.fn()} />);
+    await waitFor(() => expect(mocks.getMemberCounts).toHaveBeenCalledTimes(1));
+
+    await user.type(screen.getByLabelText('Betreff'), 'Hallo');
+    await user.type(screen.getByLabelText('Nachricht'), 'Text');
+    await user.click(screen.getByRole('button', { name: /Versenden/ }));
+
+    await waitFor(() => expect(mocks.getMemberCounts).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        /Empfängerzahl konnte nicht geladen werden/i,
+      ),
+    );
+    expect(screen.getByText(/An die ausgewählten Mitglieder senden/i)).toBeInTheDocument();
   });
 
   it('warns when the recipient count cannot be loaded', async () => {
@@ -81,11 +140,11 @@ describe('mergeAttachments', () => {
   });
 
   it('rejects a selection over the total limit', () => {
-    const result = mergeAttachments([], [
-      fileWithSize('a.bin', MAX_TOTAL_ATTACHMENT_SIZE / 2),
-      fileWithSize('b.bin', MAX_TOTAL_ATTACHMENT_SIZE / 2),
-      fileWithSize('c.bin', 1),
-    ]);
+    const files = Array.from({ length: MAX_ATTACHMENT_COUNT }, (_, i) =>
+      fileWithSize(`${i}.bin`, MAX_ATTACHMENT_SIZE),
+    );
+
+    const result = mergeAttachments([], files);
 
     expect(result.error).toMatch(/zusammen/);
     expect(result.files).toHaveLength(0);

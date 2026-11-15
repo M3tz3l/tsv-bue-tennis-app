@@ -25,17 +25,42 @@ pub fn write_routes() -> axum::Router<AppState> {
         .route("/mail/test-send", axum::routing::post(send_test_mail))
         .route("/mail/send", axum::routing::post(send_bulk_mail))
         .layer(axum::extract::DefaultBodyLimit::max(MAX_MAIL_BODY_BYTES))
+        .layer(axum::middleware::map_response(mail_error_json))
 }
 
-const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024;
+/// Turn empty 413 responses (body limit, attachment limits) into a JSON error
+/// the composer can display.
+async fn mail_error_json(response: axum::response::Response) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    if response.status() == StatusCode::PAYLOAD_TOO_LARGE {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(serde_json::json!({
+                "success": false,
+                "message": format!(
+                    "Die Anhänge sind zu groß (max. {} Dateien, {} MB pro Datei, {} MB gesamt).",
+                    MAX_ATTACHMENT_COUNT,
+                    MAX_ATTACHMENT_SIZE / (1024 * 1024),
+                    MAX_TOTAL_ATTACHMENT_SIZE / (1024 * 1024)
+                )
+            })),
+        )
+            .into_response();
+    }
+    response
+}
+
+const MAX_ATTACHMENT_SIZE: usize = 5 * 1024 * 1024;
 const MAX_ATTACHMENT_COUNT: usize = 5;
-const MAX_TOTAL_ATTACHMENT_SIZE: usize = 50 * 1024 * 1024;
-const MAX_MAIL_BODY_BYTES: usize = 55 * 1024 * 1024;
+const MAX_TOTAL_ATTACHMENT_SIZE: usize = 20 * 1024 * 1024;
+const MAX_MAIL_BODY_BYTES: usize = 25 * 1024 * 1024;
 const BULK_MAIL_CONCURRENCY: usize = 3;
 const BULK_MAIL_BATCH_SIZE: usize = 9;
 const BULK_MAIL_BATCH_DELAY_SECS: u64 = 5;
 const BULK_MAIL_RETRIES: usize = 3;
 const BULK_MAIL_RETRY_DELAY_SECS: u64 = 3;
+const BULK_SEND_BUSY_MESSAGE: &str =
+    "Es läuft bereits ein Rundmail-Versand. Bitte warten Sie, bis er abgeschlossen ist.";
 
 struct MailForm {
     subject: String,
@@ -51,6 +76,11 @@ struct MailForm {
 fn has_active_job(jobs: &std::collections::HashMap<String, MailJob>) -> bool {
     jobs.values()
         .any(|job| matches!(job.status, MailJobStatus::Pending | MailJobStatus::Running))
+}
+
+/// Only the organizer who started a job (or any orga) may read its status.
+fn can_view_job(job: &MailJob, user_id: &str, is_orga: bool) -> bool {
+    job.user_id == user_id || is_orga
 }
 
 /// Only finished jobs may be removed by the periodic cleanup; an active job
@@ -282,6 +312,15 @@ pub async fn send_bulk_mail(
         }
     };
 
+    // Cheap early check so a rejected send does not fetch all recipients first.
+    if has_active_job(&*state.mail_jobs.read().await) {
+        warn!("Bulk mail rejected early: another send is already running");
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "message": BULK_SEND_BUSY_MESSAGE
+        })));
+    }
+
     // Fetch recipients
     let recipients = match recipient_filter {
         RecipientFilter::Orga => {
@@ -348,13 +387,14 @@ pub async fn send_bulk_mail(
             warn!("Bulk mail rejected: another send is already running");
             return Ok(Json(serde_json::json!({
                 "success": false,
-                "message": "Es läuft bereits ein Rundmail-Versand. Bitte warten Sie, bis er abgeschlossen ist."
+                "message": BULK_SEND_BUSY_MESSAGE
             })));
         }
         jobs.insert(
             job_id.clone(),
             MailJob {
                 id: job_id.clone(),
+                user_id: user.id.clone(),
                 status: MailJobStatus::Pending,
                 total_recipients: total as i32,
                 sent: 0,
@@ -457,24 +497,39 @@ pub async fn send_bulk_mail(
 pub async fn get_mail_job_status(
     State(state): State<AppState>,
     Path(job_id): Path<String>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let claims =
+        extract_auth_claims_from_headers(&state.jwt_secret, &headers).map_err(|status| {
+            (
+                status,
+                Json(serde_json::json!({ "success": false, "message": "Nicht autorisiert" })),
+            )
+        })?;
+    let is_orga = claims
+        .role
+        .as_deref()
+        .is_some_and(|role| role.trim().eq_ignore_ascii_case("orga"));
+
     let jobs = state.mail_jobs.read().await;
-    match jobs.get(&job_id) {
-        Some(job) => {
-            debug!(job_id = %job_id, status = ?job.status, "Mail job status lookup");
-            Ok(Json(serde_json::json!({
-                "success": true,
-                "job": job,
-            })))
-        }
-        None => Err((
+    let job = jobs.get(&job_id).ok_or_else(|| {
+        (
             StatusCode::NOT_FOUND,
-            Json(serde_json::json!({
-                "success": false,
-                "message": "Job nicht gefunden"
-            })),
-        )),
+            Json(serde_json::json!({ "success": false, "message": "Job nicht gefunden" })),
+        )
+    })?;
+    if !can_view_job(job, &claims.sub, is_orga) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "success": false, "message": "Kein Zugriff" })),
+        ));
     }
+
+    debug!(job_id = %job_id, status = ?job.status, "Mail job status lookup");
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "job": job,
+    })))
 }
 
 pub async fn get_member_counts(
@@ -532,7 +587,7 @@ pub async fn get_member_counts(
 
 #[cfg(test)]
 mod tests {
-    use super::{has_active_job, is_stale_terminal_job};
+    use super::{can_view_job, has_active_job, is_stale_terminal_job};
     use crate::models::{MailJob, MailJobStatus};
     use std::collections::HashMap;
 
@@ -543,6 +598,7 @@ mod tests {
     ) -> MailJob {
         MailJob {
             id: id.into(),
+            user_id: "orga-1".into(),
             status,
             total_recipients: 0,
             sent: 0,
@@ -555,6 +611,14 @@ mod tests {
 
     fn job(id: &str, status: MailJobStatus) -> MailJob {
         job_at(id, status, chrono::Utc::now())
+    }
+
+    #[test]
+    fn only_the_creator_or_an_orga_can_view_a_job() {
+        let job = job("a", MailJobStatus::Running);
+        assert!(can_view_job(&job, "orga-1", false));
+        assert!(can_view_job(&job, "other", true));
+        assert!(!can_view_job(&job, "other", false));
     }
 
     #[test]

@@ -1,5 +1,11 @@
 const MAILPIT_API = process.env.MAILPIT_API_URL || 'http://localhost:8025';
 
+export interface MailpitAttachment {
+  fileName: string;
+  contentType: string;
+  size: number;
+}
+
 export interface MailpitMessage {
   id: string;
   subject: string;
@@ -8,6 +14,7 @@ export interface MailpitMessage {
   created: string;
   text?: string;
   html?: string;
+  attachments: MailpitAttachment[];
 }
 
 interface MailpitListResponse {
@@ -27,6 +34,7 @@ function normalizeMessage(raw: any): MailpitMessage {
   const from = Array.isArray(rawFrom) ? rawFrom.map(normalizeAddr) : [normalizeAddr(rawFrom ?? {})];
   const rawTo = raw.To ?? raw.to;
   const to = Array.isArray(rawTo) ? rawTo.map(normalizeAddr) : [normalizeAddr(rawTo ?? {})];
+  const rawAttachments = raw.Attachments ?? raw.attachments ?? [];
   return {
     id: raw.ID ?? raw.id ?? '',
     subject: raw.Subject ?? raw.subject ?? '',
@@ -35,6 +43,11 @@ function normalizeMessage(raw: any): MailpitMessage {
     created: raw.Created ?? raw.created ?? '',
     text: raw.Text ?? raw.text,
     html: raw.HTML ?? raw.html,
+    attachments: (Array.isArray(rawAttachments) ? rawAttachments : []).map((a: any) => ({
+      fileName: a.FileName ?? a.fileName ?? '',
+      contentType: a.ContentType ?? a.contentType ?? '',
+      size: a.Size ?? a.size ?? 0,
+    })),
   };
 }
 
