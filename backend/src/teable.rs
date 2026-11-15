@@ -110,26 +110,34 @@ fn parse_member_id(value: Value) -> Option<crate::models::LinkedRecord> {
 }
 
 /// Reads a required member field, warning when Teable omits it (for example
-/// after a field rename or when a projection is missing it) instead of
-/// silently returning an empty value.
-fn required_member_field<'a>(fields: &'a Value, record_id: &str, name: &str) -> &'a str {
+/// after a field rename) instead of silently returning an empty value. A field
+/// left out of an explicit projection is expected to be absent, so it does not
+/// warn.
+fn required_member_field<'a>(
+    fields: &'a Value,
+    record_id: &str,
+    name: &str,
+    projection: Option<&[&str]>,
+) -> &'a str {
     match fields.get(name).and_then(Value::as_str) {
         Some(value) => value,
         None => {
-            warn!(record_id = %record_id, field = %name, "Teable member record missing required field");
+            if projection.map_or(true, |fields| fields.contains(&name)) {
+                warn!(record_id = %record_id, field = %name, "Teable member record missing required field");
+            }
             ""
         }
     }
 }
 
-fn member_from_record(record: &Value) -> Member {
+fn member_from_record(record: &Value, projection: Option<&[&str]>) -> Member {
     let fields = &record["fields"];
     let id = record["id"].as_str().unwrap_or("");
     Member {
         id: id.to_string(),
-        first_name: required_member_field(fields, id, "Vorname").to_string(),
-        last_name: required_member_field(fields, id, "Nachname").to_string(),
-        email: required_member_field(fields, id, "Email").to_string(),
+        first_name: required_member_field(fields, id, "Vorname", projection).to_string(),
+        last_name: required_member_field(fields, id, "Nachname", projection).to_string(),
+        email: required_member_field(fields, id, "Email", projection).to_string(),
         family_id: fields["Familie"]
             .as_str()
             .map(|s| s.to_string())
@@ -451,7 +459,7 @@ pub async fn get_member_by_id_with_projection(
         debug!(member_id = %id, "No member found");
         return Ok(None);
     }
-    let member = member_from_record(&record);
+    let member = member_from_record(&record, projection);
     debug!(member_id = %member.id, "Member found");
     Ok(Some(member))
 }
@@ -495,7 +503,7 @@ pub async fn get_family_members_with_projection(
     .await?;
     let mut members = Vec::with_capacity(records.len());
     for record in &records {
-        members.push(member_from_record(record));
+        members.push(member_from_record(record, projection));
     }
     debug!(family_id = %family_id, count = members.len(), "Family members found");
     Ok(TeableResponse {
@@ -827,7 +835,7 @@ pub async fn get_members_by_email(
     .await?;
     let mut members = Vec::with_capacity(records.len());
     for record in &records {
-        members.push(member_from_record(record));
+        members.push(member_from_record(record, Some(MEMBER_PROJECTION)));
     }
     Ok(members)
 }
@@ -982,7 +990,7 @@ pub async fn get_all_active_members(
         let fields = &record["fields"];
         if let Some(email) = fields["Email"].as_str() {
             if !email.trim().is_empty() {
-                let member = member_from_record(record);
+                let member = member_from_record(record, Some(ALL_MEMBERS_PROJECTION));
                 members.push(member);
             }
         }
