@@ -1844,14 +1844,11 @@ mod tests {
         );
     }
 
-    #[serial_test::serial]
-    #[tokio::test]
-    async fn test_send_bulk_mail_rejects_too_many_attachments() {
-        use axum_test::multipart::{MultipartForm, Part};
+    async fn orga_mail_test_context() -> (TestServer, mockito::ServerGuard) {
         use mockito::Server;
 
         let mut teable_server = Server::new_async().await;
-        let _member_mock = teable_server
+        teable_server
             .mock("GET", "/table/test_members_table/record/orga_user_1")
             .match_query(mockito::Matcher::Any)
             .with_status(200)
@@ -1870,7 +1867,15 @@ mod tests {
             .await;
 
         let app = create_test_app_with_teable_url(&teable_server.url()).await;
-        let server = TestServer::new(app).unwrap();
+        (TestServer::new(app).unwrap(), teable_server)
+    }
+
+    #[serial_test::serial]
+    #[tokio::test]
+    async fn test_send_bulk_mail_rejects_too_many_attachments() {
+        use axum_test::multipart::{MultipartForm, Part};
+
+        let (server, _teable) = orga_mail_test_context().await;
         let token = auth::create_token(TEST_JWT_SECRET, "orga_user_1", Some("orga"))
             .expect("Failed to create orga test token");
 
@@ -1899,29 +1904,8 @@ mod tests {
     #[tokio::test]
     async fn test_send_bulk_mail_rejects_body_over_limit() {
         use axum_test::multipart::{MultipartForm, Part};
-        use mockito::Server;
 
-        let mut teable_server = Server::new_async().await;
-        let _member_mock = teable_server
-            .mock("GET", "/table/test_members_table/record/orga_user_1")
-            .match_query(mockito::Matcher::Any)
-            .with_status(200)
-            .with_header("content-type", "application/json")
-            .with_body(
-                r#"{
-                "id": "orga_user_1",
-                "fields": {
-                    "Vorname": "Orga",
-                    "Nachname": "User",
-                    "Email": "orga@example.com"
-                }
-            }"#,
-            )
-            .create_async()
-            .await;
-
-        let app = create_test_app_with_teable_url(&teable_server.url()).await;
-        let server = TestServer::new(app).unwrap();
+        let (server, _teable) = orga_mail_test_context().await;
         let token = auth::create_token(TEST_JWT_SECRET, "orga_user_1", Some("orga"))
             .expect("Failed to create orga test token");
 

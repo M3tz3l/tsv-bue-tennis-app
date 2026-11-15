@@ -46,6 +46,8 @@ struct MailForm {
 }
 
 /// True when any bulk send is still running (globally, one at a time).
+// shortcut: the reservation lives in one process; use a shared store (DB/Redis)
+// if the backend ever runs multiple instances.
 fn has_active_job(jobs: &std::collections::HashMap<String, MailJob>) -> bool {
     jobs.values()
         .any(|job| matches!(job.status, MailJobStatus::Pending | MailJobStatus::Running))
