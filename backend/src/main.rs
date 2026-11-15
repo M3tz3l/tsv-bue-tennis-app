@@ -190,7 +190,8 @@ async fn main() -> anyhow::Result<()> {
     let mail_jobs: state::MailJobStore =
         std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
 
-    // Spawn periodic cleanup of stale mail jobs (older than 1 hour)
+    // Spawn periodic cleanup of stale terminal mail jobs (older than 1 hour).
+    // Active sends are kept until their task finishes, however long that takes.
     {
         let jobs = mail_jobs.clone();
         tokio::spawn(async move {
@@ -200,7 +201,7 @@ async fn main() -> anyhow::Result<()> {
                 let cutoff = chrono::Utc::now() - chrono::Duration::hours(1);
                 let mut jobs = jobs.write().await;
                 let before = jobs.len();
-                jobs.retain(|_, j| j.created_at > cutoff);
+                jobs.retain(|_, job| !routes::mail::is_stale_terminal_job(job, cutoff));
                 let removed = before - jobs.len();
                 if removed > 0 {
                     info!("Cleaned up {} stale mail jobs", removed);

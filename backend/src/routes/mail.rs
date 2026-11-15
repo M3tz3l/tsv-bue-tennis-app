@@ -51,6 +51,13 @@ fn has_active_job(jobs: &std::collections::HashMap<String, MailJob>) -> bool {
         .any(|job| matches!(job.status, MailJobStatus::Pending | MailJobStatus::Running))
 }
 
+/// Only finished jobs may be removed by the periodic cleanup; an active job
+/// must keep its reservation until its task completes.
+pub fn is_stale_terminal_job(job: &MailJob, cutoff: chrono::DateTime<chrono::Utc>) -> bool {
+    matches!(job.status, MailJobStatus::Completed | MailJobStatus::Failed)
+        && job.created_at <= cutoff
+}
+
 async fn parse_mail_multipart(mut multipart: Multipart) -> Result<MailForm, StatusCode> {
     let mut subject = String::new();
     let mut message = String::new();
@@ -523,11 +530,15 @@ pub async fn get_member_counts(
 
 #[cfg(test)]
 mod tests {
-    use super::has_active_job;
+    use super::{has_active_job, is_stale_terminal_job};
     use crate::models::{MailJob, MailJobStatus};
     use std::collections::HashMap;
 
-    fn job(id: &str, status: MailJobStatus) -> MailJob {
+    fn job_at(
+        id: &str,
+        status: MailJobStatus,
+        created_at: chrono::DateTime<chrono::Utc>,
+    ) -> MailJob {
         MailJob {
             id: id.into(),
             status,
@@ -536,8 +547,12 @@ mod tests {
             failed: 0,
             failed_recipients: vec![],
             error: None,
-            created_at: chrono::Utc::now(),
+            created_at,
         }
+    }
+
+    fn job(id: &str, status: MailJobStatus) -> MailJob {
+        job_at(id, status, chrono::Utc::now())
     }
 
     #[test]
@@ -554,5 +569,36 @@ mod tests {
         finished.insert("c".into(), job("c", MailJobStatus::Completed));
         finished.insert("d".into(), job("d", MailJobStatus::Failed));
         assert!(!has_active_job(&finished));
+    }
+
+    #[test]
+    fn cleanup_only_removes_old_terminal_jobs() {
+        let cutoff = chrono::Utc::now();
+        let old = cutoff - chrono::Duration::hours(2);
+
+        assert!(is_stale_terminal_job(
+            &job_at("done", MailJobStatus::Completed, old),
+            cutoff
+        ));
+        assert!(is_stale_terminal_job(
+            &job_at("failed", MailJobStatus::Failed, old),
+            cutoff
+        ));
+        assert!(!is_stale_terminal_job(
+            &job_at("running", MailJobStatus::Running, old),
+            cutoff
+        ));
+        assert!(!is_stale_terminal_job(
+            &job_at("pending", MailJobStatus::Pending, old),
+            cutoff
+        ));
+        assert!(!is_stale_terminal_job(
+            &job_at(
+                "recent",
+                MailJobStatus::Completed,
+                cutoff + chrono::Duration::seconds(1),
+            ),
+            cutoff
+        ));
     }
 }
