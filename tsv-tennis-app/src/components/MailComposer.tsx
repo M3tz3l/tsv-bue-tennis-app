@@ -77,6 +77,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [includeGreeting, setIncludeGreeting] = useState(true);
   const confirmRefreshRef = useRef(false);
+  const confirmRequestRef = useRef(0);
 
   const resetForm = () => {
     setSubject('');
@@ -104,6 +105,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
   const closeComposer = () => {
     if (isBusy) return;
+    confirmRequestRef.current += 1;
     setConfirmSend(false);
     handleClose();
   };
@@ -176,6 +178,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const openConfirm = async () => {
     if (!isFormValid || confirmRefreshRef.current) return;
     confirmRefreshRef.current = true;
+    const requestId = ++confirmRequestRef.current;
     // Recipients may have changed since the composer opened.
     try {
       const response = await BackendService.getMemberCounts();
@@ -191,6 +194,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     } finally {
       confirmRefreshRef.current = false;
     }
+    if (requestId !== confirmRequestRef.current) return;
     setConfirmSend(true);
   };
 
