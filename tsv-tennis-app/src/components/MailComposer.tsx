@@ -26,6 +26,42 @@ interface MailComposerProps {
 
 const MAX_POLL_FAILURES = 20;
 
+// Keep in sync with backend/src/routes/mail.rs
+export const MAX_ATTACHMENT_COUNT = 5;
+export const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024;
+export const MAX_TOTAL_ATTACHMENT_SIZE = 50 * 1024 * 1024;
+
+/** Merges new files into the current selection, or explains why it cannot. */
+export function mergeAttachments(
+  current: File[],
+  added: File[],
+): { files: File[]; error?: string } {
+  if (added.length === 0) return { files: current };
+
+  const next = [...current, ...added];
+  if (next.length > MAX_ATTACHMENT_COUNT) {
+    return { files: current, error: `Maximal ${MAX_ATTACHMENT_COUNT} Anhänge.` };
+  }
+
+  const tooLarge = added.find((file) => file.size > MAX_ATTACHMENT_SIZE);
+  if (tooLarge) {
+    return {
+      files: current,
+      error: `"${tooLarge.name}" ist zu groß (max. ${MAX_ATTACHMENT_SIZE / (1024 * 1024)} MB).`,
+    };
+  }
+
+  const total = next.reduce((sum, file) => sum + file.size, 0);
+  if (total > MAX_TOTAL_ATTACHMENT_SIZE) {
+    return {
+      files: current,
+      error: `Anhänge dürfen zusammen höchstens ${MAX_TOTAL_ATTACHMENT_SIZE / (1024 * 1024)} MB groß sein.`,
+    };
+  }
+
+  return { files: next };
+}
+
 const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const { user } = useAuth();
   const senderFirstName = user?.name?.split(' ')[0] || 'Ihr Name';
@@ -195,10 +231,18 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     setIsRetryingStatus(false);
   };
 
+  const addAttachments = (files: File[]) => {
+    const { files: next, error } = mergeAttachments(attachments, files);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    setAttachments(next);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      setAttachments((prev) => [...prev, ...newFiles]);
+      addAttachments(Array.from(e.target.files));
       e.target.value = '';
     }
   };
@@ -228,8 +272,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     e.preventDefault();
     setIsDragOver(false);
     if (e.dataTransfer.files) {
-      const newFiles = Array.from(e.dataTransfer.files);
-      setAttachments((prev) => [...prev, ...newFiles]);
+      addAttachments(Array.from(e.dataTransfer.files));
     }
   };
 

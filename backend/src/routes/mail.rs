@@ -20,7 +20,17 @@ pub fn member_count_routes() -> axum::Router<AppState> {
     axum::Router::new().route("/mail/recipient-counts", get(get_member_counts))
 }
 
+pub fn write_routes() -> axum::Router<AppState> {
+    axum::Router::new()
+        .route("/mail/test-send", axum::routing::post(send_test_mail))
+        .route("/mail/send", axum::routing::post(send_bulk_mail))
+        .layer(axum::extract::DefaultBodyLimit::max(MAX_MAIL_BODY_BYTES))
+}
+
 const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024;
+const MAX_ATTACHMENT_COUNT: usize = 5;
+const MAX_TOTAL_ATTACHMENT_SIZE: usize = 50 * 1024 * 1024;
+const MAX_MAIL_BODY_BYTES: usize = 55 * 1024 * 1024;
 const BULK_MAIL_CONCURRENCY: usize = 3;
 const BULK_MAIL_BATCH_SIZE: usize = 9;
 const BULK_MAIL_BATCH_DELAY_SECS: u64 = 5;
@@ -35,43 +45,65 @@ struct MailForm {
     recipient_filter: String,
 }
 
+/// True when any bulk send is still running (globally, one at a time).
+// shortcut: the reservation lives in one process; use a shared store (DB/Redis)
+// if the backend ever runs multiple instances.
+fn has_active_job(jobs: &std::collections::HashMap<String, MailJob>) -> bool {
+    jobs.values()
+        .any(|job| matches!(job.status, MailJobStatus::Pending | MailJobStatus::Running))
+}
+
+/// Only finished jobs may be removed by the periodic cleanup; an active job
+/// must keep its reservation until its task completes.
+pub fn is_stale_terminal_job(job: &MailJob, cutoff: chrono::DateTime<chrono::Utc>) -> bool {
+    matches!(job.status, MailJobStatus::Completed | MailJobStatus::Failed)
+        && job.created_at <= cutoff
+}
+
 async fn parse_mail_multipart(mut multipart: Multipart) -> Result<MailForm, StatusCode> {
     let mut subject = String::new();
     let mut message = String::new();
     let mut recipient_filter = String::from("all");
     let mut include_greeting = true;
     let mut attachments: Vec<email::EmailAttachment> = Vec::new();
+    let mut attachment_bytes = 0usize;
 
     while let Some(field) = multipart
         .next_field()
         .await
-        .map_err(|_| StatusCode::BAD_REQUEST)?
+        .map_err(|error| error.status())?
     {
         let name = field.name().unwrap_or("").to_string();
         match name.as_str() {
             "subject" => {
-                subject = field.text().await.unwrap_or_default();
+                subject = field.text().await.map_err(|error| error.status())?;
             }
             "message" => {
-                message = field.text().await.unwrap_or_default();
+                message = field.text().await.map_err(|error| error.status())?;
             }
             "recipient_filter" => {
-                recipient_filter = field.text().await.unwrap_or_default();
+                recipient_filter = field.text().await.map_err(|error| error.status())?;
             }
             "include_greeting" => {
-                let val = field.text().await.unwrap_or_default();
+                let val = field.text().await.map_err(|error| error.status())?;
                 include_greeting = val != "false" && val != "0";
             }
             _ => {
+                if attachments.len() >= MAX_ATTACHMENT_COUNT {
+                    return Err(StatusCode::PAYLOAD_TOO_LARGE);
+                }
                 let file_name = field.file_name().unwrap_or("attachment").to_string();
                 let content_type = field
                     .content_type()
                     .unwrap_or("application/octet-stream")
                     .to_string();
-                let data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?;
-                if data.len() > MAX_ATTACHMENT_SIZE {
-                    return Err(StatusCode::BAD_REQUEST);
+                let data = field.bytes().await.map_err(|error| error.status())?;
+                if data.len() > MAX_ATTACHMENT_SIZE
+                    || attachment_bytes + data.len() > MAX_TOTAL_ATTACHMENT_SIZE
+                {
+                    return Err(StatusCode::PAYLOAD_TOO_LARGE);
                 }
+                attachment_bytes += data.len();
                 attachments.push(email::EmailAttachment {
                     filename: file_name,
                     content_type,
@@ -307,20 +339,32 @@ pub async fn send_bulk_mail(
         .map(|r| (r.email, r.first_name))
         .collect();
 
-    // Create job and return immediately
+    // Create the job and register it under one lock so concurrent requests
+    // cannot both start a send. Only one bulk send runs at a time.
     let job_id = uuid::Uuid::new_v4().to_string();
-    let job = MailJob {
-        id: job_id.clone(),
-        status: MailJobStatus::Pending,
-        total_recipients: total as i32,
-        sent: 0,
-        failed: 0,
-        failed_recipients: Vec::new(),
-        error: None,
-        created_at: chrono::Utc::now(),
-    };
-
-    state.mail_jobs.write().await.insert(job_id.clone(), job);
+    {
+        let mut jobs = state.mail_jobs.write().await;
+        if has_active_job(&jobs) {
+            warn!("Bulk mail rejected: another send is already running");
+            return Ok(Json(serde_json::json!({
+                "success": false,
+                "message": "Es läuft bereits ein Rundmail-Versand. Bitte warten Sie, bis er abgeschlossen ist."
+            })));
+        }
+        jobs.insert(
+            job_id.clone(),
+            MailJob {
+                id: job_id.clone(),
+                status: MailJobStatus::Pending,
+                total_recipients: total as i32,
+                sent: 0,
+                failed: 0,
+                failed_recipients: Vec::new(),
+                error: None,
+                created_at: chrono::Utc::now(),
+            },
+        );
+    }
 
     // Spawn background task
     let email_service = state.email_service.clone();
@@ -484,4 +528,79 @@ pub async fn get_member_counts(
             "orga": orga
         }
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{has_active_job, is_stale_terminal_job};
+    use crate::models::{MailJob, MailJobStatus};
+    use std::collections::HashMap;
+
+    fn job_at(
+        id: &str,
+        status: MailJobStatus,
+        created_at: chrono::DateTime<chrono::Utc>,
+    ) -> MailJob {
+        MailJob {
+            id: id.into(),
+            status,
+            total_recipients: 0,
+            sent: 0,
+            failed: 0,
+            failed_recipients: vec![],
+            error: None,
+            created_at,
+        }
+    }
+
+    fn job(id: &str, status: MailJobStatus) -> MailJob {
+        job_at(id, status, chrono::Utc::now())
+    }
+
+    #[test]
+    fn pending_or_running_jobs_block_new_sends() {
+        let mut running = HashMap::new();
+        running.insert("a".into(), job("a", MailJobStatus::Running));
+        assert!(has_active_job(&running));
+
+        let mut pending = HashMap::new();
+        pending.insert("b".into(), job("b", MailJobStatus::Pending));
+        assert!(has_active_job(&pending));
+
+        let mut finished = HashMap::new();
+        finished.insert("c".into(), job("c", MailJobStatus::Completed));
+        finished.insert("d".into(), job("d", MailJobStatus::Failed));
+        assert!(!has_active_job(&finished));
+    }
+
+    #[test]
+    fn cleanup_only_removes_old_terminal_jobs() {
+        let cutoff = chrono::Utc::now();
+        let old = cutoff - chrono::Duration::hours(2);
+
+        assert!(is_stale_terminal_job(
+            &job_at("done", MailJobStatus::Completed, old),
+            cutoff
+        ));
+        assert!(is_stale_terminal_job(
+            &job_at("failed", MailJobStatus::Failed, old),
+            cutoff
+        ));
+        assert!(!is_stale_terminal_job(
+            &job_at("running", MailJobStatus::Running, old),
+            cutoff
+        ));
+        assert!(!is_stale_terminal_job(
+            &job_at("pending", MailJobStatus::Pending, old),
+            cutoff
+        ));
+        assert!(!is_stale_terminal_job(
+            &job_at(
+                "recent",
+                MailJobStatus::Completed,
+                cutoff + chrono::Duration::seconds(1),
+            ),
+            cutoff
+        ));
+    }
 }

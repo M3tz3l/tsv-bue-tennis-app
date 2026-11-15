@@ -11,7 +11,12 @@ vi.mock('../services/backendService', () => ({
   default: { getMemberCounts: mocks.getMemberCounts },
 }));
 
-import MailComposer from './MailComposer';
+import MailComposer, {
+  mergeAttachments,
+  MAX_ATTACHMENT_COUNT,
+  MAX_ATTACHMENT_SIZE,
+  MAX_TOTAL_ATTACHMENT_SIZE,
+} from './MailComposer';
 
 describe('MailComposer member counts', () => {
   beforeEach(() => {
@@ -40,5 +45,49 @@ describe('MailComposer member counts', () => {
 
     expect(await screen.findByText(/Empfängerzahl konnte nicht geladen werden/i)).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent(/Empfängerzahl konnte nicht geladen werden/i);
+  });
+});
+
+const fileWithSize = (name: string, size: number): File => {
+  const value = new File(['x'], name, { type: 'text/plain' });
+  Object.defineProperty(value, 'size', { value: size });
+  return value;
+};
+
+describe('mergeAttachments', () => {
+  it('accepts files within the limits', () => {
+    const result = mergeAttachments([fileWithSize('a.txt', 10)], [fileWithSize('b.txt', 20)]);
+
+    expect(result.error).toBeUndefined();
+    expect(result.files).toHaveLength(2);
+  });
+
+  it('rejects more than the allowed count', () => {
+    const existing = Array.from({ length: MAX_ATTACHMENT_COUNT }, (_, i) =>
+      fileWithSize(`${i}.txt`, 1),
+    );
+
+    const result = mergeAttachments(existing, [fileWithSize('extra.txt', 1)]);
+
+    expect(result.error).toMatch(new RegExp(`Maximal ${MAX_ATTACHMENT_COUNT}`));
+    expect(result.files).toHaveLength(MAX_ATTACHMENT_COUNT);
+  });
+
+  it('rejects a file over the per-file limit', () => {
+    const result = mergeAttachments([], [fileWithSize('big.bin', MAX_ATTACHMENT_SIZE + 1)]);
+
+    expect(result.error).toMatch(/zu groß/);
+    expect(result.files).toHaveLength(0);
+  });
+
+  it('rejects a selection over the total limit', () => {
+    const result = mergeAttachments([], [
+      fileWithSize('a.bin', MAX_TOTAL_ATTACHMENT_SIZE / 2),
+      fileWithSize('b.bin', MAX_TOTAL_ATTACHMENT_SIZE / 2),
+      fileWithSize('c.bin', 1),
+    ]);
+
+    expect(result.error).toMatch(/zusammen/);
+    expect(result.files).toHaveLength(0);
   });
 });
