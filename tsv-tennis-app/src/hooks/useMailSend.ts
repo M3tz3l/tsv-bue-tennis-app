@@ -22,9 +22,12 @@ export function useMailSend({ onClose, onFinished }: UseMailSendOptions) {
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollFailuresRef = useRef(0);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       if (pollingRef.current) clearTimeout(pollingRef.current);
       if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
     };
@@ -33,6 +36,9 @@ export function useMailSend({ onClose, onFinished }: UseMailSendOptions) {
   const pollJobStatus = useCallback(
     async (jobId: string) => {
       const response = await BackendService.getMailJobStatus(jobId);
+      // A response that lands after unmount must not schedule more work or
+      // fire toasts/callbacks.
+      if (!mountedRef.current) return;
       if (response.success && response.job) {
         pollFailuresRef.current = 0;
         setActiveJob(response.job);

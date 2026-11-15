@@ -51,6 +51,28 @@ describe('MailComposer member counts', () => {
     await waitFor(() => expect(mocks.getMemberCounts).toHaveBeenCalledTimes(2));
   });
 
+  it('marks counts unavailable when the confirmation refresh fails', async () => {
+    const user = userEvent.setup();
+    mocks.getMemberCounts
+      .mockResolvedValueOnce({ success: true, data: { all: 10, orga: 3 } })
+      .mockResolvedValueOnce({ success: false, message: 'nope' });
+
+    render(<MailComposer isOpen onClose={vi.fn()} />);
+    await waitFor(() => expect(mocks.getMemberCounts).toHaveBeenCalledTimes(1));
+
+    await user.type(screen.getByLabelText('Betreff'), 'Hallo');
+    await user.type(screen.getByLabelText('Nachricht'), 'Text');
+    await user.click(screen.getByRole('button', { name: /Versenden/ }));
+
+    await waitFor(() => expect(mocks.getMemberCounts).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        /Empfängerzahl konnte nicht geladen werden/i,
+      ),
+    );
+    expect(screen.getByText(/An die ausgewählten Mitglieder senden/i)).toBeInTheDocument();
+  });
+
   it('warns when the recipient count cannot be loaded', async () => {
     mocks.getMemberCounts.mockResolvedValue({ success: false, message: 'nope' });
     render(<MailComposer isOpen onClose={vi.fn()} />);

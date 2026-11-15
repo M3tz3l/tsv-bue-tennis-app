@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { DialogTitle } from '@headlessui/react';
 import {
   PaperAirplaneIcon,
@@ -76,6 +76,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const [confirmSend, setConfirmSend] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [includeGreeting, setIncludeGreeting] = useState(true);
+  const confirmRefreshRef = useRef(false);
 
   const resetForm = () => {
     setSubject('');
@@ -163,16 +164,18 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const currentRecipientCount = countsLoaded
-    ? recipientFilter === 'all'
-      ? memberCounts.all
-      : memberCounts.orga
-    : null;
+  const currentRecipientCount =
+    countsLoaded && !countsError
+      ? recipientFilter === 'all'
+        ? memberCounts.all
+        : memberCounts.orga
+      : null;
 
   const isFormValid = subject.trim().length > 0 && message.trim().length > 0;
 
   const openConfirm = async () => {
-    if (!isFormValid) return;
+    if (!isFormValid || confirmRefreshRef.current) return;
+    confirmRefreshRef.current = true;
     // Recipients may have changed since the composer opened.
     try {
       const response = await BackendService.getMemberCounts();
@@ -180,9 +183,13 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
         setMemberCounts(response.data);
         setCountsLoaded(true);
         setCountsError(false);
+      } else {
+        setCountsError(true);
       }
     } catch {
       setCountsError(true);
+    } finally {
+      confirmRefreshRef.current = false;
     }
     setConfirmSend(true);
   };
@@ -401,7 +408,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     >
                       <UsersIcon className="h-4 w-4" />
                       <span>Alle Mitglieder</span>
-                      {countsLoaded && (
+                      {countsLoaded && !countsError && (
                         <span
                           className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
                             recipientFilter === 'all'
@@ -425,7 +432,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     >
                       <UserGroupIcon className="h-4 w-4" />
                       <span>Nur Ausschuss</span>
-                      {countsLoaded && (
+                      {countsLoaded && !countsError && (
                         <span
                           className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
                             recipientFilter === 'orga'

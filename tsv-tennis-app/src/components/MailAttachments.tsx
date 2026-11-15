@@ -57,7 +57,8 @@ const MailAttachments = ({ attachments, isBusy, onAdd, onRemove }: MailAttachmen
               <button
                 type="button"
                 onClick={() => onRemove(index)}
-                className="text-[var(--muted-soft)] hover:text-[var(--error)] shrink-0"
+                disabled={isBusy}
+                className="text-[var(--muted-soft)] hover:text-[var(--error)] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label={`Datei ${file.name} entfernen`}
               >
                 <TrashIcon className="h-4 w-4" />
