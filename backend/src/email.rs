@@ -725,13 +725,12 @@ impl EmailService {
         let transport = self
             .create_async_transport()
             .map_err(|_| anyhow::anyhow!("smtp_transport_setup_failed"))?;
-        match transport.send(email).await {
+        match send_once(&transport, email, SMTP_SEND_TIMEOUT).await {
             Ok(response) => {
                 debug!(?response, "Email sent successfully");
                 Ok(())
             }
-            Err(e) => {
-                let category = smtp_error_category(&e);
+            Err(category) => {
                 error!(category, "Failed to send email");
                 Err(anyhow::anyhow!("{category}"))
             }
@@ -772,7 +771,7 @@ impl EmailService {
         let transport = self
             .create_async_transport()
             .map_err(|_| anyhow::anyhow!("smtp_transport_setup_failed"))?;
-        match transport.send(email).await {
+        match send_once(&transport, email, SMTP_SEND_TIMEOUT).await {
             Ok(response) => {
                 debug!(
                     attachments = attachments.len(),
@@ -781,8 +780,7 @@ impl EmailService {
                 );
                 Ok(())
             }
-            Err(e) => {
-                let category = smtp_error_category(&e);
+            Err(category) => {
                 error!(category, "Failed to send email");
                 Err(anyhow::anyhow!("{category}"))
             }
@@ -843,6 +841,20 @@ Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese E-Mail bitte.
 /// connect, not a stalled response read, so without this a job could stay
 /// Running forever and keep the global bulk-send reservation.
 const SMTP_SEND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Send one message, bounding the whole SMTP exchange (including a stalled
+/// response read). Returns a stable category instead of the raw error.
+async fn send_once(
+    transport: &AsyncSmtpTransport<Tokio1Executor>,
+    message: Message,
+    timeout: std::time::Duration,
+) -> Result<lettre::transport::smtp::response::Response, &'static str> {
+    match tokio::time::timeout(timeout, transport.send(message)).await {
+        Ok(Ok(response)) => Ok(response),
+        Ok(Err(error)) => Err(smtp_error_category(&error)),
+        Err(_) => Err("smtp_timeout"),
+    }
+}
 
 /// Build a lettre `Message` with optional attachments (shared by sync and async paths)
 /// Send with a bounded number of retries for transient failures (e.g. the SMTP
@@ -1011,39 +1023,54 @@ fn build_message(
 
 #[cfg(test)]
 mod smtp_timeout_tests {
-    use super::{send_with_retry, AsyncSmtpTransport, Message, Tokio1Executor};
+    use super::{send_once, send_with_retry, AsyncSmtpTransport, Message, Tokio1Executor};
     use std::time::Duration;
 
-    #[tokio::test]
-    async fn send_with_retry_times_out_when_the_server_never_replies() {
+    async fn stalled_transport() -> (
+        AsyncSmtpTransport<Tokio1Executor>,
+        tokio::task::JoinHandle<()>,
+    ) {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
-        // Accept the connection but never send the SMTP greeting.
         let server = tokio::spawn(async move {
             let (_socket, _) = listener.accept().await.unwrap();
             tokio::time::sleep(Duration::from_secs(5)).await;
         });
-
         let transport = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous("127.0.0.1")
             .port(port)
             .build();
-        let message = Message::builder()
+        (transport, server)
+    }
+
+    fn message() -> Message {
+        Message::builder()
             .from("Test <test@example.com>".parse().unwrap())
             .to("Dest <dest@example.com>".parse().unwrap())
             .subject("Test")
             .body("Hallo".to_string())
-            .unwrap();
+            .unwrap()
+    }
 
+    #[tokio::test]
+    async fn send_with_retry_times_out_when_the_server_never_replies() {
+        let (transport, server) = stalled_transport().await;
         let result = send_with_retry(
             &transport,
-            message,
+            message(),
             0,
             Duration::ZERO,
             Duration::from_millis(100),
         )
         .await;
-
         assert_eq!(result, Err("smtp_timeout"));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn send_once_times_out_when_the_server_never_replies() {
+        let (transport, server) = stalled_transport().await;
+        let result = send_once(&transport, message(), Duration::from_millis(100)).await;
+        assert_eq!(result.err(), Some("smtp_timeout"));
         server.abort();
     }
 }

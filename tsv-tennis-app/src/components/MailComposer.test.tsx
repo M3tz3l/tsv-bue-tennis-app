@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -15,7 +16,6 @@ import MailComposer, {
   mergeAttachments,
   MAX_ATTACHMENT_COUNT,
   MAX_ATTACHMENT_SIZE,
-  MAX_TOTAL_ATTACHMENT_SIZE,
 } from './MailComposer';
 
 describe('MailComposer member counts', () => {
@@ -37,6 +37,18 @@ describe('MailComposer member counts', () => {
     rerender(<MailComposer isOpen onClose={onClose} />);
 
     expect(mocks.getMemberCounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes the counts before showing the confirmation', async () => {
+    const user = userEvent.setup();
+    render(<MailComposer isOpen onClose={vi.fn()} />);
+    await waitFor(() => expect(mocks.getMemberCounts).toHaveBeenCalledTimes(1));
+
+    await user.type(screen.getByLabelText('Betreff'), 'Hallo');
+    await user.type(screen.getByLabelText('Nachricht'), 'Text');
+    await user.click(screen.getByRole('button', { name: /Versenden/ }));
+
+    await waitFor(() => expect(mocks.getMemberCounts).toHaveBeenCalledTimes(2));
   });
 
   it('warns when the recipient count cannot be loaded', async () => {
@@ -81,11 +93,11 @@ describe('mergeAttachments', () => {
   });
 
   it('rejects a selection over the total limit', () => {
-    const result = mergeAttachments([], [
-      fileWithSize('a.bin', MAX_TOTAL_ATTACHMENT_SIZE / 2),
-      fileWithSize('b.bin', MAX_TOTAL_ATTACHMENT_SIZE / 2),
-      fileWithSize('c.bin', 1),
-    ]);
+    const files = Array.from({ length: MAX_ATTACHMENT_COUNT }, (_, i) =>
+      fileWithSize(`${i}.bin`, MAX_ATTACHMENT_SIZE),
+    );
+
+    const result = mergeAttachments([], files);
 
     expect(result.error).toMatch(/zusammen/);
     expect(result.files).toHaveLength(0);
