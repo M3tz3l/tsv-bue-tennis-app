@@ -62,21 +62,21 @@ async fn parse_mail_multipart(mut multipart: Multipart) -> Result<MailForm, Stat
     while let Some(field) = multipart
         .next_field()
         .await
-        .map_err(|_| StatusCode::BAD_REQUEST)?
+        .map_err(|error| error.status())?
     {
         let name = field.name().unwrap_or("").to_string();
         match name.as_str() {
             "subject" => {
-                subject = field.text().await.unwrap_or_default();
+                subject = field.text().await.map_err(|error| error.status())?;
             }
             "message" => {
-                message = field.text().await.unwrap_or_default();
+                message = field.text().await.map_err(|error| error.status())?;
             }
             "recipient_filter" => {
-                recipient_filter = field.text().await.unwrap_or_default();
+                recipient_filter = field.text().await.map_err(|error| error.status())?;
             }
             "include_greeting" => {
-                let val = field.text().await.unwrap_or_default();
+                let val = field.text().await.map_err(|error| error.status())?;
                 include_greeting = val != "false" && val != "0";
             }
             _ => {
@@ -88,7 +88,7 @@ async fn parse_mail_multipart(mut multipart: Multipart) -> Result<MailForm, Stat
                     .content_type()
                     .unwrap_or("application/octet-stream")
                     .to_string();
-                let data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?;
+                let data = field.bytes().await.map_err(|error| error.status())?;
                 if data.len() > MAX_ATTACHMENT_SIZE
                     || attachment_bytes + data.len() > MAX_TOTAL_ATTACHMENT_SIZE
                 {
