@@ -505,16 +505,13 @@ pub async fn get_mail_job_status(
             )
         })?
     };
-    if job.user_id != claims.sub {
-        // The token role is a snapshot; confirm the live role before exposing
-        // another member's job.
-        require_orga_role(&state, &claims).await.map_err(|status| {
-            (
-                status,
-                Json(serde_json::json!({ "success": false, "message": "Kein Zugriff" })),
-            )
-        })?;
-    }
+    // The token role is a snapshot; confirm the live role before exposing any job.
+    require_orga_role(&state, &claims).await.map_err(|status| {
+        (
+            status,
+            Json(serde_json::json!({ "success": false, "message": "Kein Zugriff" })),
+        )
+    })?;
 
     debug!(job_id = %job_id, status = ?job.status, "Mail job status lookup");
     Ok(Json(serde_json::json!({

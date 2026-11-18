@@ -25,6 +25,12 @@ pub async fn dashboard(
 
     let user_id = extract_user_id_from_headers(&state.jwt_secret, &headers)?;
 
+    // Validate the year before any Teable lookup so a malformed path always
+    // returns 400, even when the member lookup fails.
+    let year_int: i32 = year
+        .parse()
+        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+
     debug!("Dashboard: User ID from token: {}", user_id);
 
     // Get current user by ID
@@ -52,10 +58,6 @@ pub async fn dashboard(
         warn!(user_id = %user_id, "Dashboard: user not found");
         axum::http::StatusCode::NOT_FOUND
     })?;
-
-    let year_int: i32 = year
-        .parse()
-        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
 
     // Fetch user's work hours for the given year directly from Teable (API-level filtering)
     let work_hours = teable::get_work_hours_for_member_by_year(
