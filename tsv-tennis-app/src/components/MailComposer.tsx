@@ -348,7 +348,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
       title="Rundmail versenden"
       disableClose={isBusy}
       widthClassName="max-w-4xl"
-      panelClassName="max-h-[90vh] min-h-[60vh] flex flex-col overflow-hidden"
+      panelClassName="max-h-[90dvh] min-h-[60dvh] flex flex-col overflow-hidden"
       panelProps={{ onDragOver: handleDragOver, onDragLeave: handleDragLeave, onDrop: handleDrop }}
       headerContent={(
         <div className="flex items-center gap-3">
@@ -357,20 +357,24 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
         </div>
       )}
       headerClassName="shrink-0 bg-[var(--primary)]/5"
-      footerClassName="shrink-0 bg-[var(--canvas-soft)]"
+      footerClassName="shrink-0 bg-[var(--canvas-soft)] flex-col items-stretch sm:flex-row sm:items-center"
       footer={(
         <>
-          <div className="flex items-center gap-3 mr-auto">
-            <button onClick={closeComposer} className={buttonVariants.secondary} disabled={isBusy}>Abbrechen</button>
-            <button onClick={() => void sendTest(subject, message, attachments, includeGreeting)} disabled={isBusy || !isFormValid} className={`${buttonVariants.secondary} inline-flex items-center justify-center`}>{isSendingTest ? 'Wird gesendet...' : 'Test-Mail senden'}</button>
+          <div className="flex w-full items-center gap-2 sm:mr-auto sm:w-auto sm:gap-3">
+            <button onClick={closeComposer} className={`${buttonVariants.secondary} max-sm:hidden`} disabled={isBusy}>Abbrechen</button>
+            <button onClick={() => void sendTest(subject, message, attachments, includeGreeting)} disabled={isBusy || !isFormValid} className={`${buttonVariants.secondary} inline-flex flex-1 items-center justify-center sm:flex-none`}>{isSendingTest ? 'Wird gesendet...' : 'Test-Mail senden'}</button>
           </div>
-          <div className="flex items-center gap-3">
-            {confirmSend ? <>
+          {confirmSend ? (
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
               <span className="text-sm text-[var(--muted)]">{currentRecipientCount === null ? 'An die ausgewählten Mitglieder senden?' : `An ${currentRecipientCount} ${recipientFilter === 'all' ? 'Mitglieder' : 'Ausschuss-Mitglieder'} senden?`}</span>
-              <button onClick={() => setConfirmSend(false)} disabled={isBusy} className={buttonVariants.secondary}>Zurück</button>
-              <button onClick={() => { setConfirmSend(false); void sendBulk(subject, message, recipientFilter, attachments, includeGreeting); }} disabled={isBusy || sendBlocked} className={`${buttonVariants.primary} inline-flex items-center justify-center`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />Jetzt senden</button>
-            </> : <button onClick={() => void openConfirm()} disabled={isBusy || sendBlocked || !isFormValid} className={`${buttonVariants.primary} inline-flex items-center justify-center`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />{isLoading ? 'Wird gestartet...' : 'Versenden'}{currentRecipientCount !== null && <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold rounded-full bg-[var(--on-primary)]/25 text-[var(--on-primary)]">{currentRecipientCount}</span>}</button>}
-          </div>
+              <div className="flex w-full gap-2 sm:w-auto sm:gap-3">
+                <button onClick={() => setConfirmSend(false)} disabled={isBusy} className={`${buttonVariants.secondary} flex-1 sm:flex-none`}>Zurück</button>
+                <button onClick={() => { setConfirmSend(false); void sendBulk(subject, message, recipientFilter, attachments, includeGreeting); }} disabled={isBusy || sendBlocked} className={`${buttonVariants.primary} inline-flex flex-1 items-center justify-center sm:flex-none`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />Jetzt senden</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => void openConfirm()} disabled={isBusy || sendBlocked || !isFormValid} className={`${buttonVariants.primary} inline-flex w-full items-center justify-center sm:w-auto`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />{isLoading ? 'Wird gestartet...' : 'Versenden'}{currentRecipientCount !== null && <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold rounded-full bg-[var(--on-primary)]/25 text-[var(--on-primary)]">{currentRecipientCount}</span>}</button>
+          )}
         </>
       )}
     >
@@ -388,7 +392,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
           {/* Content: single-column mobile, two-column desktop */}
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="flex flex-col md:flex-row gap-6 p-6">
+            <div className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6 md:flex-row">
               {/* Form inputs */}
               <div className="flex-1 min-w-0 space-y-5">
                 {/* Recipient Filter */}
@@ -399,19 +403,19 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                   <p role="status" aria-live="polite" className="mb-2 text-xs text-[var(--error)]">
                     {countsError ? 'Empfängerzahl konnte nicht geladen werden.' : ''}
                   </p>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     <button
                       type="button"
                       onClick={() => setRecipientFilter('all')}
                       disabled={isBusy}
-                      className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                      className={`flex items-center justify-center gap-1.5 rounded-lg border-2 px-2 py-3 text-sm font-medium transition-all sm:gap-2 sm:px-4 ${
                         recipientFilter === 'all'
                           ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary-text)]'
-                          : 'border-[var(--hairline)] hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 text-[var(--body)]'
+                          : 'border-[var(--hairline)] hover:border-[var(--hairline-strong)] hover:bg-[var(--canvas-soft)] text-[var(--body)]'
                       } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
-                      <UsersIcon className="h-4 w-4" />
-                      <span>Alle Mitglieder</span>
+                      <UsersIcon className="hidden h-4 w-4 sm:block" />
+                      <span>Alle</span>
                       {countsLoaded && !countsError && (
                         <span
                           className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
@@ -428,14 +432,14 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                       type="button"
                       onClick={() => setRecipientFilter('orga')}
                       disabled={isBusy}
-                      className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                      className={`flex items-center justify-center gap-1.5 rounded-lg border-2 px-2 py-3 text-sm font-medium transition-all sm:gap-2 sm:px-4 ${
                         recipientFilter === 'orga'
                           ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary-text)]'
-                          : 'border-[var(--hairline)] hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 text-[var(--body)]'
+                          : 'border-[var(--hairline)] hover:border-[var(--hairline-strong)] hover:bg-[var(--canvas-soft)] text-[var(--body)]'
                       } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
-                      <UserGroupIcon className="h-4 w-4" />
-                      <span>Nur Ausschuss</span>
+                      <UserGroupIcon className="hidden h-4 w-4 sm:block" />
+                      <span>Ausschuss</span>
                       {countsLoaded && !countsError && (
                         <span
                           className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
@@ -462,7 +466,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                     placeholder="z. B. Einladung zur Jahreshauptversammlung"
-                    className="w-full px-3 py-2.5 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-sm"
+                    className="w-full px-3 py-2.5 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-base sm:text-sm"
                     disabled={isBusy}
                   />
                 </div>
@@ -478,7 +482,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Ihre Nachricht an die Mitglieder..."
                     rows={8}
-                    className="w-full px-3 py-2.5 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-sm resize-y min-h-[120px]"
+                    className="w-full px-3 py-2.5 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-base sm:text-sm resize-none sm:resize-y min-h-[120px]"
                     disabled={isBusy}
                   />
                 </div>
