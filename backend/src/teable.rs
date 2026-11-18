@@ -142,8 +142,11 @@ fn member_from_record(record: &Value, projection: Option<&[&str]>) -> Member {
             .as_str()
             .map(|s| s.to_string())
             .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-        birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
-        join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
+        birth_date: fields["Geburtsdatum"]
+            .as_str()
+            .map(parse_date_berlin)
+            .unwrap_or_default(),
+        join_date: fields["Eintrittsdatum"].as_str().map(parse_date_berlin),
         role: extract_role(fields),
     }
 }
@@ -1123,5 +1126,24 @@ mod tests {
 
         assert!(names.is_empty());
         mock.assert_async().await;
+    }
+
+    #[test]
+    fn member_dates_are_normalized_to_berlin() {
+        let record = serde_json::json!({
+            "id": "rec1",
+            "fields": {
+                "Vorname": "A",
+                "Nachname": "B",
+                "Email": "a@example.com",
+                "Geburtsdatum": "1999-12-31T23:00:00.000Z",
+                "Eintrittsdatum": "2025-06-30T22:00:00.000Z",
+            }
+        });
+
+        let member = member_from_record(&record, None);
+
+        assert_eq!(member.birth_date, "2000-01-01");
+        assert_eq!(member.join_date.as_deref(), Some("2025-07-01"));
     }
 }

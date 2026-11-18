@@ -3,7 +3,8 @@
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use sqlx::{sqlite::SqlitePool, Row};
+use sqlx::sqlite::{SqlitePool, SqliteRow};
+use sqlx::Row;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,18 +68,32 @@ impl TokenStore {
         .fetch_optional(&self.pool)
         .await?;
 
-        let Some(row) = row else {
-            return Ok(None);
-        };
+        Ok(row.map(|row| token_from_row(&row, token, now)))
+    }
 
-        let created_at = parse_timestamp(row.get::<String, _>("created_at"), now);
-        let expires_at = parse_timestamp(row.get::<String, _>("expires_at"), now);
-        Ok(Some(ResetToken {
-            token: token.to_string(),
-            user_id: row.get("user_id"),
-            created_at,
-            expires_at,
-        }))
+    /// Looks up a valid token without deleting it, so a transient failure after
+    /// this check does not burn the user's reset link.
+    pub async fn find_reset_token(&self, token: &str) -> Result<Option<ResetToken>, sqlx::Error> {
+        let now = Utc::now();
+        let row = sqlx::query(
+            "SELECT user_id, created_at, expires_at FROM reset_tokens \
+             WHERE token = ? AND expires_at > ?",
+        )
+        .bind(hash_token(token))
+        .bind(now.to_rfc3339())
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|row| token_from_row(&row, token, now)))
+    }
+}
+
+fn token_from_row(row: &SqliteRow, token: &str, now: DateTime<Utc>) -> ResetToken {
+    ResetToken {
+        token: token.to_string(),
+        user_id: row.get("user_id"),
+        created_at: parse_timestamp(row.get::<String, _>("created_at"), now),
+        expires_at: parse_timestamp(row.get::<String, _>("expires_at"), now),
     }
 }
 
@@ -110,6 +125,15 @@ mod tests {
         let consumed = store.consume_reset_token(&token).await.unwrap().unwrap();
         assert_eq!(consumed.user_id, "user-1");
         assert!(store.consume_reset_token(&token).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn find_reset_token_does_not_consume_it() {
+        let store = store().await;
+        let token = store.create_reset_token("user-1".into()).await.unwrap();
+
+        assert!(store.find_reset_token(&token).await.unwrap().is_some());
+        assert!(store.consume_reset_token(&token).await.unwrap().is_some());
     }
 
     #[tokio::test]

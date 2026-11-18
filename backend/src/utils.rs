@@ -3,7 +3,7 @@
 use crate::auth;
 use crate::models::{Member, WorkHour, WorkHourEntry};
 use axum::http::{HeaderMap, StatusCode};
-use chrono::Datelike;
+use chrono::{Datelike, NaiveDate};
 use tracing::{debug, warn};
 
 /// Converts a list of WorkHour to WorkHourEntry (no filtering)
@@ -124,35 +124,38 @@ pub fn is_member_eligible_for_work_hours(member: &Member, current_year: i32) -> 
             member_id = %member.id,
             "Age Check: empty birth date, assuming eligible"
         );
+        return true;
     }
 
     use chrono::DateTime;
 
-    // Try RFC3339 (e.g. 2019-10-08T22:21:36.000Z)
-    if let Ok(dt) = DateTime::parse_from_rfc3339(birth_date_str) {
-        let birth_date = dt.naive_utc().date();
-        let birth_year = birth_date.year();
-        let age_in_current_year = current_year - birth_year;
-        let eligible = (17..70).contains(&age_in_current_year);
-        debug!(
-            "Age Check: {} {} - Birth: {}, Age in {}: {}, Eligible: {}",
-            member.first_name,
-            member.last_name,
-            birth_date_str,
-            current_year,
-            age_in_current_year,
-            eligible
-        );
-        return eligible;
-    } else {
+    // Teable sends dates as local-midnight UTC timestamps, so convert to the
+    // club time zone before using the calendar date.
+    let birth_date = DateTime::parse_from_rfc3339(birth_date_str)
+        .map(|dt| dt.with_timezone(&chrono_tz::Europe::Berlin).date_naive())
+        .or_else(|_| NaiveDate::parse_from_str(birth_date_str, "%Y-%m-%d"));
+
+    let Ok(birth_date) = birth_date else {
         warn!(
             "Age Check: Invalid birth date format for {} {}: '{}', assuming eligible",
             member.first_name, member.last_name, birth_date_str
         );
-    }
+        return true;
+    };
 
-    // If no birth date or invalid format, assume eligible (for backward compatibility)
-    true
+    let birth_year = birth_date.year();
+    let age_in_current_year = current_year - birth_year;
+    let eligible = (17..70).contains(&age_in_current_year);
+    debug!(
+        "Age Check: {} {} - Birth: {}, Age in {}: {}, Eligible: {}",
+        member.first_name,
+        member.last_name,
+        birth_date_str,
+        current_year,
+        age_in_current_year,
+        eligible
+    );
+    eligible
 }
 
 /// Gets work hours info including exemption reason for a member

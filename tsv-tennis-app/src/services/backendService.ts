@@ -152,6 +152,7 @@ class BackendService {
           const url = String(config.url ?? '');
           if (!url.endsWith('/login')) {
             localStorage.removeItem('authToken');
+            localStorage.removeItem('authUser');
             if (window.location.pathname !== '/login') {
               window.location.assign('/login');
             }

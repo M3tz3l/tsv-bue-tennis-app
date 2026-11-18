@@ -23,8 +23,8 @@ impl Config {
             .context("PORT must be a valid port number")?;
 
         let jwt_secret = env::var("JWT_SECRET").context("JWT_SECRET must be set")?;
-        if jwt_secret.trim().is_empty() {
-            anyhow::bail!("JWT_SECRET must not be empty");
+        if jwt_secret.trim().len() < 32 {
+            anyhow::bail!("JWT_SECRET must be at least 32 characters");
         }
 
         // Trim here so a stray newline/space in the secret cannot cause a

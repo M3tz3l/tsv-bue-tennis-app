@@ -4,7 +4,6 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use chrono::Datelike;
 use tracing::{debug, error, warn};
 
 use crate::models::{
@@ -54,7 +53,9 @@ pub async fn dashboard(
         axum::http::StatusCode::NOT_FOUND
     })?;
 
-    let year_int: i32 = year.parse().unwrap_or_else(|_| chrono::Utc::now().year());
+    let year_int: i32 = year
+        .parse()
+        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
 
     // Fetch user's work hours for the given year directly from Teable (API-level filtering)
     let work_hours = teable::get_work_hours_for_member_by_year(

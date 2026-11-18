@@ -2,6 +2,8 @@
 .env
 .env.local
 .env.production
+.env.bak*
+/node_modules/
 
 # Rust/Cargo
 backend/target/

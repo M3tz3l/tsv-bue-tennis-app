@@ -1232,7 +1232,8 @@ mod tests {
                 "fields": {
                     "Vorname": "Orga",
                     "Nachname": "User",
-                    "Email": "orga@example.com"
+                    "Email": "orga@example.com",
+                    "Rolle": "orga"
                 }
             }"#,
             )
@@ -1293,6 +1294,52 @@ mod tests {
             .expect("Failed to create member token");
 
         // Mail endpoints now expect multipart/form-data
+        let response = server
+            .post("/api/mail/test-send")
+            .add_header("authorization", &format!("Bearer {token}"))
+            .multipart(
+                axum_test::multipart::MultipartForm::new()
+                    .add_text("subject", "Test")
+                    .add_text("message", "Hallo"),
+            )
+            .await;
+
+        assert_eq!(response.status_code(), 403);
+    }
+
+    #[serial_test::serial]
+    #[tokio::test]
+    async fn test_send_test_mail_with_demoted_orga_role_forbidden() {
+        use mockito::Server;
+
+        let mut teable_server = Server::new_async().await;
+
+        let _member_mock = teable_server
+            .mock("GET", "/table/test_members_table/record/orga_user_1")
+            .match_query(mockito::Matcher::Any)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+                "id": "orga_user_1",
+                "fields": {
+                    "Vorname": "Orga",
+                    "Nachname": "User",
+                    "Email": "orga@example.com",
+                    "Rolle": "member"
+                }
+            }"#,
+            )
+            .create_async()
+            .await;
+
+        let app = create_test_app_with_teable_url(&teable_server.url()).await;
+        let server = TestServer::new(app).unwrap();
+
+        // The token still claims "orga", but the live member role was revoked.
+        let token = auth::create_token(TEST_JWT_SECRET, "orga_user_1", Some("orga"))
+            .expect("Failed to create stale orga test token");
+
         let response = server
             .post("/api/mail/test-send")
             .add_header("authorization", &format!("Bearer {token}"))
@@ -1859,7 +1906,8 @@ mod tests {
                 "fields": {
                     "Vorname": "Orga",
                     "Nachname": "User",
-                    "Email": "orga@example.com"
+                    "Email": "orga@example.com",
+                    "Rolle": "orga"
                 }
             }"#,
             )
