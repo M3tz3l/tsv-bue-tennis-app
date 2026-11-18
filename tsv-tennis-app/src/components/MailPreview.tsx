@@ -12,9 +12,9 @@ const MailPreview = ({
   includeGreeting,
 }: MailPreviewProps) => (
   <div className="bg-white rounded-lg border border-[var(--hairline)] p-4 text-sm text-[var(--ink)]">
-    <p className="font-medium mb-3">{subject.trim() || 'Kein Betreff'}</p>
+    <p className="font-medium mb-3 break-words">{subject.trim() || 'Kein Betreff'}</p>
     {includeGreeting && <p className="text-[var(--body)] mb-1">Hallo [Vorname],</p>}
-    <p className="whitespace-pre-wrap text-[var(--body)]">
+    <p className="whitespace-pre-wrap break-words text-[var(--body)]">
       {message.trim() || 'Ihre Nachricht erscheint hier...'}
     </p>
     <div className="mt-4 pt-3 border-t border-[var(--hairline-soft)] text-sm text-[var(--body)]">

@@ -53,12 +53,12 @@ const ModalShell = ({
         className={`fixed inset-0 ${backdropClassName}`}
         aria-hidden="true"
       />
-      <div className="fixed inset-0 flex items-center justify-center p-4">
+      <div className="fixed inset-0 flex items-end justify-center p-4 sm:items-center">
         <DialogPanel
           {...panelProps}
           className={`relative w-full ${widthClassName} rounded-xl border border-[var(--hairline)] bg-white ${panelClassName}`}
         >
-          <div className={`flex items-center justify-between border-b border-[var(--hairline)] px-6 py-4 ${headerClassName}`}>
+          <div className={`flex items-center justify-between border-b border-[var(--hairline)] px-4 py-4 sm:px-6 ${headerClassName}`}>
             {headerContent ?? <DialogTitle className="text-lg font-extrabold tracking-tight text-[var(--ink)]">{title}</DialogTitle>}
             <button
               type="button"
@@ -71,7 +71,7 @@ const ModalShell = ({
             </button>
           </div>
           {children}
-          {(footer || footerActions) && <div className={`flex flex-wrap justify-end gap-3 border-t border-[var(--hairline-soft)] px-6 py-4 ${footerClassName}`}>
+          {(footer || footerActions) && <div className={`flex flex-wrap justify-end gap-3 border-t border-[var(--hairline-soft)] px-4 py-4 sm:px-6 ${footerClassName}`}>
             {footerActions ? (
               <div role="group" aria-label="Modal-Aktionen" className="contents">
                 {footerActions.destructive && <div className="mr-auto w-full sm:w-auto">{footerActions.destructive}</div>}
