@@ -78,11 +78,6 @@ fn has_active_job(jobs: &std::collections::HashMap<String, MailJob>) -> bool {
         .any(|job| matches!(job.status, MailJobStatus::Pending | MailJobStatus::Running))
 }
 
-/// Only the organizer who started a job (or any orga) may read its status.
-fn can_view_job(job: &MailJob, user_id: &str, is_orga: bool) -> bool {
-    job.user_id == user_id || is_orga
-}
-
 /// Only finished jobs may be removed by the periodic cleanup; an active job
 /// must keep its reservation until its task completes.
 pub fn is_stale_terminal_job(job: &MailJob, cutoff: chrono::DateTime<chrono::Utc>) -> bool {
@@ -157,11 +152,6 @@ async fn require_orga_role(
     state: &AppState,
     claims: &auth::AuthClaims,
 ) -> Result<Member, StatusCode> {
-    let has_orga_claim = claims
-        .role
-        .as_ref()
-        .is_some_and(|r| r.trim().eq_ignore_ascii_case("orga"));
-
     let user = teable::get_member_by_id_with_projection(
         &state.teable_config,
         &state.http_client,
@@ -175,9 +165,9 @@ async fn require_orga_role(
     })?
     .ok_or(StatusCode::NOT_FOUND)?;
 
-    let has_orga_member_role = user.has_role("orga");
-
-    if !has_orga_claim && !has_orga_member_role {
+    // The role in the token is a snapshot, so use the live member role. A
+    // demoted organizer keeps a stale token for up to 24 hours otherwise.
+    if !user.has_role("orga") {
         warn!("Mail denied for user {} (missing orga role)", user.id);
         return Err(StatusCode::FORBIDDEN);
     }
@@ -303,11 +293,11 @@ pub async fn send_bulk_mail(
 
     let recipient_filter: RecipientFilter = match form.recipient_filter.as_str() {
         "orga" => RecipientFilter::Orga,
-        "all" => RecipientFilter::All,
+        "all" | "active" => RecipientFilter::All,
         _ => {
             return Ok(Json(serde_json::json!({
                 "success": false,
-                "message": format!("Unknown recipient_filter: '{}'. Valid values: 'all', 'orga'", form.recipient_filter)
+                "message": format!("Unknown recipient_filter: '{}'. Valid values: 'all', 'active', 'orga'", form.recipient_filter)
             })));
         }
     };
@@ -506,24 +496,22 @@ pub async fn get_mail_job_status(
                 Json(serde_json::json!({ "success": false, "message": "Nicht autorisiert" })),
             )
         })?;
-    let is_orga = claims
-        .role
-        .as_deref()
-        .is_some_and(|role| role.trim().eq_ignore_ascii_case("orga"));
-
-    let jobs = state.mail_jobs.read().await;
-    let job = jobs.get(&job_id).ok_or_else(|| {
+    let job = {
+        let jobs = state.mail_jobs.read().await;
+        jobs.get(&job_id).cloned().ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "success": false, "message": "Job nicht gefunden" })),
+            )
+        })?
+    };
+    // The token role is a snapshot; confirm the live role before exposing any job.
+    require_orga_role(&state, &claims).await.map_err(|status| {
         (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "success": false, "message": "Job nicht gefunden" })),
+            status,
+            Json(serde_json::json!({ "success": false, "message": "Kein Zugriff" })),
         )
     })?;
-    if !can_view_job(job, &claims.sub, is_orga) {
-        return Err((
-            StatusCode::FORBIDDEN,
-            Json(serde_json::json!({ "success": false, "message": "Kein Zugriff" })),
-        ));
-    }
 
     debug!(job_id = %job_id, status = ?job.status, "Mail job status lookup");
     Ok(Json(serde_json::json!({
@@ -587,7 +575,7 @@ pub async fn get_member_counts(
 
 #[cfg(test)]
 mod tests {
-    use super::{can_view_job, has_active_job, is_stale_terminal_job};
+    use super::{has_active_job, is_stale_terminal_job};
     use crate::models::{MailJob, MailJobStatus};
     use std::collections::HashMap;
 
@@ -611,14 +599,6 @@ mod tests {
 
     fn job(id: &str, status: MailJobStatus) -> MailJob {
         job_at(id, status, chrono::Utc::now())
-    }
-
-    #[test]
-    fn only_the_creator_or_an_orga_can_view_a_job() {
-        let job = job("a", MailJobStatus::Running);
-        assert!(can_view_job(&job, "orga-1", false));
-        assert!(can_view_job(&job, "other", true));
-        assert!(!can_view_job(&job, "other", false));
     }
 
     #[test]

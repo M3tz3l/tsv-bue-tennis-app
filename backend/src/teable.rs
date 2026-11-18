@@ -95,6 +95,17 @@ fn parse_date_berlin(s: &str) -> String {
         .unwrap_or_else(|_| s.get(0..10).unwrap_or("").to_string())
 }
 
+/// Normalizes a member date to `YYYY-MM-DD` when Teable sends an RFC3339
+/// timestamp. Date-only and invalid values pass through unchanged so the
+/// eligibility checks keep their existing fallback behaviour.
+fn parse_member_date(s: &str) -> String {
+    use chrono::DateTime;
+    use chrono_tz::Europe::Berlin;
+    DateTime::parse_from_rfc3339(s)
+        .map(|dt| dt.with_timezone(&Berlin).date_naive().to_string())
+        .unwrap_or_else(|_| s.to_string())
+}
+
 fn extract_role(fields: &Value) -> Option<String> {
     fields["Rolle"].as_str().map(|s| s.to_string())
 }
@@ -142,8 +153,11 @@ fn member_from_record(record: &Value, projection: Option<&[&str]>) -> Member {
             .as_str()
             .map(|s| s.to_string())
             .or_else(|| fields["Familie"].as_i64().map(|n| n.to_string())),
-        birth_date: fields["Geburtsdatum"].as_str().unwrap_or("").to_string(),
-        join_date: fields["Eintrittsdatum"].as_str().map(|s| s.to_string()),
+        birth_date: fields["Geburtsdatum"]
+            .as_str()
+            .map(parse_member_date)
+            .unwrap_or_default(),
+        join_date: fields["Eintrittsdatum"].as_str().map(parse_member_date),
         role: extract_role(fields),
     }
 }
@@ -1123,5 +1137,43 @@ mod tests {
 
         assert!(names.is_empty());
         mock.assert_async().await;
+    }
+
+    #[test]
+    fn member_dates_are_normalized_to_berlin() {
+        let record = serde_json::json!({
+            "id": "rec1",
+            "fields": {
+                "Vorname": "A",
+                "Nachname": "B",
+                "Email": "a@example.com",
+                "Geburtsdatum": "1999-12-31T23:00:00.000Z",
+                "Eintrittsdatum": "2025-06-30T22:00:00.000Z",
+            }
+        });
+
+        let member = member_from_record(&record, None);
+
+        assert_eq!(member.birth_date, "2000-01-01");
+        assert_eq!(member.join_date.as_deref(), Some("2025-07-01"));
+    }
+
+    #[test]
+    fn invalid_member_dates_are_preserved() {
+        let record = serde_json::json!({
+            "id": "rec1",
+            "fields": {
+                "Vorname": "A",
+                "Nachname": "B",
+                "Email": "a@example.com",
+                "Geburtsdatum": "2010-01-01invalid",
+                "Eintrittsdatum": "2026-07-01invalid",
+            }
+        });
+
+        let member = member_from_record(&record, None);
+
+        assert_eq!(member.birth_date, "2010-01-01invalid");
+        assert_eq!(member.join_date.as_deref(), Some("2026-07-01invalid"));
     }
 }

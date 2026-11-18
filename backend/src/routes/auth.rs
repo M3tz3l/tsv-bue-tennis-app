@@ -281,21 +281,19 @@ pub async fn reset_password(
         })));
     }
 
-    // Atomically consume and validate the reset token (single lock + expiry check)
-    let reset_token_info = match state.token_store.consume_reset_token(&payload.token).await {
-        Ok(Some(info)) => {
-            info!(user_id = %info.user_id, "Reset token consumed");
-            info
-        }
+    // Validate the token without consuming it yet: a temporary Teable failure
+    // below must not burn the user's reset link.
+    let reset_token_info = match state.token_store.find_reset_token(&payload.token).await {
+        Ok(Some(info)) => info,
         Ok(None) => {
-            warn!("Failed to consume password reset token");
+            warn!("Password reset token not found or expired");
             return Ok(axum::Json(serde_json::json!({
                 "success": false,
                 "message": "Invalid or expired reset token"
             })));
         }
         Err(error) => {
-            error!(%error, "Failed to consume password reset token");
+            error!(%error, "Failed to look up password reset token");
             return Ok(axum::Json(serde_json::json!({
                 "success": false,
                 "message": "Interner Serverfehler"
@@ -334,6 +332,26 @@ pub async fn reset_password(
             })));
         }
     };
+
+    // Consume the token now that the member lookup succeeded. The DELETE is
+    // atomic, so two concurrent resets cannot both use the same token.
+    match state.token_store.consume_reset_token(&payload.token).await {
+        Ok(Some(_)) => info!(user_id = %reset_token_info.user_id, "Reset token consumed"),
+        Ok(None) => {
+            warn!("Reset token was consumed by a concurrent request");
+            return Ok(axum::Json(serde_json::json!({
+                "success": false,
+                "message": "Invalid or expired reset token"
+            })));
+        }
+        Err(error) => {
+            error!(%error, "Failed to consume password reset token");
+            return Ok(axum::Json(serde_json::json!({
+                "success": false,
+                "message": "Interner Serverfehler"
+            })));
+        }
+    }
 
     // Update the password in our SQLite database
     match state.database.get_user_by_email(&teable_user.email).await {
