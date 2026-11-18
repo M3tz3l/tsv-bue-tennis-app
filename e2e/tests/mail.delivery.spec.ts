@@ -20,8 +20,8 @@ test.describe('Mail Delivery Verification', () => {
     await page.fill('#mail-subject, input[placeholder*="Betreff"]', testSubject);
     await page.fill('#mail-message, textarea[placeholder*="Nachricht"]', 'Delivery verification test.');
 
-    // Send to all
-    await page.click('button:has-text("Alle Mitglieder")');
+    // Send to all (the recipient count suffix is optional)
+    await page.getByRole('button', { name: /^Alle(\s+\d+)?$/ }).click();
     await page.click('button:has-text("Versenden"):not(:has-text("Jetzt"))');
     await page.click('button:has-text("Jetzt senden")');
 

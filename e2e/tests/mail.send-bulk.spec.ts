@@ -70,8 +70,8 @@ test.describe('Send Bulk Mail', () => {
     await page.fill('#mail-subject, input[placeholder*="Betreff"]', testSubject);
     await page.fill('#mail-message, textarea[placeholder*="Nachricht"]', 'Dies ist ein E2E Bulk Test.');
 
-    // Select "Alle Mitglieder" (should be default)
-    await page.click('button:has-text("Alle Mitglieder")');
+    // Select "Alle" (the default; the recipient count suffix is optional)
+    await page.getByRole('button', { name: /^Alle(\s+\d+)?$/ }).click();
 
     // Click send — shows inline confirmation. The shared E2E Teable can rate
     // limit the count refresh, so either the fresh count or the safe fallback
