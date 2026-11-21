@@ -216,7 +216,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     const requestId = ++confirmRequestRef.current;
     // Recipients may have changed since the composer opened.
     try {
-      const response = await BackendService.getMemberCounts();
+      const response = await BackendService.getMemberCounts(true);
       if (response.success && response.data) {
         setMemberCounts(response.data);
         setCountsLoaded(true);

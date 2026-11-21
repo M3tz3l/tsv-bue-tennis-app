@@ -418,9 +418,12 @@ class BackendService {
     }
   }
 
-  async getMemberCounts(): Promise<ApiResult<MemberCountResponse> | ApiError> {
+  async getMemberCounts(forceRefresh: boolean = false): Promise<ApiResult<MemberCountResponse> | ApiError> {
     try {
-      const response = await this.api.get<ApiResult<MemberCountResponse>>('/mail/recipient-counts');
+      const response = await this.api.get<ApiResult<MemberCountResponse>>(
+        '/mail/recipient-counts',
+        forceRefresh ? { params: { refresh: true } } : undefined,
+      );
       return response.data;
     } catch (error: unknown) {
       logApiError('Error fetching member counts:', error);

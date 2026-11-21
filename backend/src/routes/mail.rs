@@ -1,7 +1,7 @@
 //! Bulk mail routes: test send, bulk dispatch, job status, recipient counts.
 
 use axum::{
-    extract::{Multipart, Path, State},
+    extract::{Multipart, Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::get,
@@ -91,6 +91,17 @@ fn render_message_html(message: &str, message_html: &str) -> String {
 fn has_active_job(jobs: &std::collections::HashMap<String, MailJob>) -> bool {
     jobs.values()
         .any(|job| matches!(job.status, MailJobStatus::Pending | MailJobStatus::Running))
+}
+
+/// Only the organizer who started a job may read its status. The signed token
+/// role is enough here: job data is scoped to its creator, and a live Teable
+/// lookup on every 1.5s poll is too expensive.
+fn can_view_job(job: &MailJob, claims: &auth::AuthClaims) -> bool {
+    let is_orga = claims
+        .role
+        .as_deref()
+        .is_some_and(|role| role.trim().eq_ignore_ascii_case("orga"));
+    is_orga && job.user_id == claims.sub
 }
 
 /// Only finished jobs may be removed by the periodic cleanup; an active job
@@ -581,13 +592,14 @@ pub async fn get_mail_job_status(
             )
         })?
     };
-    // The token role is a snapshot; confirm the live role before exposing any job.
-    require_orga_role(&state, &claims).await.map_err(|status| {
-        (
-            status,
-            Json(serde_json::json!({ "success": false, "message": "Kein Zugriff" })),
-        )
-    })?;
+    if !can_view_job(&job, &claims) {
+        // 404 for both a wrong owner and a non-organizer so the response does
+        // not reveal whether the job exists.
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "success": false, "message": "Job nicht gefunden" })),
+        ));
+    }
 
     debug!(job_id = %job_id, status = ?job.status, "Mail job status lookup");
     Ok(Json(serde_json::json!({
@@ -596,26 +608,38 @@ pub async fn get_mail_job_status(
     })))
 }
 
+#[derive(serde::Deserialize, Default)]
+pub struct MemberCountsQuery {
+    /// The confirmation step asks for a live count instead of the cache.
+    #[serde(default)]
+    refresh: bool,
+}
+
 pub async fn get_member_counts(
     State(state): State<AppState>,
+    Query(query): Query<MemberCountsQuery>,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
     // Serve cached counts within the TTL to avoid hammering the Teable API
     // every time the mail composer is opened.
-    if let Some((all, orga)) = state.member_counts.get() {
-        return Ok(Json(serde_json::json!({
-            "success": true,
-            "data": { "all": all, "orga": orga }
-        })));
+    if !query.refresh {
+        if let Some((all, orga)) = state.member_counts.get() {
+            return Ok(Json(serde_json::json!({
+                "success": true,
+                "data": { "all": all, "orga": orga }
+            })));
+        }
     }
 
     // Serialize refreshes so concurrent expired-cache misses perform a single
     // Teable fetch instead of N. Re-check the cache once the lock is held.
     let _refresh_guard = state.member_counts.lock_refresh().await;
-    if let Some((all, orga)) = state.member_counts.get() {
-        return Ok(Json(serde_json::json!({
-            "success": true,
-            "data": { "all": all, "orga": orga }
-        })));
+    if !query.refresh {
+        if let Some((all, orga)) = state.member_counts.get() {
+            return Ok(Json(serde_json::json!({
+                "success": true,
+                "data": { "all": all, "orga": orga }
+            })));
+        }
     }
 
     // Fetch all active members count using Teable filtering
@@ -651,7 +675,8 @@ pub async fn get_member_counts(
 
 #[cfg(test)]
 mod tests {
-    use super::{has_active_job, is_stale_terminal_job, render_message_html};
+    use super::{can_view_job, has_active_job, is_stale_terminal_job, render_message_html};
+    use crate::auth::AuthClaims;
     use crate::models::{MailJob, MailJobStatus};
     use std::collections::HashMap;
 
@@ -694,6 +719,24 @@ mod tests {
 
     fn job(id: &str, status: MailJobStatus) -> MailJob {
         job_at(id, status, chrono::Utc::now())
+    }
+
+    fn claims(user_id: &str, role: Option<&str>) -> AuthClaims {
+        AuthClaims {
+            sub: user_id.into(),
+            role: role.map(Into::into),
+            exp: 0,
+            iat: 0,
+        }
+    }
+
+    #[test]
+    fn only_the_job_owner_with_orga_role_can_view_it() {
+        let job = job("job-1", MailJobStatus::Completed);
+
+        assert!(can_view_job(&job, &claims("orga-1", Some("orga"))));
+        assert!(!can_view_job(&job, &claims("orga-1", None)));
+        assert!(!can_view_job(&job, &claims("orga-2", Some("orga"))));
     }
 
     #[test]

@@ -77,6 +77,18 @@ export function useMailSend({ onClose, onFinished }: UseMailSendOptions) {
         if (response.job.status !== 'completed' && response.job.status !== 'failed') {
           pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
         }
+      } else if (response.status === 404) {
+        // Jobs live in memory. A 404 means the backend restarted or the job
+        // was cleaned up, so it cannot still be running here.
+        if (pollingRef.current) {
+          clearTimeout(pollingRef.current);
+          pollingRef.current = null;
+        }
+        setIsLoading(false);
+        setActiveJob(null);
+        setPendingJobId(null);
+        setStatusRetryError(false);
+        toast.error('Versandstatus nicht mehr verfügbar. Bitte prüfen Sie, ob die Mail versendet wurde.');
       } else if (response.status === 429 || (response.status ?? 0) >= 500) {
         // Keep the progress view alive and retry, but give up after a bounded
         // number of attempts so the modal cannot stay locked open forever.

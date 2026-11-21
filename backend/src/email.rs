@@ -559,15 +559,19 @@ impl EmailService {
         }
 
         let from_address = format!("TSV BÜ Tennis App <{}>", self.from_email);
-        let attachments: Vec<_> = attachments
-            .iter()
-            .map(|a| EmailAttachment {
-                filename: a.filename.clone(),
-                content_type: a.content_type.clone(),
-                data: a.data.clone(),
-                content_id: a.content_id.clone(),
-            })
-            .collect();
+        // Share one copy of the attachment bytes across the concurrent tasks
+        // instead of cloning them per recipient.
+        let attachments = std::sync::Arc::new(
+            attachments
+                .iter()
+                .map(|a| EmailAttachment {
+                    filename: a.filename.clone(),
+                    content_type: a.content_type.clone(),
+                    data: a.data.clone(),
+                    content_id: a.content_id.clone(),
+                })
+                .collect::<Vec<_>>(),
+        );
 
         let mut total_sent = 0;
         let mut total_failed = 0;
@@ -641,54 +645,59 @@ impl EmailService {
                 let safe_message = safe_message.clone();
                 let signature_html = signature_html.clone();
                 let signature_text = signature_text.clone();
-                let attachments = attachments.clone();
+                let attachments = std::sync::Arc::clone(&attachments);
+                let handle_email = email_addr.clone();
 
-                handles.push(tokio::spawn(async move {
-                    let html_content =
-                        build_body_html(&safe_message, &first, include_greeting, &signature_html);
-                    let text_content =
-                        build_body_text(&message, &first, include_greeting, &signature_text);
+                handles.push((
+                    handle_email,
+                    tokio::spawn(async move {
+                        let html_content = build_body_html(
+                            &safe_message,
+                            &first,
+                            include_greeting,
+                            &signature_html,
+                        );
+                        let text_content =
+                            build_body_text(&message, &first, include_greeting, &signature_text);
 
-                    let to_mailbox: Mailbox = match email_addr.parse() {
-                        Ok(m) => m,
-                        Err(_) => {
-                            drop(permit);
-                            return Err((email_addr, "invalid_recipient"));
+                        let to_mailbox: Mailbox = match email_addr.parse() {
+                            Ok(m) => m,
+                            Err(_) => {
+                                drop(permit);
+                                return Err((email_addr, "invalid_recipient"));
+                            }
+                        };
+
+                        // Rebuild the message for each attempt instead of cloning
+                        // a fully built message (and its attachment bytes) on retry.
+                        let result = send_with_retry(
+                            &transport,
+                            || {
+                                build_message(
+                                    from_mailbox.clone(),
+                                    to_mailbox.clone(),
+                                    &subject,
+                                    &html_content,
+                                    &text_content,
+                                    attachments.as_slice(),
+                                )
+                                .map_err(|_| "message_build_failed")
+                            },
+                            retries,
+                            retry_delay,
+                            SMTP_SEND_TIMEOUT,
+                        )
+                        .await;
+                        drop(permit);
+                        match result {
+                            Ok(_) => Ok(email_addr),
+                            Err(e) => Err((email_addr, e)),
                         }
-                    };
-
-                    let email_msg = match build_message(
-                        from_mailbox,
-                        to_mailbox,
-                        &subject,
-                        &html_content,
-                        &text_content,
-                        &attachments,
-                    ) {
-                        Ok(m) => m,
-                        Err(_) => {
-                            drop(permit);
-                            return Err((email_addr, "message_build_failed"));
-                        }
-                    };
-
-                    let result = send_with_retry(
-                        &transport,
-                        email_msg,
-                        retries,
-                        retry_delay,
-                        SMTP_SEND_TIMEOUT,
-                    )
-                    .await;
-                    drop(permit);
-                    match result {
-                        Ok(_) => Ok(email_addr),
-                        Err(e) => Err((email_addr, e)),
-                    }
-                }));
+                    }),
+                ));
             }
 
-            for handle in handles {
+            for (email, handle) in handles {
                 match handle.await {
                     Ok(Ok(_)) => total_sent += 1,
                     Ok(Err((addr, err))) => {
@@ -699,16 +708,18 @@ impl EmailService {
                     Err(e) => {
                         error!("Task join error in bulk send: {}", e);
                         total_failed += 1;
+                        all_failed_recipients.push(email);
                     }
                 }
-            }
 
-            // Write intermediate progress to the job store after each batch
-            {
-                let mut jobs = job_store.write().await;
-                if let Some(job) = jobs.get_mut(&job_id) {
-                    job.sent = total_sent as i32;
-                    job.failed = total_failed as i32;
+                // Update progress after every recipient so long batches do not
+                // leave the status bar looking frozen.
+                {
+                    let mut jobs = job_store.write().await;
+                    if let Some(job) = jobs.get_mut(&job_id) {
+                        job.sent = total_sent as i32;
+                        job.failed = total_failed as i32;
+                    }
                 }
             }
         }
@@ -892,16 +903,20 @@ async fn send_once(
 /// Send with a bounded number of retries for transient failures (e.g. the SMTP
 /// server dropping the connection mid-conversation, reported by lettre as
 /// "incomplete response"). Non-transient errors fail immediately.
-async fn send_with_retry(
+async fn send_with_retry<F>(
     transport: &AsyncSmtpTransport<Tokio1Executor>,
-    message: Message,
+    build_message: F,
     max_retries: usize,
     delay: std::time::Duration,
     timeout: std::time::Duration,
-) -> Result<(), &'static str> {
+) -> Result<(), &'static str>
+where
+    F: Fn() -> Result<Message, &'static str>,
+{
     let mut attempt = 0usize;
     loop {
-        let result = tokio::time::timeout(timeout, transport.send(message.clone())).await;
+        let message = build_message()?;
+        let result = tokio::time::timeout(timeout, transport.send(message)).await;
         let result = match result {
             Ok(result) => result,
             Err(_) => {
@@ -1088,7 +1103,7 @@ mod smtp_timeout_tests {
         let (transport, server) = stalled_transport().await;
         let result = send_with_retry(
             &transport,
-            message(),
+            || Ok(message()),
             0,
             Duration::ZERO,
             Duration::from_millis(100),

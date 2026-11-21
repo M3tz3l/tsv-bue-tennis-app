@@ -599,6 +599,7 @@ mod tests {
             .route("/dashboard/:year", get(routes::dashboard::dashboard))
             .route("/user", get(get_user))
             .merge(routes::mail::write_routes())
+            .merge(routes::mail::member_count_routes())
             .route("/mail/jobs/:job_id", get(routes::mail::get_mail_job_status))
             .nest("/arbeitsstunden", routes::work_hours::routes())
             .merge(routes::events::routes())
@@ -1949,6 +1950,32 @@ mod tests {
         let body: serde_json::Value = response.json();
         assert_eq!(body["success"], false);
         assert!(body["message"].as_str().unwrap_or("").contains("Anhänge"));
+    }
+
+    #[serial_test::serial]
+    #[tokio::test]
+    async fn test_preview_mail_returns_sanitized_html() {
+        let (server, _teable) = orga_mail_test_context().await;
+        let token = auth::create_token(TEST_JWT_SECRET, "orga_user_1", Some("orga"))
+            .expect("Failed to create orga test token");
+
+        let response = server
+            .post("/api/mail/preview")
+            .add_header("authorization", &format!("Bearer {token}"))
+            .json(&serde_json::json!({
+                "message": "Hallo",
+                "message_html": "<p><strong>Fett</strong></p><script>alert(1)</script>",
+                "include_greeting": true,
+                "sender_first_name": "Max"
+            }))
+            .await;
+
+        assert_eq!(response.status_code(), 200);
+        let body: serde_json::Value = response.json();
+        let html = body["html"].as_str().expect("preview html");
+        assert!(html.contains("<strong>Fett</strong>"));
+        assert!(!html.contains("<script>"));
+        assert!(html.contains("Hallo [Vorname],"));
     }
 
     #[serial_test::serial]
