@@ -55,6 +55,7 @@ impl MemberRoleCache {
 #[derive(Clone, Default)]
 pub struct MemberCountCache {
     inner: Arc<std::sync::Mutex<MemberCountCacheEntry>>,
+    last_refresh_attempt: Arc<std::sync::Mutex<Option<std::time::Instant>>>,
     refresh_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
@@ -83,6 +84,26 @@ impl MemberCountCache {
         let guard = self.inner.lock().ok()?;
         let (fetched_at, counts) = (*guard)?;
         (fetched_at.elapsed() < max_age).then_some(counts)
+    }
+
+    /// Last fetched counts, even if the TTL has elapsed.
+    pub fn get_last(&self) -> Option<MemberCounts> {
+        let guard = self.inner.lock().ok()?;
+        (*guard).map(|(_, counts)| counts)
+    }
+
+    /// Record a forced refresh attempt. Returns false when the last attempt was
+    /// less than `floor` ago. Failed attempts count too, so an outage cannot be
+    /// hammered with `?refresh=true`.
+    pub fn begin_forced_refresh(&self, floor: std::time::Duration) -> bool {
+        let Ok(mut last) = self.last_refresh_attempt.lock() else {
+            return true;
+        };
+        if last.is_some_and(|at| at.elapsed() < floor) {
+            return false;
+        }
+        *last = Some(std::time::Instant::now());
+        true
     }
 
     /// Serializes cache refreshes so concurrent requests only perform a
@@ -435,5 +456,16 @@ mod tests {
     fn trusted_proxy_without_forwarding_header_uses_peer() {
         let request = request(Some(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2))), None, None);
         assert_eq!(extract(&request), IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2)));
+    }
+
+    #[test]
+    fn forced_refresh_floor_counts_every_attempt() {
+        let cache = MemberCountCache::default();
+
+        assert!(cache.begin_forced_refresh(std::time::Duration::from_secs(5)));
+        assert!(!cache.begin_forced_refresh(std::time::Duration::from_secs(5)));
+
+        cache.set((3, 1));
+        assert_eq!(cache.get_last(), Some((3, 1)));
     }
 }

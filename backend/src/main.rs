@@ -2044,7 +2044,9 @@ mod tests {
             .get("/api/mail/jobs/job-1")
             .add_header("authorization", &format!("Bearer {owner}"))
             .await;
-        assert_eq!(response.status_code(), 403);
+        assert_eq!(response.status_code(), 404);
+        let body: serde_json::Value = response.json();
+        assert_eq!(body["code"], "job_not_found");
     }
 
     #[serial_test::serial]

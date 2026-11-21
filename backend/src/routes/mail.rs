@@ -98,6 +98,17 @@ fn owns_job(job: &MailJob, claims: &auth::AuthClaims) -> bool {
     job.user_id == claims.sub
 }
 
+fn job_not_found() -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({
+            "success": false,
+            "code": "job_not_found",
+            "message": "Job nicht gefunden"
+        })),
+    )
+}
+
 /// Only finished jobs may be removed by the periodic cleanup; an active job
 /// must keep its reservation until its task completes.
 pub fn is_stale_terminal_job(job: &MailJob, cutoff: chrono::DateTime<chrono::Utc>) -> bool {
@@ -317,6 +328,7 @@ pub async fn send_test_mail(
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
     let claims = extract_auth_claims_from_headers(&state.jwt_secret, &headers)?;
     let user = require_orga_role(&state, &claims).await?;
+    state.role_cache.set(&user.id, true);
 
     if user.email.trim().is_empty() {
         error!(
@@ -389,6 +401,7 @@ pub async fn send_bulk_mail(
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
     let claims = extract_auth_claims_from_headers(&state.jwt_secret, &headers)?;
     let user = require_orga_role(&state, &claims).await?;
+    state.role_cache.set(&user.id, true);
 
     let form = parse_mail_multipart(multipart).await?;
 
@@ -606,40 +619,30 @@ pub async fn get_mail_job_status(
         })?;
     let job = {
         let jobs = state.mail_jobs.read().await;
-        jobs.get(&job_id).cloned().ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(serde_json::json!({
-                    "success": false,
-                    "code": "job_not_found",
-                    "message": "Job nicht gefunden"
-                })),
-            )
-        })?
+        jobs.get(&job_id).cloned().ok_or_else(job_not_found)?
     };
     if !owns_job(&job, &claims) {
         // Wrong owner gets 404 so the response does not reveal whether the job
         // exists.
-        return Err((
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({
-                "success": false,
-                "code": "job_not_found",
-                "message": "Job nicht gefunden"
-            })),
-        ));
+        return Err(job_not_found());
     }
     require_orga_role_cached(&state, &claims)
         .await
         .map_err(|status| {
-            (
-                status,
-                Json(serde_json::json!({
-                    "success": false,
-                    "code": "forbidden",
-                    "message": "Kein Zugriff"
-                })),
-            )
+            // A creator who is no longer an organizer gets the same response
+            // as a missing job, so the client can clear the stale send guard.
+            if status == StatusCode::FORBIDDEN {
+                job_not_found()
+            } else {
+                (
+                    status,
+                    Json(serde_json::json!({
+                        "success": false,
+                        "code": "forbidden",
+                        "message": "Kein Zugriff"
+                    })),
+                )
+            }
         })?;
 
     debug!(job_id = %job_id, status = ?job.status, "Mail job status lookup");
@@ -665,10 +668,25 @@ pub async fn get_member_counts(
     require_orga_role_cached(&state, &claims).await?;
 
     // A forced refresh still respects a short floor so `?refresh=true` cannot
-    // be used to bypass the cache and hammer Teable.
+    // be used to bypass the cache and hammer Teable. Failed attempts count too.
     const FORCED_REFRESH_FLOOR: std::time::Duration = std::time::Duration::from_secs(5);
     let cached = if query.refresh {
-        state.member_counts.get_within(FORCED_REFRESH_FLOOR)
+        if let Some(counts) = state.member_counts.get_within(FORCED_REFRESH_FLOOR) {
+            Some(counts)
+        } else if !state
+            .member_counts
+            .begin_forced_refresh(FORCED_REFRESH_FLOOR)
+        {
+            return match state.member_counts.get_last() {
+                Some((all, orga)) => Ok(Json(serde_json::json!({
+                    "success": true,
+                    "data": { "all": all, "orga": orga }
+                }))),
+                None => Err(StatusCode::TOO_MANY_REQUESTS),
+            };
+        } else {
+            None
+        }
     } else {
         state.member_counts.get()
     };
