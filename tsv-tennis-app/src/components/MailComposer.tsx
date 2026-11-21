@@ -18,6 +18,7 @@ import { buttonVariants } from '../styles/tokens';
 import ModalShell from './ModalShell';
 import MailAttachments from './MailAttachments';
 import MailPreview from './MailPreview';
+import MailEditor from './MailEditor';
 import { useMailSend } from '../hooks/useMailSend';
 
 interface MailComposerProps {
@@ -67,21 +68,28 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [messageHtml, setMessageHtml] = useState('');
   const [recipientFilter, setRecipientFilter] = useState<'all' | 'orga'>('all');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [memberCounts, setMemberCounts] = useState({ all: 0, orga: 0 });
   const [countsLoaded, setCountsLoaded] = useState(false);
   const [countsError, setCountsError] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState('');
+  const [previewError, setPreviewError] = useState(false);
   const [confirmSend, setConfirmSend] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [includeGreeting, setIncludeGreeting] = useState(true);
   const confirmRefreshRef = useRef(false);
   const confirmRequestRef = useRef(0);
+  const previewRequestRef = useRef(0);
 
   const resetForm = () => {
     setSubject('');
     setMessage('');
+    setMessageHtml('');
+    setPreviewHtml('');
+    setPreviewError(false);
     setRecipientFilter('all');
     setAttachments([]);
     setConfirmSend(false);
@@ -130,6 +138,30 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
     void fetchCounts();
   }, [isOpen, countsLoaded]);
+
+  // The backend renders the preview with the same greeting/signature templates
+  // as the real send, so the two can never drift apart.
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setTimeout(() => {
+      const requestId = ++previewRequestRef.current;
+      void BackendService.previewMail({
+        message,
+        message_html: messageHtml,
+        include_greeting: includeGreeting,
+        sender_first_name: senderFirstName,
+      }).then((response) => {
+        if (requestId !== previewRequestRef.current) return;
+        if (response.success && response.html) {
+          setPreviewHtml(response.html);
+          setPreviewError(false);
+        } else {
+          setPreviewError(true);
+        }
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [isOpen, message, messageHtml, includeGreeting, senderFirstName]);
 
   useEffect(() => {
     setConfirmSend(false);
@@ -362,14 +394,14 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
         <>
           <div className="flex w-full items-center gap-2 sm:mr-auto sm:w-auto sm:gap-3">
             <button onClick={closeComposer} className={`${buttonVariants.secondary} max-sm:hidden`} disabled={isBusy}>Abbrechen</button>
-            <button onClick={() => void sendTest(subject, message, attachments, includeGreeting)} disabled={isBusy || !isFormValid} className={`${buttonVariants.secondary} inline-flex flex-1 items-center justify-center sm:flex-none`}>{isSendingTest ? 'Wird gesendet...' : 'Test-Mail senden'}</button>
+            <button onClick={() => void sendTest(subject, message, messageHtml, attachments, includeGreeting)} disabled={isBusy || !isFormValid} className={`${buttonVariants.secondary} inline-flex flex-1 items-center justify-center sm:flex-none`}>{isSendingTest ? 'Wird gesendet...' : 'Test-Mail senden'}</button>
           </div>
           {confirmSend ? (
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
               <span className="text-sm text-[var(--muted)]">{currentRecipientCount === null ? 'An die ausgewählten Mitglieder senden?' : `An ${currentRecipientCount} ${recipientFilter === 'all' ? 'Mitglieder' : 'Ausschuss-Mitglieder'} senden?`}</span>
               <div className="flex w-full gap-2 sm:w-auto sm:gap-3">
                 <button onClick={() => setConfirmSend(false)} disabled={isBusy} className={`${buttonVariants.secondary} flex-1 sm:flex-none`}>Zurück</button>
-                <button onClick={() => { setConfirmSend(false); void sendBulk(subject, message, recipientFilter, attachments, includeGreeting); }} disabled={isBusy || sendBlocked} className={`${buttonVariants.primary} inline-flex flex-1 items-center justify-center sm:flex-none`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />Jetzt senden</button>
+                <button onClick={() => { setConfirmSend(false); void sendBulk(subject, message, messageHtml, recipientFilter, attachments, includeGreeting); }} disabled={isBusy || sendBlocked} className={`${buttonVariants.primary} inline-flex flex-1 items-center justify-center sm:flex-none`}><PaperAirplaneIcon className="-ml-1 mr-2 h-4 w-4" />Jetzt senden</button>
               </div>
             </div>
           ) : (
@@ -394,7 +426,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6 md:flex-row">
               {/* Form inputs */}
-              <div className="flex-1 min-w-0 space-y-5">
+              <div className="flex-1 min-w-0 space-y-4">
                 {/* Recipient Filter */}
                 <div>
                   <label className="block text-sm font-medium text-[var(--body)] mb-2">
@@ -457,7 +489,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
                 {/* Subject */}
                 <div>
-                  <label htmlFor="mail-subject" className="block text-sm font-medium text-[var(--body)] mb-2">
+                  <label htmlFor="mail-subject" className="sr-only">
                     Betreff
                   </label>
                   <input
@@ -465,7 +497,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     type="text"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    placeholder="z. B. Einladung zur Jahreshauptversammlung"
+                    placeholder="Betreff"
                     className="w-full px-3 py-2.5 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-base sm:text-sm"
                     disabled={isBusy}
                   />
@@ -473,18 +505,22 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
                 {/* Message */}
                 <div>
-                  <label htmlFor="mail-message" className="block text-sm font-medium text-[var(--body)] mb-2">
+                  <label id="mail-message-label" className="sr-only">
                     Nachricht
                   </label>
-                  <textarea
-                    id="mail-message"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Ihre Nachricht an die Mitglieder..."
-                    rows={8}
-                    className="w-full px-3 py-2.5 border border-[var(--hairline-strong)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-base sm:text-sm resize-none sm:resize-y min-h-[120px]"
-                    disabled={isBusy}
-                  />
+                  <div className="overflow-hidden rounded-lg border border-[var(--hairline-strong)] bg-white focus-within:border-transparent focus-within:ring-2 focus-within:ring-[var(--primary)]">
+                    {isOpen && (
+                      <MailEditor
+                        initialHtml={messageHtml}
+                        onChange={(html, text) => {
+                          setMessageHtml(html);
+                          setMessage(text);
+                        }}
+                        disabled={isBusy}
+                        labelId="mail-message-label"
+                      />
+                    )}
+                  </div>
                 </div>
 
                 {/* Personal greeting toggle */}
@@ -521,7 +557,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Preview panel */}
-              <div className="md:w-72 shrink-0 flex flex-col">
+              <div className="md:w-[22rem] shrink-0 flex flex-col">
                 {/* Mobile: collapsible preview */}
                 <div className="md:hidden">
                   <button
@@ -545,12 +581,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                   </button>
                   {previewOpen && (
                     <div className="border border-[var(--hairline)] rounded-lg bg-[var(--canvas-soft)] p-4 overflow-y-auto max-h-64">
-                      <MailPreview
-                        subject={subject}
-                        message={message}
-                        senderFirstName={senderFirstName}
-                        includeGreeting={includeGreeting}
-                      />
+                      <MailPreview subject={subject} html={previewHtml} error={previewError} />
                     </div>
                   )}
                 </div>
@@ -561,12 +592,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     Vorschau
                   </label>
                   <div className="flex-1 border border-[var(--hairline)] rounded-lg bg-[var(--canvas-soft)] p-4 overflow-y-auto">
-                    <MailPreview
-                      subject={subject}
-                      message={message}
-                      senderFirstName={senderFirstName}
-                      includeGreeting={includeGreeting}
-                    />
+                    <MailPreview subject={subject} html={previewHtml} error={previewError} />
                   </div>
                 </div>
               </div>

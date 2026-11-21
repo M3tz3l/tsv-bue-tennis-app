@@ -4,12 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getMemberCounts: vi.fn(),
+  previewMail: vi.fn(),
   useAuth: vi.fn(),
 }));
 
 vi.mock('../context/AuthContext', () => ({ useAuth: mocks.useAuth }));
 vi.mock('../services/backendService', () => ({
-  default: { getMemberCounts: mocks.getMemberCounts },
+  default: { getMemberCounts: mocks.getMemberCounts, previewMail: mocks.previewMail },
 }));
 
 import MailComposer, {
@@ -23,6 +24,7 @@ describe('MailComposer member counts', () => {
     vi.clearAllMocks();
     mocks.useAuth.mockReturnValue({ user: { id: 'orga-1', name: 'Orga' }, logout: vi.fn() });
     mocks.getMemberCounts.mockResolvedValue({ success: true, data: { all: 10, orga: 3 } });
+    mocks.previewMail.mockResolvedValue({ success: true, html: '<p>Hallo [Vorname],</p>' });
   });
 
   it('does not fetch member counts while the composer is closed', () => {
@@ -37,6 +39,13 @@ describe('MailComposer member counts', () => {
     rerender(<MailComposer isOpen onClose={onClose} />);
 
     expect(mocks.getMemberCounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the server-rendered preview', async () => {
+    render(<MailComposer isOpen onClose={vi.fn()} />);
+
+    await waitFor(() => expect(mocks.previewMail).toHaveBeenCalled());
+    expect(await screen.findByText('Hallo [Vorname],')).toBeInTheDocument();
   });
 
   it('refreshes the counts before showing the confirmation', async () => {

@@ -55,6 +55,36 @@ pub fn auto_link_html(input: &str) -> String {
     out
 }
 
+/// Wrap an already-rendered message in the greeting and signature. Shared by
+/// the real send and the composer preview so both render identically.
+pub fn build_body_html(
+    safe_message: &str,
+    recipient_first_name: &str,
+    include_greeting: bool,
+    signature_html: &str,
+) -> String {
+    let safe_name = escape_html(recipient_first_name);
+    if include_greeting {
+        format!("<p>Hallo {safe_name},</p><p>{safe_message}</p>{signature_html}")
+    } else {
+        format!("<p>{safe_message}</p>{signature_html}")
+    }
+}
+
+/// Plain-text counterpart of [`build_body_html`].
+pub fn build_body_text(
+    message: &str,
+    recipient_first_name: &str,
+    include_greeting: bool,
+    signature_text: &str,
+) -> String {
+    if include_greeting {
+        format!("Hallo {recipient_first_name},\n\n{message}\n\n{signature_text}")
+    } else {
+        format!("{message}\n\n{signature_text}")
+    }
+}
+
 /// Return the byte offset at which the URL starting at `url_start` ends,
 /// operating on UTF-8 character boundaries. Whitepsace, HTML markup or a
 /// trailing punctuation run terminates the URL.
@@ -164,7 +194,16 @@ fn find_earliest_url(input: &str) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{auto_link_html, build_message, EmailAttachment};
+    use super::{auto_link_html, build_body_html, build_message, EmailAttachment};
+
+    #[test]
+    fn body_html_escapes_greeting_name_and_keeps_message() {
+        let html = build_body_html("<p>Inhalt</p>", "A&B", true, "<p>Signatur</p>");
+
+        assert!(html.contains("<p>Hallo A&amp;B,</p>"));
+        assert!(html.contains("<p>Inhalt</p>"));
+        assert!(html.contains("<p>Signatur</p>"));
+    }
 
     #[test]
     fn links_plain_http_url() {
@@ -603,19 +642,10 @@ impl EmailService {
                 let attachments = attachments.clone();
 
                 handles.push(tokio::spawn(async move {
-                    let html_content = if include_greeting {
-                        format!(
-                            "<p>Hallo {safe_first_name},</p><p>{safe_message}</p>{signature_html}",
-                            safe_first_name = escape_html(&first),
-                        )
-                    } else {
-                        format!("<p>{safe_message}</p>{signature_html}")
-                    };
-                    let text_content = if include_greeting {
-                        format!("Hallo {first},\n\n{message}\n\n{signature_text}",)
-                    } else {
-                        format!("{message}\n\n{signature_text}",)
-                    };
+                    let html_content =
+                        build_body_html(&safe_message, &first, include_greeting, &signature_html);
+                    let text_content =
+                        build_body_text(&message, &first, include_greeting, &signature_text);
 
                     let to_mailbox: Mailbox = match email_addr.parse() {
                         Ok(m) => m,

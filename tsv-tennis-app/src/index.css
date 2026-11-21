@@ -41,6 +41,14 @@
   --error: #d32f2f;
 }
 
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--muted-soft);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
 body {
   overflow-x: hidden;
   background-color: var(--canvas);
