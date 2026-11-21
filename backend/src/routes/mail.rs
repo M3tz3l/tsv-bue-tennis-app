@@ -227,12 +227,15 @@ async fn preview_mail(
     Json(payload): Json<MailPreviewRequest>,
 ) -> Result<Json<MailPreviewResponse>, StatusCode> {
     let claims = extract_auth_claims_from_headers(&state.jwt_secret, &headers)?;
-    let is_orga = claims
+    let claims_orga = claims
         .role
         .as_deref()
         .is_some_and(|role| role.trim().eq_ignore_ascii_case("orga"));
-    if !is_orga {
-        return Err(StatusCode::FORBIDDEN);
+    // Normally the token role is enough for a display-only preview. Fall back to
+    // the live role only for stale tokens (e.g. a member promoted after login)
+    // so we do not hit Teable on every debounced keystroke.
+    if !claims_orga {
+        require_orga_role(&state, &claims).await?;
     }
 
     let safe_message = render_message_html(&payload.message, &payload.message_html);

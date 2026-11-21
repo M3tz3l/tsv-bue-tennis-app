@@ -143,8 +143,8 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   // as the real send, so the two can never drift apart.
   useEffect(() => {
     if (!isOpen) return;
+    const requestId = ++previewRequestRef.current;
     const timer = setTimeout(() => {
-      const requestId = ++previewRequestRef.current;
       void BackendService.previewMail({
         message,
         message_html: messageHtml,
@@ -160,7 +160,10 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
         }
       });
     }, 300);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      previewRequestRef.current += 1;
+    };
   }, [isOpen, message, messageHtml, includeGreeting, senderFirstName]);
 
   useEffect(() => {
@@ -580,7 +583,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                     )}
                   </button>
                   {previewOpen && (
-                    <div className="border border-[var(--hairline)] rounded-lg bg-[var(--canvas-soft)] p-4 overflow-y-auto max-h-64">
+                    <div className="border border-[var(--hairline)] rounded-lg bg-[var(--canvas-soft)] overflow-y-auto max-h-64">
                       <MailPreview subject={subject} html={previewHtml} error={previewError} />
                     </div>
                   )}
@@ -591,7 +594,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
                   <label className="block text-sm font-medium text-[var(--body)] mb-2">
                     Vorschau
                   </label>
-                  <div className="flex-1 border border-[var(--hairline)] rounded-lg bg-[var(--canvas-soft)] p-4 overflow-y-auto">
+                  <div className="flex-1 border border-[var(--hairline)] rounded-lg bg-[var(--canvas-soft)] overflow-y-auto">
                     <MailPreview subject={subject} html={previewHtml} error={previewError} />
                   </div>
                 </div>

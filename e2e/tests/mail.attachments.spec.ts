@@ -24,8 +24,8 @@ test.describe('Mail Attachments', () => {
     await expect(page.getByText(fileName)).toBeVisible();
 
     const subject = `E2E Attachment ${Date.now()}`;
-    await page.fill('#mail-subject, input[placeholder*="Betreff"]', subject);
-    await page.fill('#mail-message, textarea[placeholder*="Nachricht"]', 'Attachment test.');
+    await page.fill('#mail-subject', subject);
+    await page.fill('#mail-message', 'Attachment test.');
     await page.click('button:has-text("Test-Mail senden")');
     await expect(page.locator('text=Test-Mail gesendet')).toBeVisible({ timeout: 10_000 });
 

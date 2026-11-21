@@ -64,10 +64,12 @@ pub fn build_body_html(
     signature_html: &str,
 ) -> String {
     let safe_name = escape_html(recipient_first_name);
+    // A <div> keeps block content (lists, paragraphs) valid; wrapping it in a
+    // <p> would nest blocks and make the parser insert empty paragraphs.
     if include_greeting {
-        format!("<p>Hallo {safe_name},</p><p>{safe_message}</p>{signature_html}")
+        format!("<p>Hallo {safe_name},</p><div>{safe_message}</div>{signature_html}")
     } else {
-        format!("<p>{safe_message}</p>{signature_html}")
+        format!("<div>{safe_message}</div>{signature_html}")
     }
 }
 

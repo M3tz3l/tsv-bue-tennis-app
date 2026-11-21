@@ -17,8 +17,8 @@ test.describe('Mail Delivery Verification', () => {
 
     // Compose mail
     const testSubject = `E2E Delivery Test ${Date.now()}`;
-    await page.fill('#mail-subject, input[placeholder*="Betreff"]', testSubject);
-    await page.fill('#mail-message, textarea[placeholder*="Nachricht"]', 'Delivery verification test.');
+    await page.fill('#mail-subject', testSubject);
+    await page.fill('#mail-message', 'Delivery verification test.');
 
     // Send to all (the recipient count suffix is optional)
     await page.getByRole('button', { name: /^Alle(\s+\d+)?$/ }).click();
@@ -55,8 +55,8 @@ test.describe('Mail Delivery Verification', () => {
 
     const testSubject = `E2E Content Test ${Date.now()}`;
     const testBody = `Unique body ${Date.now()} for content verification.`;
-    await page.fill('#mail-subject, input[placeholder*="Betreff"]', testSubject);
-    await page.fill('#mail-message, textarea[placeholder*="Nachricht"]', testBody);
+    await page.fill('#mail-subject', testSubject);
+    await page.fill('#mail-message', testBody);
 
     await page.click('button:has-text("Test-Mail senden")');
     await expect(page.locator('text=Test-Mail gesendet')).toBeVisible({ timeout: 10_000 });

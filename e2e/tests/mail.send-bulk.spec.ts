@@ -41,8 +41,8 @@ test.describe('Send Bulk Mail', () => {
 
     // Fill subject and message
     const testSubject = `E2E Test Mail ${Date.now()}`;
-    await page.fill('#mail-subject, input[placeholder*="Betreff"]', testSubject);
-    await page.fill('#mail-message, textarea[placeholder*="Nachricht"]', 'Dies ist ein E2E Test.');
+    await page.fill('#mail-subject', testSubject);
+    await page.fill('#mail-message', 'Dies ist ein E2E Test.');
 
     // Click test mail button
     await page.click('button:has-text("Test-Mail senden")');
@@ -67,8 +67,8 @@ test.describe('Send Bulk Mail', () => {
 
     // Fill subject and message
     const testSubject = `E2E Bulk Mail ${Date.now()}`;
-    await page.fill('#mail-subject, input[placeholder*="Betreff"]', testSubject);
-    await page.fill('#mail-message, textarea[placeholder*="Nachricht"]', 'Dies ist ein E2E Bulk Test.');
+    await page.fill('#mail-subject', testSubject);
+    await page.fill('#mail-message', 'Dies ist ein E2E Bulk Test.');
 
     // Select "Alle" (the default; the recipient count suffix is optional)
     await page.getByRole('button', { name: /^Alle(\s+\d+)?$/ }).click();
@@ -113,8 +113,8 @@ test.describe('Send Bulk Mail', () => {
 
     // Fill subject and message
     const testSubject = `E2E Job Status Test ${Date.now()}`;
-    await page.fill('#mail-subject, input[placeholder*="Betreff"]', testSubject);
-    await page.fill('#mail-message, textarea[placeholder*="Nachricht"]', 'Job status polling test.');
+    await page.fill('#mail-subject', testSubject);
+    await page.fill('#mail-message', 'Job status polling test.');
 
     // Intercept the POST response to capture the job_id
     let capturedJobId = '';

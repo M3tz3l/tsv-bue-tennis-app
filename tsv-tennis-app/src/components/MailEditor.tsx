@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import {
@@ -32,6 +32,7 @@ const MailEditor = ({ initialHtml, onChange, labelId, disabled = false }: MailEd
     editable: !disabled,
     editorProps: {
       attributes: {
+        id: 'mail-message',
         'aria-labelledby': labelId,
         role: 'textbox',
         'aria-multiline': 'true',
@@ -44,6 +45,21 @@ const MailEditor = ({ initialHtml, onChange, labelId, disabled = false }: MailEd
   useEffect(() => {
     editor?.setEditable(!disabled);
   }, [editor, disabled]);
+
+  // useEditor does not re-render on selection changes, so the toolbar needs a
+  // dedicated subscription for its active state.
+  const active = useEditorState({
+    editor,
+    selector: ({ editor }) =>
+      editor
+        ? {
+            bold: editor.isActive('bold'),
+            italic: editor.isActive('italic'),
+            bulletList: editor.isActive('bulletList'),
+            orderedList: editor.isActive('orderedList'),
+          }
+        : null,
+  });
 
   const toolButton = (
     label: string,
@@ -75,25 +91,25 @@ const MailEditor = ({ initialHtml, onChange, labelId, disabled = false }: MailEd
         <div className="flex items-center gap-1 border-b border-[var(--hairline)] bg-[var(--canvas-soft)] px-2 py-1.5">
           {toolButton(
             'Fett',
-            editor.isActive('bold'),
+            (active?.bold ?? false),
             () => editor.chain().focus().toggleBold().run(),
             <BoldIcon className="h-4 w-4" />,
           )}
           {toolButton(
             'Kursiv',
-            editor.isActive('italic'),
+            (active?.italic ?? false),
             () => editor.chain().focus().toggleItalic().run(),
             <ItalicIcon className="h-4 w-4" />,
           )}
           {toolButton(
             'Aufzählung',
-            editor.isActive('bulletList'),
+            (active?.bulletList ?? false),
             () => editor.chain().focus().toggleBulletList().run(),
             <ListBulletIcon className="h-4 w-4" />,
           )}
           {toolButton(
             'Nummerierte Liste',
-            editor.isActive('orderedList'),
+            (active?.orderedList ?? false),
             () => editor.chain().focus().toggleOrderedList().run(),
             <NumberedListIcon className="h-4 w-4" />,
           )}
