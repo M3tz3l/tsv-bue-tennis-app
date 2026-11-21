@@ -86,16 +86,10 @@ impl MemberCountCache {
         (fetched_at.elapsed() < max_age).then_some(counts)
     }
 
-    /// Last fetched counts, even if the TTL has elapsed.
-    pub fn get_last(&self) -> Option<MemberCounts> {
-        let guard = self.inner.lock().ok()?;
-        (*guard).map(|(_, counts)| counts)
-    }
-
-    /// Record a forced refresh attempt. Returns false when the last attempt was
+    /// Record a cache-refresh attempt. Returns false when the last attempt was
     /// less than `floor` ago. Failed attempts count too, so an outage cannot be
-    /// hammered with `?refresh=true`.
-    pub fn begin_forced_refresh(&self, floor: std::time::Duration) -> bool {
+    /// hammered with repeated requests.
+    pub fn begin_refresh(&self, floor: std::time::Duration) -> bool {
         let Ok(mut last) = self.last_refresh_attempt.lock() else {
             return true;
         };
@@ -459,13 +453,16 @@ mod tests {
     }
 
     #[test]
-    fn forced_refresh_floor_counts_every_attempt() {
+    fn refresh_floor_counts_every_attempt() {
         let cache = MemberCountCache::default();
 
-        assert!(cache.begin_forced_refresh(std::time::Duration::from_secs(5)));
-        assert!(!cache.begin_forced_refresh(std::time::Duration::from_secs(5)));
+        assert!(cache.begin_refresh(std::time::Duration::from_secs(5)));
+        assert!(!cache.begin_refresh(std::time::Duration::from_secs(5)));
 
         cache.set((3, 1));
-        assert_eq!(cache.get_last(), Some((3, 1)));
+        assert_eq!(
+            cache.get_within(std::time::Duration::from_secs(5)),
+            Some((3, 1))
+        );
     }
 }

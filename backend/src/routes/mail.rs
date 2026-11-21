@@ -667,12 +667,13 @@ pub async fn get_member_counts(
     let claims = extract_auth_claims_from_headers(&state.jwt_secret, &headers)?;
     require_orga_role_cached(&state, &claims).await?;
 
-    // A forced refresh still respects a short floor so `?refresh=true` cannot
-    // be used to bypass the cache and hammer Teable. Failed attempts count too.
-    const FORCED_REFRESH_FLOOR: std::time::Duration = std::time::Duration::from_secs(5);
+    // Every cache refresh respects a short floor, so neither `?refresh=true` nor
+    // repeated normal requests can hammer Teable during an outage. Failed
+    // attempts count too.
+    const REFRESH_FLOOR: std::time::Duration = std::time::Duration::from_secs(5);
     // Pre-lock optimization: return a fresh cache without waiting for the lock.
     let cached = if query.refresh {
-        state.member_counts.get_within(FORCED_REFRESH_FLOOR)
+        state.member_counts.get_within(REFRESH_FLOOR)
     } else {
         state.member_counts.get()
     };
@@ -687,7 +688,7 @@ pub async fn get_member_counts(
     // Teable fetch instead of N. Re-check the cache once the lock is held.
     let _refresh_guard = state.member_counts.lock_refresh().await;
     let cached = if query.refresh {
-        state.member_counts.get_within(FORCED_REFRESH_FLOOR)
+        state.member_counts.get_within(REFRESH_FLOOR)
     } else {
         state.member_counts.get()
     };
@@ -699,19 +700,9 @@ pub async fn get_member_counts(
     }
 
     // Check the floor and record the attempt under the lock, immediately before
-    // the fetch, so a waiter cannot start a fetch too soon after a failure.
-    if query.refresh
-        && !state
-            .member_counts
-            .begin_forced_refresh(FORCED_REFRESH_FLOOR)
-    {
-        return match state.member_counts.get_last() {
-            Some((all, orga)) => Ok(Json(serde_json::json!({
-                "success": true,
-                "data": { "all": all, "orga": orga }
-            }))),
-            None => Err(StatusCode::TOO_MANY_REQUESTS),
-        };
+    // the fetch, so no request can start a fetch too soon after another.
+    if !state.member_counts.begin_refresh(REFRESH_FLOOR) {
+        return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
     // Fetch all active members count using Teable filtering
