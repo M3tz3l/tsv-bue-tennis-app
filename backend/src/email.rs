@@ -14,6 +14,7 @@ use lettre::{
     },
     AsyncSmtpTransport, AsyncTransport, Tokio1Executor,
 };
+use std::collections::HashMap;
 use tracing::{debug, error, info, warn};
 
 /// Escape HTML special characters to prevent XSS in email content
@@ -441,6 +442,46 @@ pub struct BulkMailOptions {
     pub retry_delay: std::time::Duration,
 }
 
+fn record_send_result(
+    result: Result<
+        (tokio::task::Id, Result<String, (String, &'static str)>),
+        tokio::task::JoinError,
+    >,
+    task_emails: &mut HashMap<tokio::task::Id, String>,
+    total_sent: &mut usize,
+    total_failed: &mut usize,
+    failed_recipients: &mut Vec<String>,
+) {
+    match result {
+        Ok((id, Ok(_))) => {
+            task_emails.remove(&id);
+            *total_sent += 1;
+        }
+        Ok((id, Err((addr, err)))) => {
+            task_emails.remove(&id);
+            warn!(error = %err, "Bulk mail failed");
+            *total_failed += 1;
+            failed_recipients.push(addr);
+        }
+        Err(error) => {
+            let addr = task_emails.remove(&error.id()).unwrap_or_default();
+            error!("Task join error in bulk send: {}", error);
+            *total_failed += 1;
+            if !addr.is_empty() {
+                failed_recipients.push(addr);
+            }
+        }
+    }
+}
+
+async fn write_job_progress(job_store: &MailJobStore, job_id: &str, sent: usize, failed: usize) {
+    let mut jobs = job_store.write().await;
+    if let Some(job) = jobs.get_mut(job_id) {
+        job.sent = sent as i32;
+        job.failed = failed as i32;
+    }
+}
+
 pub struct EmailService {
     smtp_host: String,
     smtp_port: u16,
@@ -631,13 +672,29 @@ impl EmailService {
                 }
             };
 
-            let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(max_concurrency));
-            let mut handles = Vec::with_capacity(chunk.len());
+            let mut sends: tokio::task::JoinSet<Result<String, (String, &'static str)>> =
+                tokio::task::JoinSet::new();
+            let mut task_emails = HashMap::new();
+            let mut in_flight = 0usize;
 
             for (email, first_name) in chunk {
-                let permit = semaphore.clone().acquire_owned().await.unwrap();
+                if in_flight >= max_concurrency {
+                    if let Some(result) = sends.join_next_with_id().await {
+                        record_send_result(
+                            result,
+                            &mut task_emails,
+                            &mut total_sent,
+                            &mut total_failed,
+                            &mut all_failed_recipients,
+                        );
+                        in_flight -= 1;
+                        write_job_progress(&job_store, &job_id, total_sent, total_failed).await;
+                    }
+                }
+
                 let transport = transport.clone();
                 let email_addr = email.clone();
+                let task_email = email.clone();
                 let first = first_name.clone();
                 let from_mailbox = from_mailbox.clone();
                 let subject = subject.clone();
@@ -646,81 +703,56 @@ impl EmailService {
                 let signature_html = signature_html.clone();
                 let signature_text = signature_text.clone();
                 let attachments = std::sync::Arc::clone(&attachments);
-                let handle_email = email_addr.clone();
 
-                handles.push((
-                    handle_email,
-                    tokio::spawn(async move {
-                        let html_content = build_body_html(
-                            &safe_message,
-                            &first,
-                            include_greeting,
-                            &signature_html,
-                        );
-                        let text_content =
-                            build_body_text(&message, &first, include_greeting, &signature_text);
+                let abort = sends.spawn(async move {
+                    let html_content =
+                        build_body_html(&safe_message, &first, include_greeting, &signature_html);
+                    let text_content =
+                        build_body_text(&message, &first, include_greeting, &signature_text);
 
-                        let to_mailbox: Mailbox = match email_addr.parse() {
-                            Ok(m) => m,
-                            Err(_) => {
-                                drop(permit);
-                                return Err((email_addr, "invalid_recipient"));
-                            }
-                        };
+                    let to_mailbox: Mailbox = match email_addr.parse() {
+                        Ok(m) => m,
+                        Err(_) => return Err((email_addr, "invalid_recipient")),
+                    };
 
-                        // Rebuild the message for each attempt instead of cloning
-                        // a fully built message (and its attachment bytes) on retry.
-                        let result = send_with_retry(
-                            &transport,
-                            || {
-                                build_message(
-                                    from_mailbox.clone(),
-                                    to_mailbox.clone(),
-                                    &subject,
-                                    &html_content,
-                                    &text_content,
-                                    attachments.as_slice(),
-                                )
-                                .map_err(|_| "message_build_failed")
-                            },
-                            retries,
-                            retry_delay,
-                            SMTP_SEND_TIMEOUT,
-                        )
-                        .await;
-                        drop(permit);
-                        match result {
-                            Ok(_) => Ok(email_addr),
-                            Err(e) => Err((email_addr, e)),
-                        }
-                    }),
-                ));
+                    // Rebuild the message for each attempt instead of cloning
+                    // a fully built message (and its attachment bytes) on retry.
+                    let result = send_with_retry(
+                        &transport,
+                        || {
+                            build_message(
+                                from_mailbox.clone(),
+                                to_mailbox.clone(),
+                                &subject,
+                                &html_content,
+                                &text_content,
+                                attachments.as_slice(),
+                            )
+                            .map_err(|_| "message_build_failed")
+                        },
+                        retries,
+                        retry_delay,
+                        SMTP_SEND_TIMEOUT,
+                    )
+                    .await;
+                    match result {
+                        Ok(_) => Ok(email_addr),
+                        Err(e) => Err((email_addr, e)),
+                    }
+                });
+                task_emails.insert(abort.id(), task_email);
+                in_flight += 1;
             }
 
-            for (email, handle) in handles {
-                match handle.await {
-                    Ok(Ok(_)) => total_sent += 1,
-                    Ok(Err((addr, err))) => {
-                        warn!(error = %err, "Bulk mail failed");
-                        total_failed += 1;
-                        all_failed_recipients.push(addr);
-                    }
-                    Err(e) => {
-                        error!("Task join error in bulk send: {}", e);
-                        total_failed += 1;
-                        all_failed_recipients.push(email);
-                    }
-                }
-
-                // Update progress after every recipient so long batches do not
-                // leave the status bar looking frozen.
-                {
-                    let mut jobs = job_store.write().await;
-                    if let Some(job) = jobs.get_mut(&job_id) {
-                        job.sent = total_sent as i32;
-                        job.failed = total_failed as i32;
-                    }
-                }
+            while let Some(result) = sends.join_next_with_id().await {
+                record_send_result(
+                    result,
+                    &mut task_emails,
+                    &mut total_sent,
+                    &mut total_failed,
+                    &mut all_failed_recipients,
+                );
+                write_job_progress(&job_store, &job_id, total_sent, total_failed).await;
             }
         }
 

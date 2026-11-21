@@ -1,6 +1,7 @@
 export type EditorNode = {
   type?: string;
   text?: string;
+  attrs?: { start?: number };
   content?: EditorNode[];
 };
 
@@ -37,16 +38,28 @@ const blockText = (node: EditorNode, depth: number): string => {
     case 'heading':
     case 'codeBlock':
       return `${INDENT.repeat(depth)}${inlineText(node.content)}\n`;
-    case 'blockquote':
-      return (node.content ?? []).map((child) => blockText(child, depth + 1)).join('');
+    case 'blockquote': {
+      const inner = (node.content ?? [])
+        .map((child) => blockText(child, depth))
+        .join('')
+        .trimEnd();
+      return (
+        inner
+          .split('\n')
+          .map((line) => `${INDENT.repeat(depth)}> ${line}`)
+          .join('\n') + '\n'
+      );
+    }
     case 'bulletList':
       return (node.content ?? [])
         .map((child) => listItemText(child, depth, '- '))
         .join('');
-    case 'orderedList':
+    case 'orderedList': {
+      const start = node.attrs?.start ?? 1;
       return (node.content ?? [])
-        .map((child, index) => listItemText(child, depth, `${index + 1}. `))
+        .map((child, index) => listItemText(child, depth, `${start + index}. `))
         .join('');
+    }
     case 'horizontalRule':
       return `${INDENT.repeat(depth)}---\n`;
     case 'hardBreak':

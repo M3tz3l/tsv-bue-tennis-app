@@ -32,6 +32,7 @@ describe('useMailSend job polling', () => {
     mocks.getMailJobStatus.mockResolvedValue({
       success: false,
       status: 404,
+      code: 'job_not_found',
       message: 'Job nicht gefunden',
     });
 
@@ -46,5 +47,30 @@ describe('useMailSend job polling', () => {
     await waitFor(() => expect(result.current.pendingJobId).toBeNull());
     expect(result.current.statusRetryError).toBe(false);
     expect(result.current.sendBlocked).toBe(false);
+  });
+
+  it('keeps the send guard for a 404 without the job_not_found code', async () => {
+    mocks.sendBulkMail.mockResolvedValue({
+      success: true,
+      job_id: 'job-1',
+      total_recipients: 1,
+    });
+    mocks.getMailJobStatus.mockResolvedValue({
+      success: false,
+      status: 404,
+      message: 'Not found',
+    });
+
+    const { result } = renderHook(() =>
+      useMailSend({ onClose: vi.fn(), onFinished: vi.fn() }),
+    );
+
+    await act(async () => {
+      await result.current.sendBulk('Betreff', 'Text', '<p>Text</p>', 'all', [], true);
+    });
+
+    await waitFor(() => expect(result.current.statusRetryError).toBe(true));
+    expect(result.current.pendingJobId).toBe('job-1');
+    expect(result.current.sendBlocked).toBe(true);
   });
 });

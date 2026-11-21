@@ -33,6 +33,35 @@ describe('editorJsonToText', () => {
     );
   });
 
+  it('honours a custom ordered-list start', () => {
+    const doc: EditorNode = {
+      type: 'doc',
+      content: [
+        {
+          type: 'orderedList',
+          attrs: { start: 5 },
+          content: [listItem(paragraph('Fünf')), listItem(paragraph('Sechs'))],
+        },
+      ],
+    };
+
+    expect(editorJsonToText(doc)).toBe('5. Fünf\n6. Sechs');
+  });
+
+  it('marks blockquotes', () => {
+    const doc: EditorNode = {
+      type: 'doc',
+      content: [
+        {
+          type: 'blockquote',
+          content: [paragraph('Zitat')],
+        },
+      ],
+    };
+
+    expect(editorJsonToText(doc)).toBe('> Zitat');
+  });
+
   it('indents nested lists', () => {
     const doc: EditorNode = {
       type: 'doc',

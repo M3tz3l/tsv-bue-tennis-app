@@ -61,6 +61,7 @@ async fn app_with_teable_url(teable_url: &str) -> (TestServer, EventRepository) 
         event_repository: repository.clone(),
         mail_jobs: Arc::new(tokio::sync::RwLock::new(Default::default())),
         member_counts: state::MemberCountCache::default(),
+        role_cache: state::MemberRoleCache::default(),
         jwt_secret: SECRET.into(),
     };
     let app = Router::new()

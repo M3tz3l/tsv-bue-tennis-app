@@ -49,7 +49,7 @@ type ApiErrorShape = {
   config?: AxiosRequestConfig;
   response?: {
     status?: unknown;
-    data?: { message?: unknown };
+    data?: { message?: unknown; code?: unknown };
     headers?: { 'retry-after'?: string };
   };
 };
@@ -434,15 +434,17 @@ class BackendService {
     }
   }
 
-  async getMailJobStatus(jobId: string): Promise<{ success: boolean; job?: MailJob; status?: number; message?: string }> {
+  async getMailJobStatus(jobId: string): Promise<{ success: boolean; job?: MailJob; status?: number; code?: string; message?: string }> {
     try {
       const response = await this.api.get(`/mail/jobs/${jobId}`);
       return response.data;
     } catch (error: unknown) {
       logApiError('Error fetching mail job status:', error);
+      const code = asApiError(error).response?.data?.code;
       return {
         success: false,
         status: getApiErrorStatus(error),
+        code: typeof code === 'string' ? code : undefined,
         message: getApiErrorMessage(error, 'Job-Status konnte nicht abgerufen werden')
       };
     }

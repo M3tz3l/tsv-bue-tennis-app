@@ -219,6 +219,7 @@ async fn main() -> anyhow::Result<()> {
         event_repository,
         mail_jobs,
         member_counts: state::MemberCountCache::default(),
+        role_cache: state::MemberRoleCache::default(),
         jwt_secret: config.jwt_secret.clone(),
     };
 
@@ -579,13 +580,22 @@ mod tests {
                 std::collections::HashMap::new(),
             )),
             member_counts: state::MemberCountCache::default(),
+            role_cache: state::MemberRoleCache::default(),
             jwt_secret: TEST_JWT_SECRET.to_string(),
         }
     }
 
-    async fn create_test_app_with_teable_url(teable_url: &str) -> Router {
+    async fn create_test_app_with_state(teable_url: &str) -> (Router, state::AppState) {
         let state = create_test_state(teable_url).await;
+        let app = build_test_app(state.clone());
+        (app, state)
+    }
 
+    async fn create_test_app_with_teable_url(teable_url: &str) -> Router {
+        create_test_app_with_state(teable_url).await.0
+    }
+
+    fn build_test_app(state: state::AppState) -> Router {
         let cors = build_cors("http://localhost:5173").expect("valid test CORS origin");
 
         // Simple routes for testing - no rate limiting to keep tests simple
@@ -1976,6 +1986,65 @@ mod tests {
         assert!(html.contains("<strong>Fett</strong>"));
         assert!(!html.contains("<script>"));
         assert!(html.contains("Hallo [Vorname],"));
+    }
+
+    #[serial_test::serial]
+    #[tokio::test]
+    async fn test_job_status_is_scoped_to_owner_and_orga_role() {
+        use tsv_tennis_backend::models::{MailJob, MailJobStatus};
+
+        let (app, state) = create_test_app_with_state("https://test.teable.io").await;
+        let server = TestServer::new(app).unwrap();
+
+        state.mail_jobs.write().await.insert(
+            "job-1".into(),
+            MailJob {
+                id: "job-1".into(),
+                user_id: "orga_user_1".into(),
+                status: MailJobStatus::Completed,
+                total_recipients: 1,
+                sent: 1,
+                failed: 0,
+                failed_recipients: vec![],
+                error: None,
+                created_at: chrono::Utc::now(),
+            },
+        );
+        state.role_cache.set("orga_user_1", true);
+
+        let owner = auth::create_token(TEST_JWT_SECRET, "orga_user_1", Some("orga"))
+            .expect("Failed to create owner token");
+        let other = auth::create_token(TEST_JWT_SECRET, "orga_user_2", Some("orga"))
+            .expect("Failed to create other token");
+
+        let response = server
+            .get("/api/mail/jobs/job-1")
+            .add_header("authorization", &format!("Bearer {owner}"))
+            .await;
+        assert_eq!(response.status_code(), 200);
+
+        let response = server
+            .get("/api/mail/jobs/job-1")
+            .add_header("authorization", &format!("Bearer {other}"))
+            .await;
+        assert_eq!(response.status_code(), 404);
+        let body: serde_json::Value = response.json();
+        assert_eq!(body["code"], "job_not_found");
+
+        let response = server
+            .get("/api/mail/jobs/missing")
+            .add_header("authorization", &format!("Bearer {owner}"))
+            .await;
+        assert_eq!(response.status_code(), 404);
+        let body: serde_json::Value = response.json();
+        assert_eq!(body["code"], "job_not_found");
+
+        state.role_cache.set("orga_user_1", false);
+        let response = server
+            .get("/api/mail/jobs/job-1")
+            .add_header("authorization", &format!("Bearer {owner}"))
+            .await;
+        assert_eq!(response.status_code(), 403);
     }
 
     #[serial_test::serial]

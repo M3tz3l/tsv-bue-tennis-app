@@ -77,7 +77,7 @@ export function useMailSend({ onClose, onFinished }: UseMailSendOptions) {
         if (response.job.status !== 'completed' && response.job.status !== 'failed') {
           pollingRef.current = setTimeout(() => void pollJobStatus(jobId), 1500);
         }
-      } else if (response.status === 404) {
+      } else if (response.status === 404 && response.code === 'job_not_found') {
         // Jobs live in memory. A 404 means the backend restarted or the job
         // was cleaned up, so it cannot still be running here.
         if (pollingRef.current) {
