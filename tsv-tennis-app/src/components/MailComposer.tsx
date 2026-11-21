@@ -82,6 +82,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
   const [includeGreeting, setIncludeGreeting] = useState(true);
   const confirmRefreshRef = useRef(false);
   const confirmRequestRef = useRef(0);
+  const countsRequestRef = useRef(0);
   const previewRequestRef = useRef(0);
 
   const resetForm = () => {
@@ -120,9 +121,11 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (!isOpen || countsLoaded) return;
+    const requestId = ++countsRequestRef.current;
     const fetchCounts = async () => {
       try {
         const response = await BackendService.getMemberCounts();
+        if (requestId !== countsRequestRef.current) return;
         if (response.success && response.data) {
           setMemberCounts(response.data);
           setCountsLoaded(true);
@@ -131,6 +134,7 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
           setCountsError(true);
         }
       } catch (error) {
+        if (requestId !== countsRequestRef.current) return;
         console.error('Failed to fetch member counts:', error);
         setCountsError(true);
       }
@@ -214,9 +218,11 @@ const MailComposer: React.FC<MailComposerProps> = ({ isOpen, onClose }) => {
     if (!isFormValid || confirmRefreshRef.current) return;
     confirmRefreshRef.current = true;
     const requestId = ++confirmRequestRef.current;
+    // Supersede any initial count request still in flight.
+    countsRequestRef.current += 1;
     // Recipients may have changed since the composer opened.
     try {
-      const response = await BackendService.getMemberCounts();
+      const response = await BackendService.getMemberCounts(true);
       if (response.success && response.data) {
         setMemberCounts(response.data);
         setCountsLoaded(true);

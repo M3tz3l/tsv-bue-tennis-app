@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
+import { editorJsonToText, type EditorNode } from './mailText';
 import {
   BoldIcon,
   ItalicIcon,
@@ -39,7 +40,8 @@ const MailEditor = ({ initialHtml, onChange, labelId, disabled = false }: MailEd
         class: contentClasses,
       },
     },
-    onUpdate: ({ editor }) => onChange(editor.getHTML(), editor.getText()),
+    onUpdate: ({ editor }) =>
+      onChange(editor.getHTML(), editorJsonToText(editor.getJSON() as EditorNode)),
   });
 
   useEffect(() => {

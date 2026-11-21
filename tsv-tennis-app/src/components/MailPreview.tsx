@@ -12,6 +12,10 @@ const MailPreview = ({ subject, html, error = false }: MailPreviewProps) => (
     ) : html ? (
       <div
         className="break-words text-[var(--body)] [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-1 [&_a]:text-[var(--primary-text)] [&_a]:underline"
+        onClick={(event) => {
+          // A preview must not navigate away from an unsent draft.
+          if ((event.target as HTMLElement).closest('a')) event.preventDefault();
+        }}
         dangerouslySetInnerHTML={{ __html: html }}
       />
     ) : (

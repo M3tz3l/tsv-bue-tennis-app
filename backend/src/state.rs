@@ -27,9 +27,35 @@ pub use crate::models::MailJobStore;
 type MemberCounts = (usize, usize);
 type MemberCountCacheEntry = Option<(std::time::Instant, MemberCounts)>;
 
+/// Short-lived cache of the live organizer role. Mail job status is polled
+/// every 1.5s, so a Teable lookup per poll is too expensive, but a long-lived
+/// token role would let a demoted organizer keep reading their jobs.
+#[derive(Clone, Default)]
+pub struct MemberRoleCache {
+    inner: Arc<std::sync::Mutex<std::collections::HashMap<String, (std::time::Instant, bool)>>>,
+}
+
+impl MemberRoleCache {
+    const TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+    pub fn get(&self, user_id: &str) -> Option<bool> {
+        let guard = self.inner.lock().ok()?;
+        let (fetched_at, is_orga) = guard.get(user_id)?;
+        (fetched_at.elapsed() < Self::TTL).then_some(*is_orga)
+    }
+
+    pub fn set(&self, user_id: &str, is_orga: bool) {
+        if let Ok(mut guard) = self.inner.lock() {
+            guard.retain(|_, (fetched_at, _)| fetched_at.elapsed() < Self::TTL);
+            guard.insert(user_id.to_string(), (std::time::Instant::now(), is_orga));
+        }
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct MemberCountCache {
     inner: Arc<std::sync::Mutex<MemberCountCacheEntry>>,
+    last_refresh_attempt: Arc<std::sync::Mutex<Option<std::time::Instant>>>,
     refresh_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
@@ -52,6 +78,28 @@ impl MemberCountCache {
         }
     }
 
+    /// Cached counts younger than `max_age`. Used to put a floor under forced
+    /// refreshes so `?refresh=true` cannot bypass the cache and hammer Teable.
+    pub fn get_within(&self, max_age: std::time::Duration) -> Option<MemberCounts> {
+        let guard = self.inner.lock().ok()?;
+        let (fetched_at, counts) = (*guard)?;
+        (fetched_at.elapsed() < max_age).then_some(counts)
+    }
+
+    /// Record a cache-refresh attempt. Returns false when the last attempt was
+    /// less than `floor` ago. Failed attempts count too, so an outage cannot be
+    /// hammered with repeated requests.
+    pub fn begin_refresh(&self, floor: std::time::Duration) -> bool {
+        let Ok(mut last) = self.last_refresh_attempt.lock() else {
+            return true;
+        };
+        if last.is_some_and(|at| at.elapsed() < floor) {
+            return false;
+        }
+        *last = Some(std::time::Instant::now());
+        true
+    }
+
     /// Serializes cache refreshes so concurrent requests only perform a
     /// single Teable fetch after the TTL has elapsed.
     pub async fn lock_refresh(&self) -> tokio::sync::MutexGuard<'_, ()> {
@@ -69,6 +117,7 @@ pub struct AppState {
     pub event_repository: EventRepository,
     pub mail_jobs: MailJobStore,
     pub member_counts: MemberCountCache,
+    pub role_cache: MemberRoleCache,
     pub jwt_secret: String,
 }
 
@@ -401,5 +450,19 @@ mod tests {
     fn trusted_proxy_without_forwarding_header_uses_peer() {
         let request = request(Some(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2))), None, None);
         assert_eq!(extract(&request), IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2)));
+    }
+
+    #[test]
+    fn refresh_floor_counts_every_attempt() {
+        let cache = MemberCountCache::default();
+
+        assert!(cache.begin_refresh(std::time::Duration::from_secs(5)));
+        assert!(!cache.begin_refresh(std::time::Duration::from_secs(5)));
+
+        cache.set((3, 1));
+        assert_eq!(
+            cache.get_within(std::time::Duration::from_secs(5)),
+            Some((3, 1))
+        );
     }
 }

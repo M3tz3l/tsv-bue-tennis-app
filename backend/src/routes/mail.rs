@@ -1,7 +1,7 @@
 //! Bulk mail routes: test send, bulk dispatch, job status, recipient counts.
 
 use axum::{
-    extract::{Multipart, Path, State},
+    extract::{Multipart, Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::get,
@@ -91,6 +91,22 @@ fn render_message_html(message: &str, message_html: &str) -> String {
 fn has_active_job(jobs: &std::collections::HashMap<String, MailJob>) -> bool {
     jobs.values()
         .any(|job| matches!(job.status, MailJobStatus::Pending | MailJobStatus::Running))
+}
+
+/// Only the organizer who started a job may read its status.
+fn owns_job(job: &MailJob, claims: &auth::AuthClaims) -> bool {
+    job.user_id == claims.sub
+}
+
+fn job_not_found() -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({
+            "success": false,
+            "code": "job_not_found",
+            "message": "Job nicht gefunden"
+        })),
+    )
 }
 
 /// Only finished jobs may be removed by the periodic cleanup; an active job
@@ -195,6 +211,33 @@ async fn require_orga_role(
     Ok(user)
 }
 
+/// Live organizer-role check with a short cache. This keeps 1.5s job polling
+/// cheap without trusting a token role for up to 24 hours.
+async fn require_orga_role_cached(
+    state: &AppState,
+    claims: &auth::AuthClaims,
+) -> Result<(), StatusCode> {
+    if let Some(is_orga) = state.role_cache.get(&claims.sub) {
+        return if is_orga {
+            Ok(())
+        } else {
+            Err(StatusCode::FORBIDDEN)
+        };
+    }
+
+    match require_orga_role(state, claims).await {
+        Ok(_) => {
+            state.role_cache.set(&claims.sub, true);
+            Ok(())
+        }
+        Err(StatusCode::FORBIDDEN) => {
+            state.role_cache.set(&claims.sub, false);
+            Err(StatusCode::FORBIDDEN)
+        }
+        Err(status) => Err(status),
+    }
+}
+
 #[derive(serde::Deserialize)]
 struct MailPreviewRequest {
     #[serde(default)]
@@ -232,10 +275,10 @@ async fn preview_mail(
         .as_deref()
         .is_some_and(|role| role.trim().eq_ignore_ascii_case("orga"));
     // Normally the token role is enough for a display-only preview. Fall back to
-    // the live role only for stale tokens (e.g. a member promoted after login)
-    // so we do not hit Teable on every debounced keystroke.
+    // the cached live role only for stale tokens (e.g. a member promoted after
+    // login) so we do not hit Teable on every debounced keystroke.
     if !claims_orga {
-        require_orga_role(&state, &claims).await?;
+        require_orga_role_cached(&state, &claims).await?;
     }
 
     let safe_message = render_message_html(&payload.message, &payload.message_html);
@@ -285,6 +328,7 @@ pub async fn send_test_mail(
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
     let claims = extract_auth_claims_from_headers(&state.jwt_secret, &headers)?;
     let user = require_orga_role(&state, &claims).await?;
+    state.role_cache.set(&user.id, true);
 
     if user.email.trim().is_empty() {
         error!(
@@ -357,6 +401,7 @@ pub async fn send_bulk_mail(
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
     let claims = extract_auth_claims_from_headers(&state.jwt_secret, &headers)?;
     let user = require_orga_role(&state, &claims).await?;
+    state.role_cache.set(&user.id, true);
 
     let form = parse_mail_multipart(multipart).await?;
 
@@ -574,20 +619,31 @@ pub async fn get_mail_job_status(
         })?;
     let job = {
         let jobs = state.mail_jobs.read().await;
-        jobs.get(&job_id).cloned().ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(serde_json::json!({ "success": false, "message": "Job nicht gefunden" })),
-            )
-        })?
+        jobs.get(&job_id).cloned().ok_or_else(job_not_found)?
     };
-    // The token role is a snapshot; confirm the live role before exposing any job.
-    require_orga_role(&state, &claims).await.map_err(|status| {
-        (
-            status,
-            Json(serde_json::json!({ "success": false, "message": "Kein Zugriff" })),
-        )
-    })?;
+    if !owns_job(&job, &claims) {
+        // Wrong owner gets 404 so the response does not reveal whether the job
+        // exists.
+        return Err(job_not_found());
+    }
+    require_orga_role_cached(&state, &claims)
+        .await
+        .map_err(|status| {
+            // A creator who is no longer an organizer gets the same response
+            // as a missing job, so the client can clear the stale send guard.
+            if status == StatusCode::FORBIDDEN || status == StatusCode::NOT_FOUND {
+                job_not_found()
+            } else {
+                (
+                    status,
+                    Json(serde_json::json!({
+                        "success": false,
+                        "code": "forbidden",
+                        "message": "Kein Zugriff"
+                    })),
+                )
+            }
+        })?;
 
     debug!(job_id = %job_id, status = ?job.status, "Mail job status lookup");
     Ok(Json(serde_json::json!({
@@ -596,12 +652,32 @@ pub async fn get_mail_job_status(
     })))
 }
 
+#[derive(serde::Deserialize, Default)]
+pub struct MemberCountsQuery {
+    /// The confirmation step asks for a live count instead of the cache.
+    #[serde(default)]
+    refresh: bool,
+}
+
 pub async fn get_member_counts(
     State(state): State<AppState>,
+    Query(query): Query<MemberCountsQuery>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
-    // Serve cached counts within the TTL to avoid hammering the Teable API
-    // every time the mail composer is opened.
-    if let Some((all, orga)) = state.member_counts.get() {
+    let claims = extract_auth_claims_from_headers(&state.jwt_secret, &headers)?;
+    require_orga_role_cached(&state, &claims).await?;
+
+    // Every cache refresh respects a short floor, so neither `?refresh=true` nor
+    // repeated normal requests can hammer Teable during an outage. Failed
+    // attempts count too.
+    const REFRESH_FLOOR: std::time::Duration = std::time::Duration::from_secs(5);
+    // Pre-lock optimization: return a fresh cache without waiting for the lock.
+    let cached = if query.refresh {
+        state.member_counts.get_within(REFRESH_FLOOR)
+    } else {
+        state.member_counts.get()
+    };
+    if let Some((all, orga)) = cached {
         return Ok(Json(serde_json::json!({
             "success": true,
             "data": { "all": all, "orga": orga }
@@ -611,11 +687,22 @@ pub async fn get_member_counts(
     // Serialize refreshes so concurrent expired-cache misses perform a single
     // Teable fetch instead of N. Re-check the cache once the lock is held.
     let _refresh_guard = state.member_counts.lock_refresh().await;
-    if let Some((all, orga)) = state.member_counts.get() {
+    let cached = if query.refresh {
+        state.member_counts.get_within(REFRESH_FLOOR)
+    } else {
+        state.member_counts.get()
+    };
+    if let Some((all, orga)) = cached {
         return Ok(Json(serde_json::json!({
             "success": true,
             "data": { "all": all, "orga": orga }
         })));
+    }
+
+    // Check the floor and record the attempt under the lock, immediately before
+    // the fetch, so no request can start a fetch too soon after another.
+    if !state.member_counts.begin_refresh(REFRESH_FLOOR) {
+        return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
     // Fetch all active members count using Teable filtering
@@ -651,7 +738,8 @@ pub async fn get_member_counts(
 
 #[cfg(test)]
 mod tests {
-    use super::{has_active_job, is_stale_terminal_job, render_message_html};
+    use super::{has_active_job, is_stale_terminal_job, owns_job, render_message_html};
+    use crate::auth::AuthClaims;
     use crate::models::{MailJob, MailJobStatus};
     use std::collections::HashMap;
 
@@ -694,6 +782,24 @@ mod tests {
 
     fn job(id: &str, status: MailJobStatus) -> MailJob {
         job_at(id, status, chrono::Utc::now())
+    }
+
+    fn claims(user_id: &str, role: Option<&str>) -> AuthClaims {
+        AuthClaims {
+            sub: user_id.into(),
+            role: role.map(Into::into),
+            exp: 0,
+            iat: 0,
+        }
+    }
+
+    #[test]
+    fn job_ownership_only_matches_the_creator() {
+        let job = job("job-1", MailJobStatus::Completed);
+
+        assert!(owns_job(&job, &claims("orga-1", Some("orga"))));
+        assert!(owns_job(&job, &claims("orga-1", None)));
+        assert!(!owns_job(&job, &claims("orga-2", Some("orga"))));
     }
 
     #[test]
