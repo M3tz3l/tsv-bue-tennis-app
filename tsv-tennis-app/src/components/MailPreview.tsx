@@ -1,33 +1,22 @@
 type MailPreviewProps = {
   subject: string;
-  message: string;
-  senderFirstName: string;
-  includeGreeting: boolean;
+  html: string;
+  error?: boolean;
 };
 
-const MailPreview = ({
-  subject,
-  message,
-  senderFirstName,
-  includeGreeting,
-}: MailPreviewProps) => (
+const MailPreview = ({ subject, html, error = false }: MailPreviewProps) => (
   <div className="bg-white rounded-lg border border-[var(--hairline)] p-4 text-sm text-[var(--ink)]">
     <p className="font-medium mb-3 break-words">{subject.trim() || 'Kein Betreff'}</p>
-    {includeGreeting && <p className="text-[var(--body)] mb-1">Hallo [Vorname],</p>}
-    <p className="whitespace-pre-wrap break-words text-[var(--body)]">
-      {message.trim() || 'Ihre Nachricht erscheint hier...'}
-    </p>
-    <div className="mt-4 pt-3 border-t border-[var(--hairline-soft)] text-sm text-[var(--body)]">
-      <p className="mb-1">mit sportlichen Grüßen,</p>
-      <p className="mb-3">{senderFirstName} / die Abteilungsleitung</p>
-      <p className="font-semibold text-[var(--ink)]">Tennisabteilung des TSV Bad Überkingen</p>
-      <a
-        href="mailto:tennisabteilung@tsv-bad-ueberkingen.de"
-        className="text-[var(--primary-text)] hover:underline"
-      >
-        tennisabteilung@tsv-bad-ueberkingen.de
-      </a>
-    </div>
+    {error ? (
+      <p className="text-[var(--muted-soft)]">Vorschau konnte nicht geladen werden.</p>
+    ) : html ? (
+      <div
+        className="break-words text-[var(--body)] [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-1 [&_a]:text-[var(--primary-text)] [&_a]:underline"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    ) : (
+      <p className="text-[var(--muted-soft)]">Vorschau wird geladen...</p>
+    )}
   </div>
 );
 

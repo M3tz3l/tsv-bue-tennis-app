@@ -17,7 +17,9 @@ use crate::teable;
 use crate::utils::extract_auth_claims_from_headers;
 
 pub fn member_count_routes() -> axum::Router<AppState> {
-    axum::Router::new().route("/mail/recipient-counts", get(get_member_counts))
+    axum::Router::new()
+        .route("/mail/recipient-counts", get(get_member_counts))
+        .route("/mail/preview", axum::routing::post(preview_mail))
 }
 
 pub fn write_routes() -> axum::Router<AppState> {
@@ -65,9 +67,22 @@ const BULK_SEND_BUSY_MESSAGE: &str =
 struct MailForm {
     subject: String,
     message: String,
+    message_html: String,
     include_greeting: bool,
     attachments: Vec<email::EmailAttachment>,
     recipient_filter: String,
+}
+
+/// Build the HTML body from the rich-text editor output. The editor sends a
+/// sanitized-by-schema document, but this is still untrusted input, so it is
+/// cleaned again here. Clients that only send plain `message` keep the
+/// escaped-newline rendering.
+fn render_message_html(message: &str, message_html: &str) -> String {
+    if message_html.trim().is_empty() {
+        auto_link_html(&escape_html(message).replace('\n', "<br/>"))
+    } else {
+        ammonia::clean(message_html)
+    }
 }
 
 /// True when any bulk send is still running (globally, one at a time).
@@ -88,6 +103,7 @@ pub fn is_stale_terminal_job(job: &MailJob, cutoff: chrono::DateTime<chrono::Utc
 async fn parse_mail_multipart(mut multipart: Multipart) -> Result<MailForm, StatusCode> {
     let mut subject = String::new();
     let mut message = String::new();
+    let mut message_html = String::new();
     let mut recipient_filter = String::from("all");
     let mut include_greeting = true;
     let mut attachments: Vec<email::EmailAttachment> = Vec::new();
@@ -105,6 +121,9 @@ async fn parse_mail_multipart(mut multipart: Multipart) -> Result<MailForm, Stat
             }
             "message" => {
                 message = field.text().await.map_err(|error| error.status())?;
+            }
+            "message_html" => {
+                message_html = field.text().await.map_err(|error| error.status())?;
             }
             "recipient_filter" => {
                 recipient_filter = field.text().await.map_err(|error| error.status())?;
@@ -142,6 +161,7 @@ async fn parse_mail_multipart(mut multipart: Multipart) -> Result<MailForm, Stat
     Ok(MailForm {
         subject,
         message,
+        message_html,
         include_greeting,
         attachments,
         recipient_filter,
@@ -173,6 +193,64 @@ async fn require_orga_role(
     }
 
     Ok(user)
+}
+
+#[derive(serde::Deserialize)]
+struct MailPreviewRequest {
+    #[serde(default)]
+    message: String,
+    #[serde(default)]
+    message_html: String,
+    #[serde(default = "default_true")]
+    include_greeting: bool,
+    #[serde(default)]
+    sender_first_name: String,
+}
+
+#[derive(serde::Serialize)]
+struct MailPreviewResponse {
+    success: bool,
+    html: String,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Render the same body the mail will send, so the composer preview does not
+/// duplicate the greeting/signature templates. The sender's first name is
+/// client-supplied because this is display-only; the real send always uses the
+/// authenticated member's live profile.
+async fn preview_mail(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<MailPreviewRequest>,
+) -> Result<Json<MailPreviewResponse>, StatusCode> {
+    let claims = extract_auth_claims_from_headers(&state.jwt_secret, &headers)?;
+    let claims_orga = claims
+        .role
+        .as_deref()
+        .is_some_and(|role| role.trim().eq_ignore_ascii_case("orga"));
+    // Normally the token role is enough for a display-only preview. Fall back to
+    // the live role only for stale tokens (e.g. a member promoted after login)
+    // so we do not hit Teable on every debounced keystroke.
+    if !claims_orga {
+        require_orga_role(&state, &claims).await?;
+    }
+
+    let safe_message = render_message_html(&payload.message, &payload.message_html);
+    let (signature_html, _) = build_signature(&payload.sender_first_name);
+    let html = email::build_body_html(
+        &safe_message,
+        "[Vorname]",
+        payload.include_greeting,
+        &signature_html,
+    );
+
+    Ok(Json(MailPreviewResponse {
+        success: true,
+        html,
+    }))
 }
 
 /// Drop empty-email and duplicate-email recipients, matching how the bulk send
@@ -229,23 +307,21 @@ pub async fn send_test_mail(
         form.message
     };
 
-    let safe_first_name = escape_html(&user.first_name);
-    let safe_message = auto_link_html(&escape_html(&message).replace('\n', "<br/>"));
+    let safe_message = render_message_html(&message, &form.message_html);
     let (signature_html, signature_text) = build_signature(&user.first_name);
 
-    let html_content = if form.include_greeting {
-        format!("<p>Hallo {safe_first_name},</p><p>{safe_message}</p>{signature_html}")
-    } else {
-        format!("<p>{safe_message}</p>{signature_html}")
-    };
-    let text_content = if form.include_greeting {
-        format!(
-            "Hallo {},\n\n{}\n\n{}",
-            user.first_name, message, signature_text
-        )
-    } else {
-        format!("{}\n\n{}", message, signature_text)
-    };
+    let html_content = email::build_body_html(
+        &safe_message,
+        &user.first_name,
+        form.include_greeting,
+        &signature_html,
+    );
+    let text_content = email::build_body_text(
+        &message,
+        &user.first_name,
+        form.include_greeting,
+        &signature_text,
+    );
 
     state
         .email_service
@@ -359,7 +435,7 @@ pub async fn send_bulk_mail(
     let total = unique_recipients.len();
 
     // Pre-build template parts (done once, not per recipient)
-    let safe_message = auto_link_html(&escape_html(&form.message).replace('\n', "<br/>"));
+    let safe_message = render_message_html(&form.message, &form.message_html);
     let (signature_html, signature_text) = build_signature(&user.first_name);
 
     // Prepare recipient data for the background task
@@ -575,9 +651,28 @@ pub async fn get_member_counts(
 
 #[cfg(test)]
 mod tests {
-    use super::{has_active_job, is_stale_terminal_job};
+    use super::{has_active_job, is_stale_terminal_job, render_message_html};
     use crate::models::{MailJob, MailJobStatus};
     use std::collections::HashMap;
+
+    #[test]
+    fn rich_message_is_sanitized_and_keeps_formatting() {
+        let html = render_message_html(
+            "Hallo",
+            "<p><strong>Fett</strong></p><ul><li>Punkt</li></ul><script>alert(1)</script>",
+        );
+
+        assert!(html.contains("<strong>Fett</strong>"));
+        assert!(html.contains("<li>Punkt</li>"));
+        assert!(!html.contains("<script>"));
+    }
+
+    #[test]
+    fn message_without_html_falls_back_to_escaped_plain_text() {
+        let html = render_message_html("Zeile 1\nZeile 2 <b>", "");
+
+        assert_eq!(html, "Zeile 1<br/>Zeile 2 &lt;b&gt;");
+    }
 
     fn job_at(
         id: &str,

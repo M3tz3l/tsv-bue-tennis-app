@@ -142,7 +142,13 @@ export function useMailSend({ onClose, onFinished }: UseMailSendOptions) {
   }, [pendingJobId, pollJobStatus]);
 
   const sendTest = useCallback(
-    async (subject: string, message: string, attachments: File[], includeGreeting: boolean) => {
+    async (
+      subject: string,
+      message: string,
+      messageHtml: string,
+      attachments: File[],
+      includeGreeting: boolean,
+    ) => {
       if (!subject.trim() || !message.trim()) {
         toast.error('Betreff und Nachricht sind erforderlich');
         return;
@@ -154,6 +160,7 @@ export function useMailSend({ onClose, onFinished }: UseMailSendOptions) {
           { subject: subject.trim(), message: message.trim() },
           attachments.length > 0 ? attachments : undefined,
           includeGreeting,
+          messageHtml,
         );
         if (response.success) {
           toast.success('Test-Mail gesendet!');
@@ -173,6 +180,7 @@ export function useMailSend({ onClose, onFinished }: UseMailSendOptions) {
     async (
       subject: string,
       message: string,
+      messageHtml: string,
       recipientFilter: 'all' | 'orga',
       attachments: File[],
       includeGreeting: boolean,
@@ -198,6 +206,7 @@ export function useMailSend({ onClose, onFinished }: UseMailSendOptions) {
           payload,
           attachments.length > 0 ? attachments : undefined,
           includeGreeting,
+          messageHtml,
         );
 
         if (response.success) {

@@ -317,11 +317,27 @@ class BackendService {
     }
   }
 
-  async sendTestMail(payload: SendTestMailPayload = {}, attachments?: File[], includeGreeting: boolean = true): Promise<ApiResult | ApiError> {
+  async previewMail(payload: {
+    message: string;
+    message_html: string;
+    include_greeting: boolean;
+    sender_first_name: string;
+  }): Promise<{ success: boolean; html?: string; message?: string }> {
+    try {
+      const response = await this.api.post<{ success: boolean; html?: string }>('/mail/preview', payload);
+      return response.data;
+    } catch (error: unknown) {
+      logApiError('Error fetching mail preview:', error);
+      return { success: false, message: getApiErrorMessage(error, 'Vorschau konnte nicht geladen werden') };
+    }
+  }
+
+  async sendTestMail(payload: SendTestMailPayload = {}, attachments?: File[], includeGreeting: boolean = true, messageHtml?: string): Promise<ApiResult | ApiError> {
     try {
       const formData = new FormData();
       if (payload.subject) formData.append('subject', payload.subject);
       if (payload.message) formData.append('message', payload.message);
+      if (messageHtml) formData.append('message_html', messageHtml);
       formData.append('include_greeting', String(includeGreeting));
       if (attachments) {
         for (const file of attachments) {
@@ -362,11 +378,12 @@ class BackendService {
     }
   }
 
-  async sendBulkMail(payload: SendBulkMailRequest, attachments?: File[], includeGreeting: boolean = true): Promise<MailSendResponse | ApiError> {
+  async sendBulkMail(payload: SendBulkMailRequest, attachments?: File[], includeGreeting: boolean = true, messageHtml?: string): Promise<MailSendResponse | ApiError> {
     try {
       const formData = new FormData();
       formData.append('subject', payload.subject);
       formData.append('message', payload.message);
+      if (messageHtml) formData.append('message_html', messageHtml);
       formData.append('recipient_filter', payload.recipient_filter);
       formData.append('include_greeting', String(includeGreeting));
       if (attachments) {
