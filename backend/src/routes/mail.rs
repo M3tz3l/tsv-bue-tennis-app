@@ -631,7 +631,7 @@ pub async fn get_mail_job_status(
         .map_err(|status| {
             // A creator who is no longer an organizer gets the same response
             // as a missing job, so the client can clear the stale send guard.
-            if status == StatusCode::FORBIDDEN {
+            if status == StatusCode::FORBIDDEN || status == StatusCode::NOT_FOUND {
                 job_not_found()
             } else {
                 (
@@ -670,23 +670,9 @@ pub async fn get_member_counts(
     // A forced refresh still respects a short floor so `?refresh=true` cannot
     // be used to bypass the cache and hammer Teable. Failed attempts count too.
     const FORCED_REFRESH_FLOOR: std::time::Duration = std::time::Duration::from_secs(5);
+    // Pre-lock optimization: return a fresh cache without waiting for the lock.
     let cached = if query.refresh {
-        if let Some(counts) = state.member_counts.get_within(FORCED_REFRESH_FLOOR) {
-            Some(counts)
-        } else if !state
-            .member_counts
-            .begin_forced_refresh(FORCED_REFRESH_FLOOR)
-        {
-            return match state.member_counts.get_last() {
-                Some((all, orga)) => Ok(Json(serde_json::json!({
-                    "success": true,
-                    "data": { "all": all, "orga": orga }
-                }))),
-                None => Err(StatusCode::TOO_MANY_REQUESTS),
-            };
-        } else {
-            None
-        }
+        state.member_counts.get_within(FORCED_REFRESH_FLOOR)
     } else {
         state.member_counts.get()
     };
@@ -710,6 +696,22 @@ pub async fn get_member_counts(
             "success": true,
             "data": { "all": all, "orga": orga }
         })));
+    }
+
+    // Check the floor and record the attempt under the lock, immediately before
+    // the fetch, so a waiter cannot start a fetch too soon after a failure.
+    if query.refresh
+        && !state
+            .member_counts
+            .begin_forced_refresh(FORCED_REFRESH_FLOOR)
+    {
+        return match state.member_counts.get_last() {
+            Some((all, orga)) => Ok(Json(serde_json::json!({
+                "success": true,
+                "data": { "all": all, "orga": orga }
+            }))),
+            None => Err(StatusCode::TOO_MANY_REQUESTS),
+        };
     }
 
     // Fetch all active members count using Teable filtering
