@@ -14,6 +14,7 @@ import {
     getCurrentYear,
     getFamilyMemberEntries,
     formatHours,
+    isWorkHourYearEditable,
     sortEntriesByDate,
 } from '../utils/utils';
 import { buttonVariants } from '../styles/tokens';
@@ -24,6 +25,8 @@ const Dashboard = () => {
     const [showAddForm, setShowAddForm] = useState(false);
     const [selectedYear, setSelectedYear] = useState(getCurrentYear());
     const [showMailComposer, setShowMailComposer] = useState(false);
+    const currentYear = getCurrentYear();
+    const isYearEditable = isWorkHourYearEditable(selectedYear);
 
     // Fetch family dashboard data from the backend API
     const { data: dashboardData, isLoading, error } = useDashboard(user?.id, selectedYear, !!user?.id && !!token);
@@ -90,16 +93,22 @@ const Dashboard = () => {
                 <div className="text-center py-12">
                     <ClockIcon className="mx-auto h-12 w-12 text-[var(--muted-soft)]" />
                     <h3 className="mt-2 text-sm font-medium text-[var(--ink)]">Keine Arbeitsstunden für {selectedYear} gefunden</h3>
-                    <p className="mt-1 text-sm text-[var(--muted)]">Fügen Sie Ihren ersten Eintrag hinzu.</p>
-                    <div className="mt-6">
-                        <button
-                            onClick={() => setShowAddForm(true)}
-                            className={`${buttonVariants.primary} inline-flex items-center`}
-                        >
-                            <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
-                            Arbeitsstunden eintragen
-                        </button>
-                    </div>
+                    {isYearEditable ? (
+                        <>
+                            <p className="mt-1 text-sm text-[var(--muted)]">Fügen Sie Ihren ersten Eintrag hinzu.</p>
+                            <div className="mt-6">
+                                <button
+                                    onClick={() => setShowAddForm(true)}
+                                    className={`${buttonVariants.primary} inline-flex items-center`}
+                                >
+                                    <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
+                                    Arbeitsstunden eintragen
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <p className="mt-1 text-sm text-[var(--muted)]">Dieses Jahr ist abgeschlossen. Es können keine neuen Einträge erstellt werden.</p>
+                    )}
                 </div>
             );
         }
@@ -132,13 +141,15 @@ const Dashboard = () => {
                             Detaillierte Übersicht aller Einträge
                         </p>
                     </div>
-                    <button
-                        onClick={() => setShowAddForm(true)}
-                        className={`${buttonVariants.primary} inline-flex w-full items-center justify-center sm:w-auto`}
-                    >
-                        <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
-                        Eintragen
-                    </button>
+                    {isYearEditable && (
+                        <button
+                            onClick={() => setShowAddForm(true)}
+                            className={`${buttonVariants.primary} inline-flex w-full items-center justify-center sm:w-auto`}
+                        >
+                            <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
+                            Eintragen
+                        </button>
+                    )}
                 </div>
 
                 {/* Mobile card layout (compact with overflow menu only) */}
@@ -156,15 +167,17 @@ const Dashboard = () => {
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         <div className="text-sm font-semibold text-[var(--ink)] w-14 text-right">{formatHours(row.Stunden)}h</div>
-                                        <div className="relative">
-                                            <button
-                                                onClick={() => handleEdit(row)}
-                                                aria-label="Bearbeiten"
-                                                className="touch-control rounded-md text-[var(--muted)] hover:bg-[var(--canvas-soft)] hover:text-[var(--ink)]"
-                                            >
-                                                <PencilIcon className="h-5 w-5" />
-                                            </button>
-                                        </div>
+                                        {isYearEditable && (
+                                            <div className="relative">
+                                                <button
+                                                    onClick={() => handleEdit(row)}
+                                                    aria-label="Bearbeiten"
+                                                    className="touch-control rounded-md text-[var(--muted)] hover:bg-[var(--canvas-soft)] hover:text-[var(--ink)]"
+                                                >
+                                                    <PencilIcon className="h-5 w-5" />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -185,9 +198,11 @@ const Dashboard = () => {
                                         {FIELD_LABELS[String(field)] ?? String(field).replace(/_/g, ' ')}
                                     </th>
                                 ))}
-                                <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">
-                                    Aktionen
-                                </th>
+                                {isYearEditable && (
+                                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-[var(--muted)] uppercase tracking-wider whitespace-nowrap">
+                                        Aktionen
+                                    </th>
+                                )}
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-[var(--hairline)]">
@@ -209,17 +224,19 @@ const Dashboard = () => {
                                             </td>
                                         );
                                     })}
-                                    <td className="px-3 lg:px-6 py-4 text-sm font-medium">
-                                        <div className="flex space-x-2">
-                                            <button
-                                                onClick={() => handleEdit(row)}
-                                                aria-label="Bearbeiten"
-                                                className="touch-control rounded-md text-[var(--muted)] hover:bg-[var(--canvas-soft)] hover:text-[var(--ink)]"
-                                            >
-                                                <PencilIcon className="h-5 w-5" />
-                                            </button>
-                                        </div>
-                                    </td>
+                                    {isYearEditable && (
+                                        <td className="px-3 lg:px-6 py-4 text-sm font-medium">
+                                            <div className="flex space-x-2">
+                                                <button
+                                                    onClick={() => handleEdit(row)}
+                                                    aria-label="Bearbeiten"
+                                                    className="touch-control rounded-md text-[var(--muted)] hover:bg-[var(--canvas-soft)] hover:text-[var(--ink)]"
+                                                >
+                                                    <PencilIcon className="h-5 w-5" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    )}
                                 </tr>
                             ))}
                         </tbody>
@@ -245,10 +262,13 @@ const Dashboard = () => {
                         onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                         className="w-full sm:w-auto px-3 py-2 border border-[var(--hairline-strong)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                     >
-                        {[new Date().getFullYear() - 1, new Date().getFullYear()].map(year => (
+                        {[currentYear - 1, currentYear].map(year => (
                             <option key={year} value={year}>{year}</option>
                         ))}
                     </select>
+                    {!isYearEditable && (
+                        <p className="mt-2 text-sm text-[var(--muted)]">Dieses Jahr ist abgeschlossen. Einträge können nur noch angesehen werden.</p>
+                    )}
                 </div>
 
                 {dashboardData && <WorkHoursOverviewCard data={dashboardData} selectedYear={selectedYear} variant="detail" />}

@@ -11,11 +11,12 @@ import WorkHoursOverviewCard from '../components/WorkHoursOverviewCard';
 import UpcomingEventsList from '../components/UpcomingEventsList';
 import ArbeitsstundenFormModal from '../components/ArbeitsstundenFormModal';
 import { buttonVariants, cardShellClass } from '../styles/tokens';
+import { getCurrentYear } from '../utils/utils';
 
 const DashboardOverview = () => {
     const { user, token } = useAuth();
     const navigate = useNavigate();
-    const selectedYear = new Date().getFullYear();
+    const selectedYear = getCurrentYear();
     const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError, refetch: refetchDashboard } = useDashboard(user?.id, selectedYear, !!user?.id && !!token);
     const { data: events, isLoading: eventsLoading, error: eventsError } = useEvents(user?.id, !!user?.id && !!token);
     const [isMailComposerOpen, setIsMailComposerOpen] = useState(false);

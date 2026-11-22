@@ -1,7 +1,15 @@
 // Shared utility functions for the frontend
 import type { DashboardResponse, MemberContribution, WorkHourEntry } from '../types';
+import { berlinToday } from './dates';
 
-export const getCurrentYear = (): number => new Date().getFullYear();
+export const getCurrentYear = (): number => Number(berlinToday().slice(0, 4));
+
+/** True while entries of `year` may still be created or changed. Mirrors the
+ * backend window: current year, plus the previous year during January. */
+export const isWorkHourYearEditable = (year: number): boolean => {
+    const [currentYear, currentMonth] = berlinToday().split('-').map(Number);
+    return year === currentYear || (currentMonth === 1 && year === currentYear - 1);
+};
 
 export const getMemberEntries = (
     dashboard: DashboardResponse | undefined,
