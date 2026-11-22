@@ -49,6 +49,21 @@ async fn lock_work_hour(member_id: &str, date: &str) -> tokio::sync::OwnedMutexG
     mutex.lock_owned().await
 }
 
+/// First year whose entries may still be created or changed. During January the
+/// previous year stays open for late submissions.
+fn earliest_editable_year(current_year: i32, current_month: u32) -> i32 {
+    if current_month == 1 {
+        current_year - 1
+    } else {
+        current_year
+    }
+}
+
+/// True when `date` is neither in the future nor older than the editable window.
+fn is_date_in_entry_window(date: chrono::NaiveDate, today: chrono::NaiveDate) -> bool {
+    date <= today && date.year() >= earliest_editable_year(today.year(), today.month())
+}
+
 /// Validate work hour date with one-month grace period.
 /// Returns Ok(()) if valid, or a JSON error body to return to the caller.
 fn validate_work_hour_date(date: &str, prefix: &str) -> Result<(), axum::Json<serde_json::Value>> {
@@ -73,26 +88,19 @@ fn validate_work_hour_date(date: &str, prefix: &str) -> Result<(), axum::Json<se
         })));
     }
 
-    let current_year = today.year();
-    let current_month = today.month();
-    let work_year = work_date.year();
-
-    let min_allowed_year = if current_month == 1 {
-        current_year - 1
-    } else {
-        current_year
-    };
-
-    if work_year >= min_allowed_year {
+    if is_date_in_entry_window(work_date, today) {
         return Ok(());
     }
 
+    let current_year = today.year();
     debug!(
         "{}: Year validation failed - work year: {}, min allowed: {}",
-        prefix, work_year, min_allowed_year
+        prefix,
+        work_date.year(),
+        earliest_editable_year(current_year, today.month())
     );
 
-    if current_month == 1 {
+    if today.month() == 1 {
         Err(axum::Json(serde_json::json!({
             "success": false,
             "message": format!("Arbeitsstunden können nur für {} oder {} (Nachfrist bis Ende Januar) eingetragen werden.", current_year, current_year - 1)
@@ -103,6 +111,46 @@ fn validate_work_hour_date(date: &str, prefix: &str) -> Result<(), axum::Json<se
             "message": format!("Arbeitsstunden können nur für das aktuelle Jahr {} eingetragen werden.", current_year)
         })))
     }
+}
+
+/// Rejects edits and deletes for records whose existing date lies in a closed
+/// period, so the year window cannot be bypassed by moving or removing entries.
+fn validate_existing_work_hour_date(
+    date: Option<&str>,
+    prefix: &str,
+) -> Result<(), axum::Json<serde_json::Value>> {
+    let Some(date) = date.filter(|value| !value.trim().is_empty()) else {
+        warn!("{}: Existing work hour has no date", prefix);
+        return Err(axum::Json(serde_json::json!({
+            "success": false,
+            "message": "Der Eintrag hat kein gültiges Datum und kann nicht geändert werden."
+        })));
+    };
+
+    let Ok(work_date) = chrono::NaiveDate::parse_from_str(date.trim(), "%Y-%m-%d") else {
+        warn!(
+            "{}: Existing work hour has an invalid date: {}",
+            prefix, date
+        );
+        return Err(axum::Json(serde_json::json!({
+            "success": false,
+            "message": "Der Eintrag hat kein gültiges Datum und kann nicht geändert werden."
+        })));
+    };
+
+    let today = Utc::now().with_timezone(&Berlin).date_naive();
+    if is_date_in_entry_window(work_date, today) {
+        return Ok(());
+    }
+
+    warn!(
+        "{}: Existing work hour is in a closed period: {}",
+        prefix, date
+    );
+    Err(axum::Json(serde_json::json!({
+        "success": false,
+        "message": "Dieser Eintrag liegt in einem abgeschlossenen Zeitraum und kann nicht mehr geändert oder gelöscht werden."
+    })))
 }
 
 fn validate_work_hour_payload(
@@ -459,11 +507,19 @@ pub async fn update_work_hour(
     let description = payload.description.trim().to_string();
     let date = payload.date.trim().to_string();
 
-    let _wh = match verify_work_hour_ownership(&state, &work_hour_id, &user_id, "edit").await {
+    let existing = match verify_work_hour_ownership(&state, &work_hour_id, &user_id, "edit").await {
         Ok(wh) => wh,
         Err(OwnershipError::Upstream(status)) => return Err(status),
         Err(OwnershipError::Denied) => return Ok(denied_response("edit")),
     };
+
+    // Validate the record's current date, not just the new one, so entries from
+    // a closed year cannot be moved into the open year after the deadline.
+    if let Err(json_err) =
+        validate_existing_work_hour_date(existing.date.as_deref(), "Update Work Hour")
+    {
+        return Ok(json_err);
+    }
 
     // Use get_member_by_id for efficiency
     let current_user = teable::get_member_by_id_with_projection(
@@ -569,11 +625,17 @@ pub async fn delete_work_hour(
 ) -> Result<impl IntoResponse, axum::http::StatusCode> {
     let user_id = extract_user_id_from_headers(&state.jwt_secret, &headers)?;
 
-    if let Err(err) = verify_work_hour_ownership(&state, &id, &user_id, "delete").await {
-        return match err {
-            OwnershipError::Upstream(status) => Err(status),
-            OwnershipError::Denied => Ok(denied_response("delete")),
-        };
+    let existing = match verify_work_hour_ownership(&state, &id, &user_id, "delete").await {
+        Ok(wh) => wh,
+        Err(OwnershipError::Upstream(status)) => return Err(status),
+        Err(OwnershipError::Denied) => return Ok(denied_response("delete")),
+    };
+
+    // Deletion follows the same closed-period rule as editing.
+    if let Err(json_err) =
+        validate_existing_work_hour_date(existing.date.as_deref(), "Delete Work Hour")
+    {
+        return Ok(json_err);
     }
 
     match teable::delete_work_hour(&state.teable_config, &state.http_client, &id).await {
@@ -661,5 +723,44 @@ mod tests {
     fn rejects_blank_description() {
         let request = payload(today(), "   ", 1.0);
         assert!(validate_work_hour_payload(&request, "test").is_err());
+    }
+
+    fn date(year: i32, month: u32, day: u32) -> chrono::NaiveDate {
+        chrono::NaiveDate::from_ymd_opt(year, month, day).expect("valid test date")
+    }
+
+    #[test]
+    fn january_keeps_previous_year_open() {
+        let today = date(2026, 1, 15);
+        assert!(is_date_in_entry_window(date(2025, 12, 31), today));
+        assert!(is_date_in_entry_window(date(2026, 1, 1), today));
+    }
+
+    #[test]
+    fn february_closes_previous_year() {
+        let today = date(2026, 2, 1);
+        assert!(!is_date_in_entry_window(date(2025, 12, 31), today));
+        assert!(is_date_in_entry_window(date(2026, 1, 1), today));
+    }
+
+    #[test]
+    fn future_dates_are_outside_the_window() {
+        let today = date(2026, 6, 1);
+        assert!(!is_date_in_entry_window(date(2026, 6, 2), today));
+    }
+
+    #[test]
+    fn rejects_editing_closed_period_entries() {
+        assert!(validate_existing_work_hour_date(Some("2000-01-01"), "test").is_err());
+    }
+
+    #[test]
+    fn accepts_editing_current_entries() {
+        assert!(validate_existing_work_hour_date(Some(&today()), "test").is_ok());
+    }
+
+    #[test]
+    fn rejects_entries_without_a_date() {
+        assert!(validate_existing_work_hour_date(None, "test").is_err());
     }
 }

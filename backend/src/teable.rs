@@ -148,7 +148,7 @@ fn member_from_record(record: &Value, projection: Option<&[&str]>) -> Member {
         id: id.to_string(),
         first_name: required_member_field(fields, id, "Vorname", projection).to_string(),
         last_name: required_member_field(fields, id, "Nachname", projection).to_string(),
-        email: required_member_field(fields, id, "Email", projection).to_string(),
+        email: fields["Email"].as_str().unwrap_or_default().to_string(),
         family_id: fields["Familie"]
             .as_str()
             .map(|s| s.to_string())
@@ -592,13 +592,15 @@ pub async fn get_work_hours_for_member_by_year(
         "value": member_record_id
     }));
 
-    // Use date range for the year: isOnOrAfter YYYY-01-01 and isOnOrBefore YYYY-12-31
+    // Use the full local year range so entries late on 31 December are not
+    // excluded by a midnight-only upper bound. Explicit offsets avoid relying
+    // on how Teable interprets a trailing `Z`.
     filter_set.push(serde_json::json!({
         "fieldId": "Datum",
         "operator": "isOnOrAfter",
         "value": {
             "mode": "exactDate",
-            "exactDate": format!("{}-01-01T00:00:00.000Z", year),
+            "exactDate": format!("{}-01-01T00:00:00.000+01:00", year),
             "timeZone": "Europe/Berlin"
         }
     }));
@@ -607,7 +609,7 @@ pub async fn get_work_hours_for_member_by_year(
         "operator": "isOnOrBefore",
         "value": {
             "mode": "exactDate",
-            "exactDate": format!("{}-12-31T00:00:00.000Z", year),
+            "exactDate": format!("{}-12-31T23:59:59.999+01:00", year),
             "timeZone": "Europe/Berlin"
         }
     }));
